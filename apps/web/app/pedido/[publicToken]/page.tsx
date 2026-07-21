@@ -1,6 +1,6 @@
 import { getOrderByPublicToken } from "@suarex/db";
-import { formatCents } from "@suarex/domain";
 import { notFound } from "next/navigation";
+import { StatusPoller } from "./StatusPoller";
 
 export default async function PedidoPage({ params }: { params: Promise<{ publicToken: string }> }) {
   const { publicToken } = await params;
@@ -10,8 +10,7 @@ export default async function PedidoPage({ params }: { params: Promise<{ publicT
   return (
     <main>
       <h1>Pedido {order.orderNumber}</h1>
-      <p data-testid="order-status">{order.status}</p>
-      <p>{formatCents(order.totalCents, "es-ES", order.currency)}</p>
+      <StatusPoller publicToken={publicToken} initialOrder={order} />
     </main>
   );
 }
