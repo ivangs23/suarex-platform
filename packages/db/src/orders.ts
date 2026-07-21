@@ -16,6 +16,13 @@ type ProductRow = {
   categories: { destination: string } | null;
 };
 
+type ExtraRow = {
+  id: string;
+  product_id: string;
+  name_i18n: Record<string, string>;
+  price: string | number;
+};
+
 /**
  * Fallos que describen algo sobre EL CARRITO del comensal (línea con cantidad
  * inválida, producto que ya no existe/está disponible para este tenant) y que por
@@ -76,6 +83,24 @@ export async function createPendingOrder(input: {
 
   const byId = new Map((products as unknown as ProductRow[]).map((p) => [p.id, p]));
 
+  // Igual que con los productos: el filtro por tenant lo aplica tenantScoped, así que un
+  // extraId de otro tenant sencillamente no aparece en `extrasById` -- y por tanto cae en
+  // la misma rama de "no disponible" que un id inventado, sin distinción observable.
+  const allExtraIds = [...new Set(input.lines.flatMap((line) => line.extraIds))];
+  const extrasById = new Map<string, ExtraRow>();
+  if (allExtraIds.length > 0) {
+    const { data: extraRows, error: extrasError } = await tenantScoped(
+      "product_extras",
+      input.tenantId,
+    )
+      .select("id, product_id, name_i18n, price")
+      .in("id", allExtraIds);
+    if (extrasError) throw extrasError;
+    for (const extraRow of extraRows as unknown as ExtraRow[]) {
+      extrasById.set(extraRow.id, extraRow);
+    }
+  }
+
   const priced: PricedLine[] = [];
   const rows: {
     product_id: string;
@@ -86,6 +111,13 @@ export async function createPendingOrder(input: {
     destination: string;
     notes: string | null;
   }[] = [];
+  // Paralelo a `rows` (mismo índice = misma línea): las extras congeladas de esa línea,
+  // pendientes todavía del `order_item_id` que solo existe tras insertar `order_items`.
+  const extrasForRows: {
+    extra_id: string;
+    name_snapshot: Record<string, string>;
+    price: number;
+  }[][] = [];
 
   for (const line of input.lines) {
     const product = byId.get(line.productId);
@@ -95,7 +127,37 @@ export async function createPendingOrder(input: {
 
     // Los precios SIEMPRE salen de la base de datos, nunca del carrito del cliente.
     const unitPrice = eurosToCents(Number(product.price));
-    const pricedLine: PricedLine = { unitPrice, quantity: line.quantity, extras: [] };
+
+    // Deduplicado: un id de extra repetido en la misma línea (accidental o forzado por
+    // el cliente) representa la misma elección real una sola vez, así que se cobra una
+    // sola vez -- no tantas veces como aparezca en el array.
+    const uniqueExtraIds = [...new Set(line.extraIds)];
+    const lineExtraRows: {
+      extra_id: string;
+      name_snapshot: Record<string, string>;
+      price: number;
+    }[] = [];
+    const extrasCents: number[] = [];
+    for (const extraId of uniqueExtraIds) {
+      const extra = extrasById.get(extraId);
+      // `extra.product_id !== line.productId` cierra la vía de un extra real, del MISMO
+      // tenant, pero que pertenece a otro producto: sin esta comprobación, el precio
+      // (correcto en la base de datos) se aplicaría a un producto para el que esa extra
+      // nunca se ofreció.
+      if (!extra || extra.product_id !== line.productId) {
+        throw new OrderCartError(`Extra no disponible: ${extraId}`);
+      }
+      const extraPriceCents = eurosToCents(Number(extra.price));
+      extrasCents.push(extraPriceCents);
+      lineExtraRows.push({
+        extra_id: extra.id,
+        name_snapshot: extra.name_i18n,
+        price: Number(extra.price),
+      });
+    }
+    extrasForRows.push(lineExtraRows);
+
+    const pricedLine: PricedLine = { unitPrice, quantity: line.quantity, extras: extrasCents };
     priced.push(pricedLine);
 
     rows.push({
@@ -105,7 +167,7 @@ export async function createPendingOrder(input: {
       quantity: line.quantity,
       // Misma función que usa computeTotals() para el total del pedido: una sola
       // definición de "cuánto cuesta una línea" en vez de reimplementarla aquí y
-      // arriesgarse a que ambas diverjan en cuanto se conecten las extras.
+      // arriesgarse a que ambas diverjan.
       line_total: centsToEuros(lineTotal(pricedLine)),
       destination: product.categories?.destination ?? "cocina",
       notes: line.notes,
@@ -141,10 +203,31 @@ export async function createPendingOrder(input: {
     .single();
   if (orderError) throw orderError;
 
-  const { error: itemsError } = await tenantScoped("order_items", input.tenantId).insert(
-    rows.map((r) => ({ ...r, order_id: order.id })),
+  // Se inserta una línea a la vez (en vez de un único insert masivo con `.select("id")`)
+  // para poder correlacionar CADA `order_item_id` recién creado con SUS extras, sin
+  // depender de que Postgres devuelva las filas de un INSERT múltiple en el mismo orden
+  // en que se enviaron -- ese orden no es una garantía del estándar SQL, y este
+  // emparejamiento es dinero: un id equivocado ataría las extras de una línea a otra.
+  const insertedItemIds: string[] = [];
+  for (const row of rows) {
+    const { data: itemRow, error: itemError } = await tenantScoped("order_items", input.tenantId)
+      .insert({ ...row, order_id: order.id })
+      .select("id")
+      .single();
+    if (itemError) throw itemError;
+    insertedItemIds.push(itemRow.id as string);
+  }
+
+  const extraInsertRows = insertedItemIds.flatMap((orderItemId, index) =>
+    (extrasForRows[index] ?? []).map((extraRow) => ({ ...extraRow, order_item_id: orderItemId })),
   );
-  if (itemsError) throw itemsError;
+  if (extraInsertRows.length > 0) {
+    const { error: extrasInsertError } = await tenantScoped(
+      "order_item_extras",
+      input.tenantId,
+    ).insert(extraInsertRows);
+    if (extrasInsertError) throw extrasInsertError;
+  }
 
   return {
     orderId: order.id as string,

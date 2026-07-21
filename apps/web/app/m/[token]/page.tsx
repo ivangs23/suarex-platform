@@ -27,6 +27,11 @@ export default async function MesaPage({ params }: { params: Promise<{ token: st
           categoryId: p.categoryId,
           name: p.nameI18n.es ?? "",
           priceCents: Math.round(p.price * 100),
+          extras: p.extras.map((e) => ({
+            id: e.id,
+            name: e.nameI18n.es ?? "",
+            priceCents: Math.round(e.price * 100),
+          })),
         }))}
       />
     </main>

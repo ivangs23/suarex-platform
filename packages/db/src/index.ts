@@ -19,6 +19,7 @@ export type {
   Category,
   OrderStatus,
   Product,
+  ProductExtra,
   TableRow,
   Tenant,
   TenantSettingsRow,

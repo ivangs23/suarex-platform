@@ -190,6 +190,215 @@ describe("createPendingOrder", () => {
   });
 });
 
+describe("createPendingOrder — extras", () => {
+  let extraId: string;
+
+  beforeAll(async () => {
+    const { data: extra } = await admin
+      .from("product_extras")
+      .insert({
+        tenant_id: tenant.tenantId,
+        product_id: productId,
+        name_i18n: { es: "Extra queso" },
+        price: 2.5,
+      })
+      .select("id")
+      .single();
+    extraId = extra?.id as string;
+  });
+
+  it("cobra el precio del producto más el de la extra, leídos de la base, e ignora cualquier precio enviado por el cliente", async () => {
+    const order = await createPendingOrder({
+      tenantId: tenant.tenantId,
+      venueId,
+      tableId,
+      // El tipo CartLineInput no tiene ningún campo de precio: ni la extra ni el
+      // producto pueden llevar uno adjunto desde el "cliente" (aquí, este test).
+      lines: [{ productId, quantity: 2, extraIds: [extraId], notes: null }],
+      taxRate: 0.1,
+    });
+
+    // 18,00 € producto + 2,50 € extra = 20,50 € por unidad x 2 = 41,00 €.
+    expect(order.totalCents).toBe(4100);
+
+    const { data: item } = await admin
+      .from("order_items")
+      .select("id, unit_price, quantity, line_total")
+      .eq("order_id", order.orderId)
+      .single();
+    expect(Number(item?.unit_price)).toBe(18);
+    expect(Number(item?.line_total)).toBe(41);
+
+    const { data: extraRows } = await admin
+      .from("order_item_extras")
+      .select("order_item_id, extra_id, name_snapshot, price")
+      .eq("order_item_id", item?.id);
+    expect(extraRows).toHaveLength(1);
+    expect(extraRows?.[0]?.extra_id).toBe(extraId);
+    expect(Number(extraRows?.[0]?.price)).toBe(2.5);
+    expect(extraRows?.[0]?.name_snapshot).toEqual({ es: "Extra queso" });
+  });
+
+  it("rechaza un extra de otro tenant, ignorando su id aunque exista de verdad", async () => {
+    const otro = await createTenantFixture(`ord-extra-otro-${nonce()}`);
+    const { data: cat } = await admin
+      .from("categories")
+      .insert({ tenant_id: otro.tenantId, slug: `c-${nonce()}`, name_i18n: { es: "X" } })
+      .select("id")
+      .single();
+    const { data: prod } = await admin
+      .from("products")
+      .insert({
+        tenant_id: otro.tenantId,
+        category_id: cat?.id,
+        name_i18n: { es: "Ajeno" },
+        price: 5,
+      })
+      .select("id")
+      .single();
+    const { data: foreignExtra } = await admin
+      .from("product_extras")
+      .insert({
+        tenant_id: otro.tenantId,
+        product_id: prod?.id,
+        name_i18n: { es: "Extra ajena" },
+        price: 0.01,
+      })
+      .select("id")
+      .single();
+
+    await expect(
+      createPendingOrder({
+        tenantId: tenant.tenantId,
+        venueId,
+        tableId,
+        lines: [{ productId, quantity: 1, extraIds: [foreignExtra?.id as string], notes: null }],
+        taxRate: 0.1,
+      }),
+    ).rejects.toThrow(/no disponible/i);
+  });
+
+  it("rechaza un extra que existe pero pertenece a otro producto del MISMO tenant", async () => {
+    const { data: category2 } = await admin
+      .from("categories")
+      .insert({ tenant_id: tenant.tenantId, slug: `c2-${nonce()}`, name_i18n: { es: "Otra" } })
+      .select("id")
+      .single();
+    const { data: otherProduct } = await admin
+      .from("products")
+      .insert({
+        tenant_id: tenant.tenantId,
+        category_id: category2?.id,
+        name_i18n: { es: "Otro producto" },
+        price: 3,
+      })
+      .select("id")
+      .single();
+    const { data: otherExtra } = await admin
+      .from("product_extras")
+      .insert({
+        tenant_id: tenant.tenantId,
+        product_id: otherProduct?.id,
+        name_i18n: { es: "Extra de otro producto" },
+        price: 1,
+      })
+      .select("id")
+      .single();
+
+    await expect(
+      createPendingOrder({
+        tenantId: tenant.tenantId,
+        venueId,
+        tableId,
+        // productId es el producto ORIGINAL de este describe; otherExtra pertenece
+        // a otherProduct, no a productId.
+        lines: [{ productId, quantity: 1, extraIds: [otherExtra?.id as string], notes: null }],
+        taxRate: 0.1,
+      }),
+    ).rejects.toThrow(/no disponible/i);
+  });
+
+  it("un id de extra duplicado en la misma línea se cobra una sola vez", async () => {
+    const order = await createPendingOrder({
+      tenantId: tenant.tenantId,
+      venueId,
+      tableId,
+      lines: [{ productId, quantity: 1, extraIds: [extraId, extraId], notes: null }],
+      taxRate: 0.1,
+    });
+
+    // 18,00 € + 2,50 € = 20,50 €, NO 23,00 € (que sería cobrar la extra dos veces).
+    expect(order.totalCents).toBe(2050);
+  });
+
+  it("rechaza un id de extra inexistente", async () => {
+    await expect(
+      createPendingOrder({
+        tenantId: tenant.tenantId,
+        venueId,
+        tableId,
+        lines: [
+          {
+            productId,
+            quantity: 1,
+            extraIds: ["00000000-0000-0000-0000-000000000000"],
+            notes: null,
+          },
+        ],
+        taxRate: 0.1,
+      }),
+    ).rejects.toThrow(/no disponible/i);
+  });
+
+  it("congela el precio de la extra: subirlo DESPUÉS en la base no reescribe un pedido ya creado", async () => {
+    // Extra propia de este test (no la compartida `extraId` de arriba) para no acoplar
+    // el orden de ejecución de los demás tests de este describe a su precio.
+    const { data: ownExtra } = await admin
+      .from("product_extras")
+      .insert({
+        tenant_id: tenant.tenantId,
+        product_id: productId,
+        name_i18n: { es: "Extra congelable" },
+        price: 2.5,
+      })
+      .select("id")
+      .single();
+    const ownExtraId = ownExtra?.id as string;
+
+    const order = await createPendingOrder({
+      tenantId: tenant.tenantId,
+      venueId,
+      tableId,
+      lines: [{ productId, quantity: 1, extraIds: [ownExtraId], notes: null }],
+      taxRate: 0.1,
+    });
+    expect(order.totalCents).toBe(2050); // 18,00 € + 2,50 €
+
+    // El precio de la extra sube en la base DESPUÉS de que el pedido ya existe.
+    const { error: updateError } = await admin
+      .from("product_extras")
+      .update({ price: 99, name_i18n: { es: "Extra renombrada" } })
+      .eq("id", ownExtraId);
+    if (updateError) throw updateError;
+
+    const { data: item } = await admin
+      .from("order_items")
+      .select("id")
+      .eq("order_id", order.orderId)
+      .single();
+    const { data: extraRow } = await admin
+      .from("order_item_extras")
+      .select("price, name_snapshot")
+      .eq("order_item_id", item?.id)
+      .single();
+
+    // El pedido ya creado sigue mostrando el precio Y el nombre de cuando se hizo, no
+    // los nuevos valores que la extra tiene ahora en product_extras.
+    expect(Number(extraRow?.price)).toBe(2.5);
+    expect(extraRow?.name_snapshot).toEqual({ es: "Extra congelable" });
+  });
+});
+
 describe("markOrderPaid", () => {
   it("marca como pagado un pedido pending", async () => {
     const order = await createPendingOrder({

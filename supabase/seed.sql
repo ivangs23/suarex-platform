@@ -44,6 +44,14 @@ select v.tenant_id, v.id, m.label, m.token, m.sort_order
   ) as m(label, token, sort_order)
  where t.slug = 'garum';
 
+-- Extra del vino de garum, para que `tests/e2e/qr-order.spec.ts` pueda demostrar que la
+-- carta ofrece extras y que elegir uno suma su precio al total del carrito.
+insert into public.product_extras (tenant_id, product_id, name_i18n, price)
+select p.tenant_id, p.id, '{"es":"Copa extra","en":"Extra glass"}'::jsonb, 3.00
+  from public.products p
+  join public.tenants t on t.id = p.tenant_id
+ where t.slug = 'garum';
+
 -- Mesa de manuela: sin esto, `tests/e2e/staff-board.spec.ts` no podría crear un pedido
 -- real para manuela por la API pública (`POST /api/orders` exige un `tableToken` válido,
 -- ver `findTableByToken`) y su test de aislamiento (control positivo con dos tenants

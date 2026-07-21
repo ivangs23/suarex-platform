@@ -26,3 +26,18 @@ test("la carta de un tenant no muestra productos de otro", async ({ page }) => {
   await page.goto(MESA_1);
   await expect(page.getByText("Tosta de jamón")).toHaveCount(0);
 });
+
+test("elegir un extra suma su precio al total del carrito del lado del cliente", async ({
+  page,
+}) => {
+  await page.goto(MESA_1);
+  await page.getByTestId("add-to-cart").first().click();
+  await expect(page.getByTestId("cart-total")).toHaveText("18,00 €");
+
+  await page.getByTestId("extra-checkbox").first().click();
+  await expect(page.getByTestId("cart-total")).toHaveText("21,00 €");
+
+  // Desmarcarla la resta de nuevo.
+  await page.getByTestId("extra-checkbox").first().click();
+  await expect(page.getByTestId("cart-total")).toHaveText("18,00 €");
+});
