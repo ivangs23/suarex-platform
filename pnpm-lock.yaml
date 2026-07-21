@@ -50,6 +50,9 @@ importers:
       '@suarex/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@suarex/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       next:
         specifier: ^16.2.6
         version: 16.2.10(@playwright/test@1.61.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)

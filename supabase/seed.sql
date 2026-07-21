@@ -33,3 +33,13 @@ union all
 select c.tenant_id, c.id, '{"es":"Tosta de jamón","en":"Ham toast"}'::jsonb, 4.50, 0
   from public.categories c join public.tenants t on t.id = c.tenant_id
  where t.slug = 'manuela';
+
+insert into public.tables (tenant_id, venue_id, label, token, sort_order)
+select v.tenant_id, v.id, m.label, m.token, m.sort_order
+  from public.venues v
+  join public.tenants t on t.id = v.tenant_id
+  cross join (values
+    ('1', '11111111-1111-1111-1111-111111111111'::uuid, 0),
+    ('2', '22222222-2222-2222-2222-222222222222'::uuid, 1)
+  ) as m(label, token, sort_order)
+ where t.slug = 'garum';
