@@ -52,6 +52,15 @@ type WriteFixture = {
   /** Columna+valor usados para el intento de UPDATE cross-tenant sobre la fila de B. */
   updateColumn: string;
   updateValue: unknown;
+  /**
+   * Por defecto, el UPDATE cross-tenant se espera SIN error (la policy `USING` filtra la
+   * fila del candidate set y el UPDATE simplemente afecta 0 filas). Declarar esto anula
+   * ese default cuando la tabla revoca el privilegio UPDATE a `authenticated` a nivel de
+   * GRANT (ver `order_counters` más abajo, ronda de fix de seguridad #1): en ese caso
+   * Postgres rechaza el UPDATE entero con "permission denied" antes de que RLS llegue a
+   * filtrar nada, así que SÍ hay un error, y es ese, no ausencia de error.
+   */
+  expectedUpdateRejection?: { code: string; messageIncludes?: string };
 };
 
 const RLS_REJECTION = { code: "42501" };
@@ -163,22 +172,41 @@ const WRITE_FIXTURES: Record<string, WriteFixture> = {
   },
   tables: {
     // venue_id apunta al venue real de B (seedB.venueId, sembrado por seedCatalog) para
-    // que la única razón de rechazo posible sea la policy de aislamiento, nunca una FK
-    // inexistente; label lleva nonce() para no chocar con la unique (tenant_id, venue_id,
-    // label) de la mesa ya sembrada de B.
+    // que la única razón de rechazo posible sea una guarda de aislamiento deliberada,
+    // nunca una FK inexistente; label lleva nonce() para no chocar con la unique
+    // (tenant_id, venue_id, label) de la mesa ya sembrada de B.
+    //
+    // tenant_id y venue_id aquí SÍ pertenecen al mismo tenant (B), así que el trigger
+    // `assert_same_tenant` (ronda de fix de seguridad #2, ver 20260721000004_tables.sql)
+    // no ve ninguna discrepancia de tenants -- PERO, igual que en products/product_extras,
+    // ese trigger consulta `public.venues` con los privilegios (y por tanto la RLS) del
+    // invocador: A no puede ver el venue de B bajo su propia RLS, así que la subconsulta
+    // devuelve 0 filas, `parent_tenant` queda NULL, y el trigger dispara su propia
+    // excepción (P0001) ANTES de que el WITH CHECK de `tables_isolation` llegue a
+    // evaluarse. Es la misma guarda de aislamiento real, solo en la capa del trigger en
+    // vez de en la de RLS -- ver SAME_TENANT_TRIGGER_REJECTION.
     insertPayload: ({ tenantB, seedB }) => ({
       tenant_id: tenantB.tenantId,
       venue_id: seedB.venueId,
       label: `intruso-mesa-${nonce()}`,
     }),
-    expectedInsertRejection: RLS_REJECTION,
+    expectedInsertRejection: SAME_TENANT_TRIGGER_REJECTION,
     updateColumn: "sort_order",
     updateValue: 999,
   },
   order_counters: {
     // Misma lógica que tables: venue_id real de B, pero con una fecha distinta a la
-    // sembrada ("2026-01-01") para que la única causa de rechazo posible sea RLS, nunca
-    // un choque con la primary key (tenant_id, venue_id, date) de la fila ya existente.
+    // sembrada ("2026-01-01") para que la única causa de rechazo posible sea una guarda de
+    // aislamiento deliberada, nunca un choque con la primary key (tenant_id, venue_id,
+    // date) de la fila ya existente. Igual que en `tables`, el trigger
+    // `assert_same_tenant` ahora cubre esta tabla y sería quien dispare P0001 -- pero
+    // aquí nunca llega a evaluarse: la ronda de fix de seguridad #1 revocó INSERT (y
+    // UPDATE/DELETE/TRUNCATE) de `authenticated` sobre order_counters (la única vía de
+    // escritura debe ser next_order_number(), SECURITY DEFINER), así que Postgres rechaza
+    // el INSERT entero por falta de privilegio ANTES de que dispare ningún trigger.
+    // "permission denied for table" también es SQLSTATE 42501, igual que el RLS_REJECTION
+    // original, así que el código esperado no cambia (solo cambia, internamente, en qué
+    // capa se produce el rechazo).
     insertPayload: ({ tenantB, seedB }) => ({
       tenant_id: tenantB.tenantId,
       venue_id: seedB.venueId,
@@ -187,6 +215,11 @@ const WRITE_FIXTURES: Record<string, WriteFixture> = {
     expectedInsertRejection: RLS_REJECTION,
     updateColumn: "last_number",
     updateValue: 999,
+    // Mismo motivo que el INSERT de arriba: UPDATE fue revocado por completo a
+    // `authenticated` (ronda de fix de seguridad #1), así que el intento de UPDATE
+    // cross-tenant ya ni siquiera llega a que RLS lo filtre -- Postgres lo rechaza entero
+    // con "permission denied", SQLSTATE 42501.
+    expectedUpdateRejection: { code: "42501", messageIncludes: "permission denied" },
   },
 };
 
@@ -414,8 +447,27 @@ describe("aislamiento entre tenants", () => {
         .update({ [updateColumn]: updateValue })
         .eq(scopeColumn, tenantB.tenantId)
         .select();
-      expect(error, `${table}: UPDATE cross-tenant devolvió error inesperado`).toBeNull();
-      expect(data ?? [], `${table}: UPDATE cross-tenant afectó filas`).toHaveLength(0);
+
+      if (fixture.expectedUpdateRejection) {
+        // Esta tabla revoca el privilegio UPDATE a `authenticated` a nivel de GRANT (ver
+        // el comentario en su WRITE_FIXTURES): el rechazo esperado es un error explícito,
+        // no una ausencia de filas afectadas.
+        const expected = fixture.expectedUpdateRejection;
+        expect(error, `${table}: UPDATE cross-tenant NO fue rechazado`).not.toBeNull();
+        expect(
+          error?.code,
+          `${table}: UPDATE cross-tenant fue rechazado por otra razón (${error?.message}), no por la guarda esperada (${expected.code})`,
+        ).toBe(expected.code);
+        if (expected.messageIncludes) {
+          expect(
+            error?.message,
+            `${table}: el mensaje de error no confirma la guarda esperada`,
+          ).toContain(expected.messageIncludes);
+        }
+      } else {
+        expect(error, `${table}: UPDATE cross-tenant devolvió error inesperado`).toBeNull();
+        expect(data ?? [], `${table}: UPDATE cross-tenant afectó filas`).toHaveLength(0);
+      }
 
       const { data: intact, error: intactError } = await admin
         .from(table)
