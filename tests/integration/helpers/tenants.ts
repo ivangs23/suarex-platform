@@ -33,6 +33,7 @@ export type TenantFixture = {
 export type SeedResult = {
   categoryId: string;
   productId: string;
+  venueId: string;
 };
 
 const PASSWORD = "fixture-password-1234";
@@ -120,9 +121,11 @@ export async function seedCatalog(tenantId: string, label: string): Promise<Seed
   });
   if (extraError) throw extraError;
 
-  const { error: venueError } = await admin
+  const { data: venue, error: venueError } = await admin
     .from("venues")
-    .insert({ tenant_id: tenantId, slug: "principal", name: "Principal", is_default: true });
+    .insert({ tenant_id: tenantId, slug: "principal", name: "Principal", is_default: true })
+    .select("id")
+    .single();
   if (venueError) throw venueError;
 
   const { error: settingsError } = await admin
@@ -139,7 +142,22 @@ export async function seedCatalog(tenantId: string, label: string): Promise<Seed
     .insert({ tenant_id: tenantId, name_i18n: { es: `Alérgeno ${label}` } });
   if (allergenError) throw allergenError;
 
-  return { categoryId: category.id, productId: product.id };
+  // tables/order_counters también son tenant-scoped (mesas del local y contador de
+  // pedidos por día): se siembra una fila de cada una aquí, igual que el resto de
+  // tablas de este helper, para que tanto el control positivo de lectura como la
+  // cobertura de escritura cross-tenant (WRITE_FIXTURES) tengan una fila real de este
+  // tenant sobre la que operar.
+  const { error: tableError } = await admin
+    .from("tables")
+    .insert({ tenant_id: tenantId, venue_id: venue.id, label: `mesa-${label}` });
+  if (tableError) throw tableError;
+
+  const { error: counterError } = await admin
+    .from("order_counters")
+    .insert({ tenant_id: tenantId, venue_id: venue.id, date: "2026-01-01", last_number: 1 });
+  if (counterError) throw counterError;
+
+  return { categoryId: category.id, productId: product.id, venueId: venue.id };
 }
 
 /** Tablas de public con columna tenant_id, descubiertas en runtime. */

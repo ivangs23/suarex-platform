@@ -161,6 +161,33 @@ const WRITE_FIXTURES: Record<string, WriteFixture> = {
     updateColumn: "plan",
     updateValue: "hacked",
   },
+  tables: {
+    // venue_id apunta al venue real de B (seedB.venueId, sembrado por seedCatalog) para
+    // que la única razón de rechazo posible sea la policy de aislamiento, nunca una FK
+    // inexistente; label lleva nonce() para no chocar con la unique (tenant_id, venue_id,
+    // label) de la mesa ya sembrada de B.
+    insertPayload: ({ tenantB, seedB }) => ({
+      tenant_id: tenantB.tenantId,
+      venue_id: seedB.venueId,
+      label: `intruso-mesa-${nonce()}`,
+    }),
+    expectedInsertRejection: RLS_REJECTION,
+    updateColumn: "sort_order",
+    updateValue: 999,
+  },
+  order_counters: {
+    // Misma lógica que tables: venue_id real de B, pero con una fecha distinta a la
+    // sembrada ("2026-01-01") para que la única causa de rechazo posible sea RLS, nunca
+    // un choque con la primary key (tenant_id, venue_id, date) de la fila ya existente.
+    insertPayload: ({ tenantB, seedB }) => ({
+      tenant_id: tenantB.tenantId,
+      venue_id: seedB.venueId,
+      date: "2026-03-03",
+    }),
+    expectedInsertRejection: RLS_REJECTION,
+    updateColumn: "last_number",
+    updateValue: 999,
+  },
 };
 
 let tenantA: TenantFixture;
