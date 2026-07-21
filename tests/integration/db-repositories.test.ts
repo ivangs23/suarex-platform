@@ -76,4 +76,24 @@ describe("repositorios de catálogo", () => {
     const settings = await getTenantSettings(tenantA.tenantId);
     expect(settings?.branding).toMatchObject({ colors: { primary: "#000000" } });
   });
+
+  it("getTenantSettings degrada campo a campo un valor corrupto, sin blanquear el resto de la fila", async () => {
+    // `channels` con un valor fuera del enum de tenantSettingsSchema (drift de datos: hoy
+    // no hay ningún camino de escritura autenticado hacia esta tabla, pero un futuro CRUD
+    // de administración podría producirlo). Escrito directamente vía admin porque un
+    // valor así nunca pasaría por un `.insert()`/`.update()` tipado normal de la app.
+    const { error: corruptError } = await admin
+      .from("tenant_settings")
+      .update({ channels: ["canal-inventado"], locale: "es" })
+      .eq("tenant_id", tenantA.tenantId);
+    if (corruptError) throw corruptError;
+
+    const settings = await getTenantSettings(tenantA.tenantId);
+    // El campo corrupto degrada a su default...
+    expect(settings?.channels).toEqual([]);
+    // ...pero locale (válido) y branding (fuera del alcance de este schema) sobreviven
+    // intactos: una fila con un solo campo corrupto no se blanquea entera.
+    expect(settings?.locale).toBe("es");
+    expect(settings?.branding).toMatchObject({ colors: { primary: "#000000" } });
+  });
 });
