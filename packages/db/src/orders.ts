@@ -16,6 +16,24 @@ type ProductRow = {
   categories: { destination: string } | null;
 };
 
+/**
+ * Fallos que describen algo sobre EL CARRITO del comensal (línea con cantidad
+ * inválida, producto que ya no existe/está disponible para este tenant) y que por
+ * tanto es seguro y útil devolver tal cual a un llamante anónimo: le dicen qué
+ * línea debe quitar o corregir. Es la ÚNICA clase de error de esta función que el
+ * route handler (`apps/web/app/api/orders/route.ts`) reenvía verbatim; cualquier
+ * `Error` normal que salga de aquí (fallo de Postgres, RPC, restricción de
+ * `assert_same_tenant`, taxRate de la config del tenant fuera de rango...) no es
+ * culpa ni asunto del comensal y el route handler lo colapsa a un mensaje
+ * genérico, registrando el original en el log del servidor.
+ */
+export class OrderCartError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "OrderCartError";
+  }
+}
+
 export async function createPendingOrder(input: {
   tenantId: string;
   venueId: string;
@@ -23,10 +41,10 @@ export async function createPendingOrder(input: {
   lines: CartLineInput[];
   taxRate: number;
 }): Promise<{ orderId: string; publicToken: string; totalCents: number; currency: string }> {
-  if (input.lines.length === 0) throw new Error("El pedido no tiene líneas");
+  if (input.lines.length === 0) throw new OrderCartError("El pedido no tiene líneas");
   for (const line of input.lines) {
     if (!Number.isInteger(line.quantity) || line.quantity <= 0) {
-      throw new Error(`Cantidad inválida: ${line.quantity}`);
+      throw new OrderCartError(`Cantidad inválida: ${line.quantity}`);
     }
   }
 
@@ -72,7 +90,7 @@ export async function createPendingOrder(input: {
   for (const line of input.lines) {
     const product = byId.get(line.productId);
     if (!product?.is_available) {
-      throw new Error(`Producto no disponible: ${line.productId}`);
+      throw new OrderCartError(`Producto no disponible: ${line.productId}`);
     }
 
     // Los precios SIEMPRE salen de la base de datos, nunca del carrito del cliente.
@@ -144,6 +162,30 @@ export async function attachPaymentIntent(
   const { error } = await tenantScoped("orders", tenantId)
     .update({ stripe_payment_intent_id: paymentIntentId })
     .eq("id", orderId);
+  if (error) throw error;
+}
+
+/**
+ * Se llama cuando un pedido `pending` ya se creó pero el intento de pago de Stripe
+ * (o su asociación al pedido) falla justo después, en `apps/web/app/api/orders/route.ts`.
+ * Sin esto, el pedido queda huérfano en `pending` para siempre: no solo es basura en
+ * la base de datos, sino que `kitchen_status`/`bar_status` pueden quedar en `pending`
+ * también, así que cocina/barra podrían llegar a ver y preparar un pedido que jamás
+ * tuvo -- ni podrá tener -- un cobro válido asociado.
+ *
+ * Se marca `cancelled` (valor válido del CHECK de `orders.status`) en vez de borrarlo:
+ * el pedido y sus líneas quedan trazables para depuración/auditoría, y `cancelled` es
+ * distinguible de un `pending` legítimo que sigue esperando el pago del comensal.
+ *
+ * El `.eq("status", "pending")` es la misma guarda de concurrencia que usa
+ * `markOrderPaid`: si por lo que sea el pedido ya cambió de estado entre medias, esta
+ * llamada no pisa nada.
+ */
+export async function cancelOrphanedPendingOrder(tenantId: string, orderId: string): Promise<void> {
+  const { error } = await tenantScoped("orders", tenantId)
+    .update({ status: "cancelled" })
+    .eq("id", orderId)
+    .eq("status", "pending");
   if (error) throw error;
 }
 
