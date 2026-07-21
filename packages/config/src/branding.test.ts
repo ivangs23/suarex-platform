@@ -41,3 +41,129 @@ describe("brandingToCssVars", () => {
     expect(css.endsWith(";")).toBe(true);
   });
 });
+
+// --- Regresiones del reviewer (findings 1-4) ---
+
+describe("parseBranding — finding 1: nunca debe lanzar", () => {
+  it("no lanza cuando una propiedad de nivel superior es un getter que lanza", () => {
+    const hostile = {
+      get colors() {
+        throw new Error("boom");
+      },
+    };
+    expect(() => parseBranding(hostile)).not.toThrow();
+    expect(parseBranding(hostile)).toEqual(DEFAULT_BRANDING);
+  });
+
+  it("no lanza cuando una propiedad anidada es un getter que lanza", () => {
+    const hostile = {
+      colors: {
+        get bg() {
+          throw new Error("boom");
+        },
+        fg: "#000000",
+      },
+    };
+    expect(() => parseBranding(hostile)).not.toThrow();
+    const result = parseBranding(hostile);
+    expect(result.colors.bg).toBe(DEFAULT_BRANDING.colors.bg);
+    expect(result.colors.fg).toBe("#000000");
+  });
+});
+
+describe("parseBranding — finding 2: degradación por campo, no todo o nada", () => {
+  it("conserva bg válido y fonts.display válido aunque colors.primary sea inválido", () => {
+    const result = parseBranding({
+      colors: { bg: "#ffffff", primary: "not-a-color" },
+      fonts: { display: "Georgia" },
+    });
+    expect(result.colors.bg).toBe("#ffffff");
+    expect(result.colors.primary).toBe(DEFAULT_BRANDING.colors.primary);
+    expect(result.fonts.display).toBe("Georgia");
+    expect(result.fonts.body).toBe(DEFAULT_BRANDING.fonts.body);
+  });
+});
+
+describe("parseBranding — finding 3: logoUrl solo admite http/https", () => {
+  it("rechaza javascript: y cae al default", () => {
+    expect(parseBranding({ logoUrl: "javascript:alert(1)" }).logoUrl).toBe(
+      DEFAULT_BRANDING.logoUrl,
+    );
+  });
+
+  it("rechaza data: y cae al default", () => {
+    expect(parseBranding({ logoUrl: "data:text/html,<script>alert(1)</script>" }).logoUrl).toBe(
+      DEFAULT_BRANDING.logoUrl,
+    );
+  });
+
+  it("acepta https absoluto", () => {
+    expect(parseBranding({ logoUrl: "https://cdn.example.com/x.png" }).logoUrl).toBe(
+      "https://cdn.example.com/x.png",
+    );
+  });
+
+  it("acepta http absoluto", () => {
+    expect(parseBranding({ logoUrl: "http://cdn.example.com/x.png" }).logoUrl).toBe(
+      "http://cdn.example.com/x.png",
+    );
+  });
+});
+
+describe("parseBranding — finding 4: undefined explícito no debe pisar el default", () => {
+  it("colors.bg explícitamente undefined cae al default, no se propaga como 'undefined'", () => {
+    const result = parseBranding({ colors: { bg: undefined, fg: "#000000" } });
+    expect(result.colors.bg).toBe(DEFAULT_BRANDING.colors.bg);
+    expect(result.colors.fg).toBe("#000000");
+    const css = brandingToCssVars(result);
+    expect(css).not.toContain("undefined");
+  });
+});
+
+describe("brandingToCssVars — límite de seguridad ante payloads hostiles", () => {
+  const FORBIDDEN_CHARS = ["<", ">", '"', "'", "`", "}"];
+  const HOSTILE_PAYLOADS = [
+    "</style><script>alert(1)</script>",
+    '"; } body{background:red} /*',
+    "`" + "alert(1)" + "`",
+    "red; } * {outline:9999px solid red} /*",
+    "javascript:alert(1)",
+    "data:text/html,<script>alert(1)</script>",
+    "'; color:red; --x:'",
+    "<img src=x onerror=alert(1)>",
+    'Arial", "onmouseover="alert(1)',
+    "Arial}body{background:url(javascript:alert(1))}",
+  ];
+
+  it("ningún payload hostil en colores/fuentes/logoUrl deja rastro en el CSS emitido", () => {
+    for (const payload of HOSTILE_PAYLOADS) {
+      const branding = parseBranding({
+        colors: { bg: payload, fg: payload, primary: payload, accent: payload, muted: payload },
+        fonts: { display: payload, body: payload },
+        logoUrl: payload,
+      });
+      const css = brandingToCssVars(branding);
+      for (const char of FORBIDDEN_CHARS) {
+        expect(css.includes(char)).toBe(false);
+      }
+      // 5 colores + 2 fuentes = 7 declaraciones, exactamente 7 punto y coma.
+      expect(css.split(";").length - 1).toBe(7);
+    }
+  });
+
+  it("un payload mixto (campos válidos + hostiles) conserva lo válido y sigue siendo CSS seguro", () => {
+    const branding = parseBranding({
+      colors: { bg: "#ffffff", primary: "<script>alert(1)</script>" },
+      fonts: { display: "Georgia", body: '"; } * {color:red} /*' },
+      logoUrl: "javascript:alert(1)",
+    });
+    expect(branding.colors.bg).toBe("#ffffff");
+    expect(branding.fonts.display).toBe("Georgia");
+    expect(branding.logoUrl).toBe(DEFAULT_BRANDING.logoUrl);
+
+    const css = brandingToCssVars(branding);
+    for (const char of FORBIDDEN_CHARS) {
+      expect(css.includes(char)).toBe(false);
+    }
+  });
+});
