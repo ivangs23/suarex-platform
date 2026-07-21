@@ -130,10 +130,92 @@ describe("createPendingOrder", () => {
       }),
     ).rejects.toThrow();
   });
+
+  it("rechaza un taxRate no finito", async () => {
+    await expect(
+      createPendingOrder({
+        tenantId: tenant.tenantId,
+        venueId,
+        tableId,
+        lines: [{ productId, quantity: 1, extraIds: [], notes: null }],
+        taxRate: Number.NaN,
+      }),
+    ).rejects.toThrow(/taxRate/);
+
+    await expect(
+      createPendingOrder({
+        tenantId: tenant.tenantId,
+        venueId,
+        tableId,
+        lines: [{ productId, quantity: 1, extraIds: [], notes: null }],
+        taxRate: Number.POSITIVE_INFINITY,
+      }),
+    ).rejects.toThrow(/taxRate/);
+  });
+
+  it("rechaza un taxRate fuera de rango [0, 1)", async () => {
+    // Negativo: 1 + taxRate se acercaría o cruzaría cero (base infinita o de signo cambiado).
+    await expect(
+      createPendingOrder({
+        tenantId: tenant.tenantId,
+        venueId,
+        tableId,
+        lines: [{ productId, quantity: 1, extraIds: [], notes: null }],
+        taxRate: -1,
+      }),
+    ).rejects.toThrow(/taxRate/);
+
+    // >= 1: ninguna jurisdicción real aplica IVA >= 100 %; también atrapa el error
+    // clásico de pasar el tipo como porcentaje entero (21) en vez de fracción (0.21).
+    await expect(
+      createPendingOrder({
+        tenantId: tenant.tenantId,
+        venueId,
+        tableId,
+        lines: [{ productId, quantity: 1, extraIds: [], notes: null }],
+        taxRate: 21,
+      }),
+    ).rejects.toThrow(/taxRate/);
+  });
+
+  it("acepta un taxRate normal dentro de rango", async () => {
+    const order = await createPendingOrder({
+      tenantId: tenant.tenantId,
+      venueId,
+      tableId,
+      lines: [{ productId, quantity: 1, extraIds: [], notes: null }],
+      taxRate: 0.21,
+    });
+    expect(order.totalCents).toBe(1800);
+  });
 });
 
 describe("markOrderPaid", () => {
-  it("es idempotente", async () => {
+  it("marca como pagado un pedido pending", async () => {
+    const order = await createPendingOrder({
+      tenantId: tenant.tenantId,
+      venueId,
+      tableId,
+      lines: [{ productId, quantity: 1, extraIds: [], notes: null }],
+      taxRate: 0.1,
+    });
+
+    const pi = `pi_test_${nonce()}`;
+    await admin.from("orders").update({ stripe_payment_intent_id: pi }).eq("id", order.orderId);
+
+    const outcome = await markOrderPaid(pi);
+    expect(outcome).toBe("marked");
+
+    const { data } = await admin
+      .from("orders")
+      .select("status, paid_at")
+      .eq("id", order.orderId)
+      .single();
+    expect(data?.status).toBe("paid");
+    expect(data?.paid_at).not.toBeNull();
+  });
+
+  it("es idempotente: la segunda llamada da already-paid y paid_at no se mueve", async () => {
     const order = await createPendingOrder({
       tenantId: tenant.tenantId,
       venueId,
@@ -146,7 +228,7 @@ describe("markOrderPaid", () => {
     await admin.from("orders").update({ stripe_payment_intent_id: pi }).eq("id", order.orderId);
 
     const first = await markOrderPaid(pi);
-    expect(first.alreadyPaid).toBe(false);
+    expect(first).toBe("marked");
 
     const { data: afterFirst } = await admin
       .from("orders")
@@ -155,7 +237,7 @@ describe("markOrderPaid", () => {
       .single();
 
     const second = await markOrderPaid(pi);
-    expect(second.alreadyPaid).toBe(true);
+    expect(second).toBe("already-paid");
 
     const { data: afterSecond } = await admin
       .from("orders")
@@ -164,6 +246,12 @@ describe("markOrderPaid", () => {
       .single();
 
     expect(afterSecond?.status).toBe("paid");
+    expect(afterSecond?.status).toBe(afterFirst?.status);
     expect(afterSecond?.paid_at).toBe(afterFirst?.paid_at);
+  });
+
+  it("devuelve order-not-found cuando ningún pedido tiene ese payment intent", async () => {
+    const outcome = await markOrderPaid(`pi_test_inexistente_${nonce()}`);
+    expect(outcome).toBe("order-not-found");
   });
 });

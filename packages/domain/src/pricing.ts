@@ -52,8 +52,21 @@ export function lineTotal(line: PricedLine): Cents {
  *
  * La cuota se deriva restando la base al total, no redondeando por separado: así
  * base + cuota == total siempre, sin céntimos perdidos ni inventados.
+ *
+ * `taxRate` solo se valida aquí como última línea de defensa matemática, no de
+ * negocio: este paquete no sabe qué es un tipo de IVA razonable (eso lo decide
+ * quien llama, p. ej. `createPendingOrder` en `@suarex/db`). Lo único que esta
+ * función necesita garantizar es que `1 + taxRate` no sea cero ni negativo --
+ * si lo fuera, la base saldría `Infinity` o cambiaría de signo. Por eso el
+ * límite es `taxRate > -1` y no algo más estrecho: un tipo de 1 (100 %) sigue
+ * siendo válido aritméticamente (ver el caso límite en pricing.test.ts) aunque
+ * no tenga sentido fiscal en España.
  */
 export function computeTotals(lines: PricedLine[], taxRate: number): OrderTotals {
+  if (!Number.isFinite(taxRate) || taxRate <= -1) {
+    throw new Error(`taxRate debe ser finito y mayor que -1: ${taxRate}`);
+  }
+
   const total = lines.reduce((sum, line) => sum + lineTotal(line), 0);
   const subtotal = Math.round(total / (1 + taxRate));
   return { subtotal, taxAmount: total - subtotal, total };

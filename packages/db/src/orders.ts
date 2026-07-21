@@ -30,6 +30,23 @@ export async function createPendingOrder(input: {
     }
   }
 
+  // `taxRate` acaba en subtotal/tax_amount de un recibo fiscal persistido, así
+  // que se valida ANTES de tocar la base de datos, no solo en computeTotals.
+  // Rango elegido deliberadamente para un tipo de IVA, no una lista cerrada de
+  // valores españoles (el sistema es multi-tenant y puede servir otras
+  // jurisdicciones):
+  //   - `>= 0`: un tipo de IVA negativo no es un concepto fiscal real para un
+  //     precio de carta; no existe jurisdicción con IVA negativo.
+  //   - `< 1`: ninguna jurisdicción conocida aplica un IVA/IGV >= 100 % sobre
+  //     bienes de hostelería (el tipo estándar más alto del mundo ronda el
+  //     25-27 %); `< 1` deja margen amplio para cualquier país sin permitir
+  //     valores absurdos. De propina, atrapa el error clásico de pasar el tipo
+  //     como porcentaje entero (`21`) en vez de fracción (`0.21`): 21 nunca
+  //     entra en este rango y el error señala el valor exacto recibido.
+  if (!Number.isFinite(input.taxRate) || input.taxRate < 0 || input.taxRate >= 1) {
+    throw new Error(`taxRate fuera de rango (se espera [0, 1)): ${input.taxRate}`);
+  }
+
   const productIds = [...new Set(input.lines.map((l) => l.productId))];
 
   // El filtro por tenant lo aplica tenantScoped: un producto de otro tenant
@@ -131,20 +148,48 @@ export async function attachPaymentIntent(
 }
 
 /**
- * Idempotente por construcción: el `.eq("status", "pending")` hace que una segunda
- * llamada no encuentre filas que actualizar, así que `paid_at` conserva el instante
- * del primer cobro y el pedido no cambia. Devuelve si ya estaba pagado para que el
- * webhook pueda registrarlo sin tratarlo como error.
+ * Tres resultados, no dos, porque conflar los tres tiraría una señal que vale
+ * la pena conservar:
+ *   - "marked": el pedido existía en `pending` y se acaba de marcar pagado.
+ *   - "already-paid": el pedido existe pero ya no estaba `pending` (webhook
+ *     duplicado -- normal e inofensivo).
+ *   - "order-not-found": ningún pedido tiene ese `stripe_payment_intent_id`.
+ *     Esto NO es inofensivo: implica un cobro sin pedido asociado en este
+ *     sistema, un webhook apuntando al entorno equivocado, o alguien
+ *     sondeando el endpoint.
  */
-export async function markOrderPaid(paymentIntentId: string): Promise<{ alreadyPaid: boolean }> {
-  const { data, error } = await ordersTableForPaymentResolution()
+export type MarkPaidOutcome = "marked" | "already-paid" | "order-not-found";
+
+/**
+ * Idempotente por construcción: el UPDATE lleva `.eq("status", "pending")`, así
+ * que una segunda llamada no encuentra filas que actualizar (0 filas afectadas)
+ * y `paid_at` conserva el instante del primer cobro. El resultado del UPDATE
+ * (filas realmente afectadas) es lo que decide "marked", no una lectura previa
+ * del estado -- así, ante dos webhooks concurrentes para el mismo
+ * paymentIntentId, como mucho uno de los dos ve "marked" y el otro cae al
+ * SELECT de abajo y ve "already-paid", nunca los dos "marked".
+ *
+ * Solo si el UPDATE no afectó ninguna fila hace falta un SELECT adicional para
+ * distinguir "already-paid" (la fila existe, pero no estaba pending) de
+ * "order-not-found" (no existe ninguna fila con ese payment intent) -- un
+ * único UPDATE no puede por sí mismo distinguir esos dos casos.
+ */
+export async function markOrderPaid(paymentIntentId: string): Promise<MarkPaidOutcome> {
+  const { data: updated, error: updateError } = await ordersTableForPaymentResolution()
     .update({ status: "paid", paid_at: new Date().toISOString() })
     .eq("stripe_payment_intent_id", paymentIntentId)
     .eq("status", "pending")
     .select("id");
-  if (error) throw error;
+  if (updateError) throw updateError;
+  if ((updated ?? []).length > 0) return "marked";
 
-  return { alreadyPaid: (data ?? []).length === 0 };
+  const { data: existing, error: selectError } = await ordersTableForPaymentResolution()
+    .select("id")
+    .eq("stripe_payment_intent_id", paymentIntentId)
+    .maybeSingle();
+  if (selectError) throw selectError;
+
+  return existing ? "already-paid" : "order-not-found";
 }
 
 export async function getOrderByPublicToken(publicToken: string): Promise<OrderStatus | null> {

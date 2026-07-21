@@ -1,4 +1,5 @@
 export { getCategories, getProducts } from "./catalog.js";
+export type { MarkPaidOutcome } from "./orders.js";
 export {
   attachPaymentIntent,
   createPendingOrder,

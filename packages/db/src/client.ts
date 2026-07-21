@@ -118,10 +118,16 @@ export function tablesTableForTokenResolution() {
 }
 
 /**
- * TERCERA EXENCIÓN DELIBERADA. El webhook de Stripe identifica el pedido por
- * `stripe_payment_intent_id` y no sabe nada de tenants: Stripe no los conoce. La
- * búsqueda es por una columna con índice único global, así que devuelve una fila o
- * ninguna -- no puede usarse para barrer datos de nadie. Acotado por firma a `orders`.
+ * TERCERA EXENCIÓN DELIBERADA, con dos usos legítimos, ambos búsquedas por una
+ * columna con índice único global (devuelven una fila o ninguna, nunca pueden
+ * usarse para barrer datos de nadie):
+ *   1. El webhook de Stripe identifica el pedido por `stripe_payment_intent_id`
+ *      (columna `unique`) y no sabe nada de tenants: Stripe no los conoce.
+ *   2. `getOrderByPublicToken` resuelve el estado de un pedido para el cliente
+ *      (consulta de invitado, sin sesión) por `public_token` (índice único
+ *      `orders_public_token_idx`) -- igual que el token de mesa, es lo que
+ *      identifica la fila antes de que exista ningún tenant conocido.
+ * Acotado por firma a `orders`; no es un escape hatch de propósito general.
  */
 export function ordersTableForPaymentResolution() {
   return serviceClient().from("orders");

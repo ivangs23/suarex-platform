@@ -64,6 +64,32 @@ describe("computeTotals", () => {
   it("un pedido vacío da todo a cero", () => {
     expect(computeTotals([], 0.1)).toEqual({ subtotal: 0, taxAmount: 0, total: 0 });
   });
+
+  it("rechaza un taxRate no finito", () => {
+    expect(() => computeTotals([{ unitPrice: 1000, quantity: 1, extras: [] }], Number.NaN)).toThrow(
+      /taxRate/,
+    );
+    expect(() =>
+      computeTotals([{ unitPrice: 1000, quantity: 1, extras: [] }], Number.POSITIVE_INFINITY),
+    ).toThrow(/taxRate/);
+  });
+
+  it("rechaza un taxRate <= -1 (haría la base infinita o de signo cambiado)", () => {
+    expect(() => computeTotals([{ unitPrice: 1000, quantity: 1, extras: [] }], -1)).toThrow(
+      /taxRate/,
+    );
+    expect(() => computeTotals([{ unitPrice: 1000, quantity: 1, extras: [] }], -2)).toThrow(
+      /taxRate/,
+    );
+  });
+
+  it("un taxRate de 1 (100 %) sigue siendo aritméticamente válido", () => {
+    // Este paquete no juzga si un tipo es fiscalmente razonable, solo que la
+    // división por (1 + taxRate) no rompa. Esa decisión de negocio vive en
+    // quien llama (createPendingOrder en @suarex/db).
+    const totals = computeTotals([{ unitPrice: 1000, quantity: 1, extras: [] }], 1);
+    expect(totals.subtotal + totals.taxAmount).toBe(totals.total);
+  });
 });
 
 /**
