@@ -40,7 +40,11 @@ export type TenantScopedTable =
   | "allergens"
   | "categories"
   | "products"
-  | "product_extras";
+  | "product_extras"
+  | "tables"
+  | "orders"
+  | "order_items"
+  | "order_item_extras";
 
 /**
  * ÚNICO punto de entrada a una tabla tenant-scoped desde este paquete. `tenantId` es un
@@ -61,6 +65,26 @@ export function tenantScoped(table: TenantScopedTable, tenantId: string) {
     // resultado se degrada a `GenericStringError` en vez de la forma real de la fila.
     select<Query extends string = "*">(columns: Query) {
       return serviceClient().from(table).select(columns).eq("tenant_id", tenantId);
+    },
+
+    /**
+     * `tenant_id` se sobreescribe DESPUÉS de esparcir la fila, así que un
+     * `tenant_id` ajeno que venga en los datos no puede colarse: el del
+     * parámetro siempre gana.
+     */
+    insert<Row extends Record<string, unknown>>(rows: Row | Row[]) {
+      const list = Array.isArray(rows) ? rows : [rows];
+      const scoped = list.map((row) => ({ ...row, tenant_id: tenantId }));
+      return serviceClient().from(table).insert(scoped);
+    },
+
+    /**
+     * `tenant_id` se elimina de los valores (no tiene sentido reasignar una fila
+     * a otro tenant) y el filtro se aplica antes de devolver el builder.
+     */
+    update(values: Record<string, unknown>) {
+      const { tenant_id: _ignored, ...rest } = values;
+      return serviceClient().from(table).update(rest).eq("tenant_id", tenantId);
     },
   };
 }

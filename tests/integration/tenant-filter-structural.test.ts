@@ -1,6 +1,8 @@
 import { execFileSync } from "node:child_process";
 import path from "node:path";
+import { tenantScoped } from "@suarex/db/client";
 import { describe, expect, it } from "vitest";
+import { admin, createTenantFixture, deleteTenantFixture } from "./helpers/tenants.js";
 
 /**
  * Prueba, EJECUTABLE POR MÁQUINA, de que la garantía estructural de `packages/db` (ver
@@ -64,5 +66,27 @@ describe("garantía estructural: sin filtro de tenant es un error de compilació
     expect(output, `esperaba el mensaje de argumento faltante; salida real:\n${output}`).toContain(
       "Expected 2 arguments, but got 1",
     );
+  });
+});
+
+describe("tenantScoped.insert", () => {
+  it("ignora un tenant_id ajeno que venga en la fila", async () => {
+    const a = await createTenantFixture(`ins-a-${Date.now()}`);
+    const b = await createTenantFixture(`ins-b-${Date.now()}`);
+
+    await tenantScoped("categories", a.tenantId).insert({
+      tenant_id: b.tenantId,
+      slug: "intento",
+      name_i18n: { es: "Intento" },
+    });
+
+    const { data } = await admin.from("categories").select("tenant_id").eq("slug", "intento");
+
+    expect(data).toHaveLength(1);
+    expect(data?.[0]?.tenant_id).toBe(a.tenantId);
+
+    await admin.from("categories").delete().eq("slug", "intento");
+    await deleteTenantFixture(a);
+    await deleteTenantFixture(b);
   });
 });
