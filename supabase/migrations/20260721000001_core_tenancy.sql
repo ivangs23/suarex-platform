@@ -130,6 +130,18 @@ create policy tenant_settings_isolation on public.tenant_settings
   using (tenant_id = public.current_tenant_id())
   with check (tenant_id = public.current_tenant_id());
 
+-- ATENCIÓN, subproyectos 2-6: esta policy solo acota por tenant_id, NUNCA consulta
+-- `role`. Un usuario autenticado con role='staff' puede hoy
+-- `update memberships set role = 'owner' where user_id = <su propio user_id>` y sería
+-- owner en el siguiente refresco de token (custom_access_token_hook lee memberships sin
+-- volver a comprobar quién hizo el último UPDATE). No es explotable todavía porque no
+-- existe ninguna UI/API autenticada que exponga un UPDATE a esta tabla, pero en cuanto el
+-- CRUD de administración construya sobre esta policy asumiendo que `role` significa algo,
+-- deja de ser seguro. NO se restringe `role` en esta migración a propósito -- qué
+-- restricción exacta aplicar (solo owner puede cambiar roles, no puedes tocar el tuyo
+-- propio, etc.) es una decisión de diseño del sub-proyecto de administración, no de esta
+-- ronda de fixes. Cualquier camino de escritura autenticado hacia esta tabla DEBE resolver
+-- esto antes de salir a producción.
 create policy memberships_isolation on public.memberships
   for all to authenticated
   using (tenant_id = public.current_tenant_id())
