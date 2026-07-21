@@ -8,9 +8,19 @@ Plataforma multitenant para hostelería. Un despliegue, N negocios.
 pnpm install
 supabase start
 pnpm db:env
+pnpm seed:staff
 cp .env.test apps/web/.env.local
 pnpm --filter @suarex/web dev
 ```
+
+`pnpm seed:staff` es parte del arranque estándar, no un paso aparte que haya
+que recordar: sin personal sembrado, `/staff/login` no tiene con qué
+autenticar y `tests/e2e/staff-auth.spec.ts` (la suite que prueba ese login de
+extremo a extremo) fallaría por falta de prerrequisito. Es idempotente --
+puedes volver a correrlo sin duplicar usuarios ni membresías -- así que
+sembrar siempre no tiene coste. Tras un `supabase db reset` (que destruye
+`auth.users` junto con todo lo demás), hace falta repetir `pnpm db:env &&
+pnpm seed:staff` antes de volver a levantar el servidor o correr los tests.
 
 Abrir `http://garum.localhost:3000/5` y `http://manuela.localhost:3000/2`.
 
@@ -26,30 +36,33 @@ estado sin autenticación.
 
 El personal de cocina/sala inicia sesión en `/staff/login` (por ejemplo
 `http://garum.localhost:3000/staff/login`) con email y contraseña, vía
-Supabase Auth. Para sembrar un usuario de personal por tenant demo (rol
-`staff` en `memberships`), elige tú mismo una contraseña de desarrollo
-(cualquier valor sirve — solo existe en tu stack local) y pásala como
-variable de entorno:
+Supabase Auth. `pnpm seed:staff` (ver arriba, parte del arranque estándar)
+crea, si no existen ya, `staff@garum.local` y `staff@manuela.local` con rol
+`staff` en `memberships`.
+
+Por defecto no eliges tú la contraseña: si no defines `STAFF_SEED_PASSWORD`,
+el script genera una aleatoria y la guarda en `.env.test` (gitignorado, el
+mismo fichero que escribe `pnpm db:env`) — nunca se hardcodea en ningún
+fichero del repo. Es una contraseña **del stack local desechable**
+(`supabase db reset` la destruye junto con todo lo demás).
+
+Si prefieres elegir tú la contraseña (por ejemplo para iniciar sesión a mano
+en el navegador sin ir a mirar `.env.test`), pásala como variable de entorno;
+igualmente se guarda en `.env.test` para que el resto de comandos la
+encuentren sin más:
 
 ```bash
 STAFF_SEED_PASSWORD='<elige-tu-contraseña-de-desarrollo>' pnpm seed:staff
 ```
 
-Esto crea (si no existen ya) `staff@garum.local` y `staff@manuela.local` con
-esa contraseña. Es un usuario y una contraseña **del stack local desechable**
-(`supabase db reset` los destruye junto con todo lo demás) — no reutilices esta
-contraseña en ningún sitio real, y no la escribas en ningún fichero del repo.
-`STAFF_SEED_PASSWORD` solo se pasa como variable de entorno al ejecutar el
-script.
-
 `tests/e2e/staff-auth.spec.ts` inicia sesión de verdad contra ese usuario
-sembrado: exporta la MISMA `STAFF_SEED_PASSWORD` al correr `pnpm test:e2e`
-(o esos dos tests se saltan con `test.skip`, nunca fallan en silencio por
-falta de credencial):
-
-```bash
-STAFF_SEED_PASSWORD='<la-misma-que-usaste-en-seed:staff>' pnpm test:e2e
-```
+sembrado, leyendo `STAFF_SEED_PASSWORD` de `.env.test`
+(`playwright.config.ts` lo carga igual que `vitest.config.ts`) — no hace
+falta exportar nada a mano para que `pnpm test:e2e` los ejecute. Si de verdad
+no hay personal sembrado (nunca corriste `pnpm seed:staff`, o hiciste
+`supabase db reset` sin repetirlo), esos dos tests **fallan** con un mensaje
+explícito en vez de saltarse: un test saltado es indistinguible de uno que
+pasa en un resumen de CI, así que esta suite nunca se salta en silencio.
 
 ## Verificación
 

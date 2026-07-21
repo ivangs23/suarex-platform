@@ -1,16 +1,26 @@
 import { expect, test } from "@playwright/test";
 
 // Requiere que el personal demo ya esté sembrado (`pnpm seed:staff`, ver
-// README) y que este test se ejecute con la MISMA `STAFF_SEED_PASSWORD` que
-// se usó al sembrar. Nunca hardcodeamos la contraseña en el repo -- igual que
-// `scripts/seed-staff.mjs`, se lee de la variable de entorno.
+// README). Nunca hardcodeamos la contraseña en el repo: `pnpm seed:staff`
+// genera una aleatoria cuando no le pasas `STAFF_SEED_PASSWORD` y la guarda en
+// `.env.test` (gitignorado) -- `playwright.config.ts` carga ese mismo fichero
+// (igual que `vitest.config.ts`), así que en un `pnpm test:e2e` normal esta
+// variable ya está puesta sin que nadie exporte nada a mano.
 const STAFF_PASSWORD = process.env.STAFF_SEED_PASSWORD;
 
-test.skip(
-  !STAFF_PASSWORD,
-  "Falta STAFF_SEED_PASSWORD: sembrar personal con `STAFF_SEED_PASSWORD=... pnpm seed:staff` " +
-    "y exportar la misma variable al correr `pnpm test:e2e` (ver README).",
-);
+test.beforeAll(() => {
+  // Deliberadamente un fallo, no un `test.skip`: un test saltado es
+  // indistinguible de uno que pasa en un resumen de CI/local -- exactamente
+  // el defecto que esta suite existe para no repetir. Si esto revienta,
+  // significa que nadie sembró personal en absoluto en este stack (p. ej.
+  // tras `supabase db reset` sin volver a correr `pnpm seed:staff`), y el
+  // mensaje lo dice explícitamente en vez de dejar pasar la suite en verde.
+  expect(
+    STAFF_PASSWORD,
+    "Falta STAFF_SEED_PASSWORD: no hay personal sembrado en este stack. Corre " +
+      "`pnpm seed:staff` (ver README) y vuelve a lanzar `pnpm test:e2e`.",
+  ).toBeTruthy();
+});
 
 /**
  * Login real a través del formulario de `/staff/login`, no una cookie
