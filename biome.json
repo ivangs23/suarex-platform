@@ -32,7 +32,7 @@
   },
   "overrides": [
     {
-      "includes": ["packages/db/src/**", "tests/integration/helpers/**"],
+      "includes": ["packages/db/src/**", "tests/integration/helpers/**", "tests/e2e/helpers/**"],
       "linter": { "rules": { "style": { "noRestrictedImports": "off" } } }
     },
     {

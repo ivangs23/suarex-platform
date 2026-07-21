@@ -109,7 +109,7 @@ function OrderCard({
   const done = stationStatus === "done";
 
   return (
-    <article data-testid="order-card">
+    <article data-testid="order-card" data-order-id={order.id}>
       <h3>
         Pedido #{order.orderNumber}
         {order.tableLabel ? ` — Mesa ${order.tableLabel}` : null}

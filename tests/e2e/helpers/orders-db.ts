@@ -1,0 +1,63 @@
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+
+const rawUrl = process.env.SUPABASE_URL;
+const rawServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!rawUrl || !rawServiceKey) {
+  throw new Error(
+    "Faltan SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY en .env.test. Corre `pnpm db:env`.",
+  );
+}
+
+const url: string = rawUrl;
+const serviceKey: string = rawServiceKey;
+
+/**
+ * Cliente de servicio EXCLUSIVO de `tests/e2e/staff-board.spec.ts`, con un único trabajo:
+ * localizar y borrar, por su propio id, exactamente los pedidos que ESE test creó.
+ *
+ * Por qué hace falta esto en vez de confiar en "marcar hecho": marcar una estación
+ * `done` cambia `status` a `served` (ver `markStationDone` en
+ * `packages/db/src/staff-orders.ts`) y ESO es lo que hace que `listActiveOrders` deje de
+ * devolver la fila -- pero la fila sigue existiendo. Que un pedido desaparezca del
+ * tablero es un efecto del filtro de `listActiveOrders`, no una limpieza; confundir los
+ * dos es exactamente lo que dejó pedidos `pending` huérfanos en la base cada vez que una
+ * ejecución anterior de esta suite falló a mitad de test (antes de llegar al "marcar
+ * hecho"), y por qué la siguiente ejecución arrancaba con el tablero ya no-vacío. Un test
+ * es dueño de los pedidos que crea y los borra él mismo en un `finally`, pase lo que pase
+ * durante el test -- ver brief de la tarea.
+ */
+const admin: SupabaseClient = createClient(url, serviceKey, {
+  auth: { autoRefreshToken: false, persistSession: false },
+});
+
+export type CreatedOrder = { orderId: string; orderNumber: number };
+
+/**
+ * `POST /api/orders` (API pública, ver `apps/web/app/api/orders/route.ts`) solo devuelve
+ * `clientSecret`/`publicToken` -- nunca el id interno del pedido, a propósito, porque un
+ * comensal anónimo no tiene por qué conocerlo. Este helper resuelve ese id (y el número
+ * visible en el tablero) a partir del `publicToken` que la API sí expone, usando la
+ * misma columna única (`orders_public_token_idx`) que `getOrderByPublicToken` en
+ * `packages/db/src/orders.ts`.
+ */
+export async function findOrderByPublicToken(publicToken: string): Promise<CreatedOrder> {
+  const { data, error } = await admin
+    .from("orders")
+    .select("id, order_number")
+    .eq("public_token", publicToken)
+    .single();
+  if (error) throw error;
+  return { orderId: data.id as string, orderNumber: data.order_number as number };
+}
+
+/**
+ * Borra el pedido por id. `order_items`/`order_item_extras` caen en cascada (`on delete
+ * cascade` sobre `order_id`/`order_item_id`, ver `20260721000005_orders.sql`), así que
+ * este único delete basta. Se llama SIEMPRE desde un `finally` en el test, con o sin
+ * fallo: cada test deja la base exactamente como la encontró.
+ */
+export async function deleteOrder(orderId: string): Promise<void> {
+  const { error } = await admin.from("orders").delete().eq("id", orderId);
+  if (error) throw error;
+}
