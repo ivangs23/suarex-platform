@@ -221,6 +221,55 @@ const WRITE_FIXTURES: Record<string, WriteFixture> = {
     // con "permission denied", SQLSTATE 42501.
     expectedUpdateRejection: { code: "42501", messageIncludes: "permission denied" },
   },
+  orders: {
+    // venue_id apunta al venue real de B (seedB.venueId) para que la única razón de
+    // rechazo posible sea una guarda de aislamiento deliberada, nunca una FK inexistente.
+    // `orders` lleva su propio trigger assert_same_tenant (finding de autorreview, ver
+    // 20260721000005_orders.sql) que resuelve `venues` bajo los privilegios (y por tanto
+    // la RLS) del invocador: A no puede ver el venue real de B, la subconsulta devuelve 0
+    // filas, `parent_tenant` queda NULL, y dispara P0001 antes de que el WITH CHECK de
+    // orders_isolation llegue a evaluarse. Mismo patrón que tables/products.
+    insertPayload: ({ tenantB, seedB }) => ({
+      tenant_id: tenantB.tenantId,
+      venue_id: seedB.venueId,
+      order_number: 1,
+    }),
+    expectedInsertRejection: SAME_TENANT_TRIGGER_REJECTION,
+    updateColumn: "order_number",
+    updateValue: 999,
+  },
+  order_items: {
+    // order_id apunta al pedido real de B (seedB.orderId, sembrado por seedCatalog): A no
+    // puede verlo bajo su propia RLS, así que la subconsulta del trigger assert_same_tenant
+    // devuelve 0 filas, parent_tenant queda NULL, y dispara su propia excepción (P0001)
+    // ANTES de que el WITH CHECK de order_items_isolation llegue a evaluarse. Mismo patrón
+    // que products/tables. Ver SAME_TENANT_TRIGGER_REJECTION.
+    insertPayload: ({ tenantB, seedB }) => ({
+      tenant_id: tenantB.tenantId,
+      order_id: seedB.orderId,
+      name_snapshot: { es: "Intruso" },
+      unit_price: 1,
+      quantity: 1,
+      line_total: 1,
+      destination: "cocina",
+    }),
+    expectedInsertRejection: SAME_TENANT_TRIGGER_REJECTION,
+    updateColumn: "quantity",
+    updateValue: 999,
+  },
+  order_item_extras: {
+    // Mismo razonamiento que order_items: order_item_id apunta a la línea real de B
+    // (seedB.orderItemId), invisible para A bajo su propia RLS.
+    insertPayload: ({ tenantB, seedB }) => ({
+      tenant_id: tenantB.tenantId,
+      order_item_id: seedB.orderItemId,
+      name_snapshot: { es: "Intruso" },
+      price: 1,
+    }),
+    expectedInsertRejection: SAME_TENANT_TRIGGER_REJECTION,
+    updateColumn: "price",
+    updateValue: 999,
+  },
 };
 
 let tenantA: TenantFixture;

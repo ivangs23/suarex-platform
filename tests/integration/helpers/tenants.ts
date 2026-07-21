@@ -34,6 +34,8 @@ export type SeedResult = {
   categoryId: string;
   productId: string;
   venueId: string;
+  orderId: string;
+  orderItemId: string;
 };
 
 const PASSWORD = "fixture-password-1234";
@@ -113,12 +115,16 @@ export async function seedCatalog(tenantId: string, label: string): Promise<Seed
     .single();
   if (productError) throw productError;
 
-  const { error: extraError } = await admin.from("product_extras").insert({
-    tenant_id: tenantId,
-    product_id: product.id,
-    name_i18n: { es: `Extra ${label}` },
-    price: 1.5,
-  });
+  const { data: extra, error: extraError } = await admin
+    .from("product_extras")
+    .insert({
+      tenant_id: tenantId,
+      product_id: product.id,
+      name_i18n: { es: `Extra ${label}` },
+      price: 1.5,
+    })
+    .select("id")
+    .single();
   if (extraError) throw extraError;
 
   const { data: venue, error: venueError } = await admin
@@ -157,7 +163,51 @@ export async function seedCatalog(tenantId: string, label: string): Promise<Seed
     .insert({ tenant_id: tenantId, venue_id: venue.id, date: "2026-01-01", last_number: 1 });
   if (counterError) throw counterError;
 
-  return { categoryId: category.id, productId: product.id, venueId: venue.id };
+  // orders/order_items/order_item_extras también son tenant-scoped y quedan cubiertas por
+  // el descubrimiento dinámico de listTenantScopedTables(): sin una fila propia sembrada
+  // aquí, el control positivo de "SELECT ve las propias filas" y los de UPDATE/DELETE
+  // cross-tenant (que exigen una fila real de B sobre la que operar) fallarían por falta
+  // de datos, no por un fallo real de aislamiento. Se referencia el product/extra reales
+  // creados arriba para que las filas sean válidas en todo lo demás (NOT NULL, FKs).
+  const { data: order, error: orderError } = await admin
+    .from("orders")
+    .insert({ tenant_id: tenantId, venue_id: venue.id, order_number: 1 })
+    .select("id")
+    .single();
+  if (orderError) throw orderError;
+
+  const { data: orderItem, error: orderItemError } = await admin
+    .from("order_items")
+    .insert({
+      tenant_id: tenantId,
+      order_id: order.id,
+      product_id: product.id,
+      name_snapshot: { es: `Prod ${label}` },
+      unit_price: 9.5,
+      quantity: 1,
+      line_total: 9.5,
+      destination: "cocina",
+    })
+    .select("id")
+    .single();
+  if (orderItemError) throw orderItemError;
+
+  const { error: orderItemExtraError } = await admin.from("order_item_extras").insert({
+    tenant_id: tenantId,
+    order_item_id: orderItem.id,
+    extra_id: extra.id,
+    name_snapshot: { es: `Extra ${label}` },
+    price: 1.5,
+  });
+  if (orderItemExtraError) throw orderItemExtraError;
+
+  return {
+    categoryId: category.id,
+    productId: product.id,
+    venueId: venue.id,
+    orderId: order.id,
+    orderItemId: orderItem.id,
+  };
 }
 
 /** Tablas de public con columna tenant_id, descubiertas en runtime. */
