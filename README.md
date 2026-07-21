@@ -14,6 +14,14 @@ pnpm --filter @suarex/web dev
 
 Abrir `http://garum.localhost:3000/5` y `http://manuela.localhost:3000/2`.
 
+La carta real del canal QR en mesa (fase A) vive en `/m/{token}`, no en esas rutas
+numéricas de demostración: `http://garum.localhost:3000/m/11111111-1111-1111-1111-111111111111`
+resuelve la mesa 1 de `garum` a partir del token sembrado por `supabase/seed.sql`. Un
+token desconocido o de una mesa desactivada devuelve 404 sin revelar cuáles existen.
+Añadir productos al carrito y pulsar "Pagar" crea el pedido (`POST /api/orders`,
+precios recalculados en servidor) y redirige a `/pedido/{publicToken}`, que muestra su
+estado sin autenticación.
+
 ## Verificación
 
 ```bash
