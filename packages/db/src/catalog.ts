@@ -1,11 +1,9 @@
-import { serviceClient } from "./client.js";
+import { tenantScoped } from "./client.js";
 import type { Category, Product } from "./types.js";
 
 export async function getCategories(tenantId: string): Promise<Category[]> {
-  const { data, error } = await serviceClient()
-    .from("categories")
+  const { data, error } = await tenantScoped("categories", tenantId)
     .select("id, slug, name_i18n, sort_order")
-    .eq("tenant_id", tenantId)
     .order("sort_order", { ascending: true });
 
   if (error) throw error;
@@ -19,10 +17,8 @@ export async function getCategories(tenantId: string): Promise<Category[]> {
 }
 
 export async function getProducts(tenantId: string): Promise<Product[]> {
-  const { data, error } = await serviceClient()
-    .from("products")
+  const { data, error } = await tenantScoped("products", tenantId)
     .select("id, category_id, name_i18n, description_i18n, price, is_available, sort_order")
-    .eq("tenant_id", tenantId)
     .eq("is_available", true)
     .order("sort_order", { ascending: true });
 

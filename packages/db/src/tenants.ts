@@ -1,5 +1,5 @@
 import { parseTenantHost, tenantSettingsSchema } from "@suarex/config";
-import { serviceClient } from "./client.js";
+import { tenantScoped, tenantsTableForHostResolution } from "./client.js";
 import type { Tenant, TenantSettingsRow } from "./types.js";
 
 export async function findTenantByHost(
@@ -9,7 +9,9 @@ export async function findTenantByHost(
   const ref = parseTenantHost(host, rootDomains);
   if (!ref) return null;
 
-  const query = serviceClient().from("tenants").select("id, slug, name, status");
+  // Exención deliberada: aún no hay tenantId que aplicar, ver el docstring de
+  // `tenantsTableForHostResolution` en ./client.ts.
+  const query = tenantsTableForHostResolution().select("id, slug, name, status");
   const { data, error } =
     ref.kind === "subdomain"
       ? await query.eq("slug", ref.slug).maybeSingle()
@@ -27,10 +29,8 @@ export async function findTenantByHost(
 }
 
 export async function getTenantSettings(tenantId: string): Promise<TenantSettingsRow | null> {
-  const { data, error } = await serviceClient()
-    .from("tenant_settings")
+  const { data, error } = await tenantScoped("tenant_settings", tenantId)
     .select("tenant_id, branding, fiscal, locale, currency, channels, features")
-    .eq("tenant_id", tenantId)
     .maybeSingle();
 
   if (error) throw error;
