@@ -6,7 +6,23 @@
     "enabled": true,
     "rules": {
       "recommended": true,
-      "suspicious": { "noExplicitAny": "error" }
+      "suspicious": { "noExplicitAny": "error" },
+      "style": {
+        "noRestrictedImports": {
+          "level": "error",
+          "options": {
+            "paths": {
+              "@supabase/supabase-js": "Solo packages/db puede importar Supabase. Usa una función repositorio de @suarex/db."
+            }
+          }
+        }
+      }
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["packages/db/src/**", "tests/integration/helpers/**"],
+      "linter": { "rules": { "style": { "noRestrictedImports": "off" } } }
+    }
+  ]
 }

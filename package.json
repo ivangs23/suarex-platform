@@ -19,6 +19,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.12",
+    "@suarex/db": "workspace:*",
     "@supabase/supabase-js": "^2.110.7",
     "@types/node": "^26.1.1",
     "dotenv": "^17.4.2",
