@@ -34,6 +34,14 @@
     {
       "includes": ["packages/db/src/**", "tests/integration/helpers/**"],
       "linter": { "rules": { "style": { "noRestrictedImports": "off" } } }
+    },
+    {
+      "includes": ["packages/realtime/src/**"],
+      "linter": { "rules": { "style": { "noRestrictedImports": "off" } } }
+    },
+    {
+      "includes": ["scripts/seed-staff.mjs"],
+      "linter": { "rules": { "style": { "noRestrictedImports": "off" } } }
     }
   ]
 }

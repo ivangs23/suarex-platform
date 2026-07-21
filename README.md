@@ -22,6 +22,24 @@ Añadir productos al carrito y pulsar "Pagar" crea el pedido (`POST /api/orders`
 precios recalculados en servidor) y redirige a `/pedido/{publicToken}`, que muestra su
 estado sin autenticación.
 
+### Acceso del personal
+
+El personal de cocina/sala inicia sesión en `/staff/login` (por ejemplo
+`http://garum.localhost:3000/staff/login`) con email y contraseña, vía
+Supabase Auth. Para sembrar un usuario de personal por tenant demo (rol
+`staff` en `memberships`):
+
+```bash
+STAFF_SEED_PASSWORD='Personal-Suarex-Dev-2026' pnpm seed:staff
+```
+
+Esto crea (si no existen ya) `staff@garum.local` y `staff@manuela.local` con
+esa contraseña. Es un usuario y una contraseña **del stack local desechable**
+(`supabase db reset` los destruye junto con todo lo demás) — no reutilices esta
+contraseña en ningún sitio real. `STAFF_SEED_PASSWORD` solo se pasa como
+variable de entorno al ejecutar el script; no se guarda en ningún fichero del
+repo.
+
 ## Verificación
 
 ```bash

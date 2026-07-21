@@ -1,5 +1,6 @@
 import { resolveRootDomains } from "@suarex/config";
 import { findTenantByHost } from "@suarex/db";
+import { createServerClient } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
 
 // Ver resolveRootDomains (@suarex/config/tenant-host.ts): recorta y descarta entradas
@@ -23,6 +24,36 @@ function stripForgedTenantHeaders(request: NextRequest): Headers {
   stripped.delete(TENANT_ID_HEADER);
   stripped.delete(TENANT_SLUG_HEADER);
   return stripped;
+}
+
+// Refresca la sesión de Supabase Auth del personal (rota el access token si
+// expiró) leyendo/escribiendo las cookies de sesión sobre la respuesta ya
+// construida por `proxy()`. NO participa en la resolución de tenant ni en el
+// borrado de cabeceras forjadas de arriba -- eso sigue siendo enteramente
+// responsabilidad de `stripForgedTenantHeaders`/`findTenantByHost`. Se invoca
+// solo para rutas `/staff`, después de que el tenant ya se resolvió con éxito.
+async function refreshStaffSession(request: NextRequest, response: NextResponse): Promise<void> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !anonKey) return;
+
+  const supabase = createServerClient(url, anonKey, {
+    cookies: {
+      getAll: () => request.cookies.getAll(),
+      setAll: (cookiesToSet) => {
+        for (const { name, value, options } of cookiesToSet) {
+          response.cookies.set(name, value, options);
+        }
+      },
+    },
+  });
+
+  // `getUser()` verifica el JWT contra el servidor de Auth y, si hace falta,
+  // rota el refresh token -- exactamente lo que hace falta aquí (mantener viva
+  // la sesión), sin tomar ninguna decisión de autorización: esa decisión sigue
+  // viviendo en `getStaffSession()` (apps/web/lib/supabase-server.ts), que lee
+  // el claim `tenant_id` ya verificado, nunca en este middleware.
+  await supabase.auth.getUser();
 }
 
 export async function proxy(request: NextRequest) {
@@ -67,7 +98,13 @@ export async function proxy(request: NextRequest) {
   headers.set(TENANT_ID_HEADER, tenant.id);
   headers.set(TENANT_SLUG_HEADER, tenant.slug);
 
-  return NextResponse.next({ request: { headers } });
+  const response = NextResponse.next({ request: { headers } });
+
+  if (request.nextUrl.pathname.startsWith("/staff")) {
+    await refreshStaffSession(request, response);
+  }
+
+  return response;
 }
 
 export const config = {
