@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - Directorio de trabajo único: `/Users/ivangonzalez/Documents/proyectos/suarex-platform`. **Prohibido escribir en** `GARUM`, `web-manuela`, `kiosko-manuela`, `agente-impresora-v2`, `web-prueba`.
-- Prohibido aplicar migraciones a los proyectos Supabase existentes `vjrttuhdrkljcdixartp` (Garum) y `mapaaxihjyxfeaalhcjo` (Manuela). Todo el desarrollo usa el stack local de Supabase CLI.
+- Prohibido aplicar migraciones a los proyectos Supabase existentes `<proyecto-garum>` (Garum) y `<proyecto-manuela>` (Manuela). Todo el desarrollo usa el stack local de Supabase CLI.
 - Node `>=22.12.0`. pnpm `10.33.0`.
 - TypeScript en modo `strict`. Prohibido `any` explícito.
 - Ninguna policy RLS puede ser `USING (true)`. Excepción única y declarada: lectura de `allergens` con `tenant_id is null`.

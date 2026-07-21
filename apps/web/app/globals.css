@@ -1,0 +1,22 @@
+:root {
+  --color-bg: #f5f1e8;
+  --color-fg: #0f0f0f;
+  --color-primary: #a88445;
+  --color-accent: #1f1d1a;
+  --color-muted: #d9d1bd;
+  --font-display: system-ui;
+  --font-body: system-ui;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-family: var(--font-body);
+}
+
+h1,
+h2 {
+  font-family: var(--font-display);
+  color: var(--color-primary);
+}

@@ -44,7 +44,7 @@ Problemas medidos:
 Todo el trabajo ocurre exclusivamente dentro de `suarex-platform`. Los cinco repositorios actuales quedan intactos:
 
 - No se modifica ningún fichero de `GARUM`, `web-manuela`, `kiosko-manuela`, `agente-impresora-v2` ni `web-prueba`.
-- No se aplican migraciones a los proyectos Supabase existentes (`vjrttuhdrkljcdixartp` de Garum, `mapaaxihjyxfeaalhcjo` de Manuela). La plataforma usa un proyecto Supabase nuevo y vacío.
+- No se aplican migraciones a los proyectos Supabase existentes (`<proyecto-garum>` de Garum, `<proyecto-manuela>` de Manuela). La plataforma usa un proyecto Supabase nuevo y vacío.
 - El código que se reutiliza de GARUM se **copia** al repo nuevo y se adapta ahí. No se extrae a un paquete compartido entre repos, no se enlaza por symlink ni por workspace.
 - `web-prueba` se copiará a `apps/marketing` en el sub-proyecto 6; el repo original sigue existiendo hasta entonces.
 
