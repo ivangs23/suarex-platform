@@ -37,6 +37,11 @@ export type SeedResult = {
 
 const PASSWORD = "fixture-password-1234";
 
+/** Entropía para evitar colisiones (slug, dominio...) entre ejecuciones repetidas/concurrentes. */
+export function nonce(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
 export async function createTenantFixture(slug: string): Promise<TenantFixture> {
   const { data: tenant, error: tenantError } = await admin
     .from("tenants")
@@ -71,13 +76,20 @@ export async function createTenantFixture(slug: string): Promise<TenantFixture> 
 }
 
 /**
- * Borra el usuario de auth creado por createTenantFixture. Acotado por diseño: solo
- * recibe el userId concreto de la fixture (nunca un patrón/wildcard), para que no pueda
- * derivar en un borrado masivo de auth.users por accidente.
+ * Borra la fila de `tenants` y el usuario de auth creados por createTenantFixture.
+ * Acotado por diseño: solo recibe el tenantId/userId concretos de la fixture (nunca un
+ * patrón/wildcard), para que no pueda derivar en un borrado masivo de `tenants` o
+ * `auth.users` por accidente. Borrar la fila de `tenants` primero es suficiente: las
+ * FKs de catálogo (categories, products, product_extras, venues, tenant_settings,
+ * memberships, allergens tenant-scoped) declaran `on delete cascade` sobre
+ * `tenants.id`, así que sus filas desaparecen solas con este único delete.
  */
 export async function deleteTenantFixture(fixture: TenantFixture): Promise<void> {
-  const { error } = await admin.auth.admin.deleteUser(fixture.userId);
-  if (error) throw error;
+  const { error: tenantError } = await admin.from("tenants").delete().eq("id", fixture.tenantId);
+  if (tenantError) throw tenantError;
+
+  const { error: userError } = await admin.auth.admin.deleteUser(fixture.userId);
+  if (userError) throw userError;
 }
 
 export async function seedCatalog(tenantId: string, label: string): Promise<SeedResult> {

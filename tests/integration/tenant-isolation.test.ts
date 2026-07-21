@@ -5,6 +5,7 @@ import {
   createTenantFixture,
   deleteTenantFixture,
   listTenantScopedTables,
+  nonce,
   type SeedResult,
   seedCatalog,
   type TenantFixture,
@@ -12,11 +13,6 @@ import {
 
 /** Tablas cuya lectura admite filas compartidas (tenant_id NULL), declaradas a propósito. */
 const SHARED_READ_TABLES = new Set(["allergens"]);
-
-/** Entropía para evitar colisiones de slug entre ejecuciones repetidas/concurrentes. */
-function nonce(): string {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-}
 
 type WriteFixtureCtx = {
   tenantA: TenantFixture;
