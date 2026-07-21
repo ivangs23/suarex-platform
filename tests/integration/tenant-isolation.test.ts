@@ -136,6 +136,10 @@ const WRITE_FIXTURES: Record<string, WriteFixture> = {
   },
   memberships: {
     // El ataque más relevante: A intenta auto-concederse membresía en el tenant de B.
+    // Tras la ronda de fix de seguridad #3 (20260721000006_memberships_lockdown.sql),
+    // INSERT/UPDATE/DELETE/TRUNCATE se revocaron por completo de `authenticated` sobre
+    // esta tabla, así que ambos rechazos siguen siendo 42501 pero ahora por falta de
+    // privilegio, no porque la policy los filtre.
     insertPayload: ({ tenantA, tenantB }) => ({
       tenant_id: tenantB.tenantId,
       user_id: tenantA.userId,
@@ -144,6 +148,13 @@ const WRITE_FIXTURES: Record<string, WriteFixture> = {
     expectedInsertRejection: RLS_REJECTION,
     updateColumn: "role",
     updateValue: "admin",
+    // Antes de la revocación, el UPDATE cross-tenant no daba error: la policy `USING`
+    // filtraba la fila de B y el UPDATE afectaba 0 filas en silencio. Ahora el privilegio
+    // UPDATE ya no existe para `authenticated`, así que Postgres rechaza el UPDATE entero
+    // con "permission denied" antes de que RLS llegue a filtrar nada -- mismo patrón que
+    // order_counters más abajo. Es un comportamiento mejor (rechazo explícito en vez de
+    // éxito silencioso), no una relajación del test.
+    expectedUpdateRejection: { code: "42501", messageIncludes: "permission denied" },
   },
   allergens: {
     insertPayload: ({ tenantB }) => ({
