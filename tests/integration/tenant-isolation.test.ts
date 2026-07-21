@@ -1,35 +1,35 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { isPermittedPolicyForm, type PolicyRow } from './helpers/policy-check.js'
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { isPermittedPolicyForm, type PolicyRow } from "./helpers/policy-check.js";
 import {
   admin,
   createTenantFixture,
   deleteTenantFixture,
   listTenantScopedTables,
-  seedCatalog,
   type SeedResult,
+  seedCatalog,
   type TenantFixture,
-} from './helpers/tenants.js'
+} from "./helpers/tenants.js";
 
 /** Tablas cuya lectura admite filas compartidas (tenant_id NULL), declaradas a propósito. */
-const SHARED_READ_TABLES = new Set(['allergens'])
+const SHARED_READ_TABLES = new Set(["allergens"]);
 
 /** Entropía para evitar colisiones de slug entre ejecuciones repetidas/concurrentes. */
 function nonce(): string {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 type WriteFixtureCtx = {
-  tenantA: TenantFixture
-  tenantB: TenantFixture
-  seedB: SeedResult
-}
+  tenantA: TenantFixture;
+  tenantB: TenantFixture;
+  seedB: SeedResult;
+};
 
 type WriteFixture = {
   /** Payload de INSERT que, como tenant A, intenta crear una fila para el tenant B.
    *  Debe ser válido en todo lo demás (NOT NULL, FKs) para que la ÚNICA razón de
    *  rechazo posible sea una guarda de aislamiento deliberada (RLS o el trigger
    *  assert_same_tenant), nunca un fallo incidental (NOT NULL, FK inexistente...). */
-  insertPayload: (ctx: WriteFixtureCtx) => Record<string, unknown>
+  insertPayload: (ctx: WriteFixtureCtx) => Record<string, unknown>;
   /**
    * Código de error de Postgres esperado y, opcionalmente, un fragmento del mensaje que
    * debe contener. Por defecto es el rechazo de RLS (42501). categories/products/
@@ -40,17 +40,17 @@ type WriteFixture = {
    * deliberada, solo que en una capa distinta: se declara explícitamente aquí en vez de
    * asumir un único código para todas las tablas.
    */
-  expectedInsertRejection: { code: string; messageIncludes?: string }
+  expectedInsertRejection: { code: string; messageIncludes?: string };
   /** Columna+valor usados para el intento de UPDATE cross-tenant sobre la fila de B. */
-  updateColumn: string
-  updateValue: unknown
-}
+  updateColumn: string;
+  updateValue: unknown;
+};
 
-const RLS_REJECTION = { code: '42501' }
+const RLS_REJECTION = { code: "42501" };
 const SAME_TENANT_TRIGGER_REJECTION = {
-  code: 'P0001',
-  messageIncludes: 'cross-tenant reference rejected',
-}
+  code: "P0001",
+  messageIncludes: "cross-tenant reference rejected",
+};
 
 /**
  * Configuración de CÓMO probar cada tabla en el camino de escritura. Esto NO filtra qué
@@ -65,30 +65,30 @@ const WRITE_FIXTURES: Record<string, WriteFixture> = {
     insertPayload: ({ tenantB }) => ({
       tenant_id: tenantB.tenantId,
       slug: `intruso-cat-${nonce()}`,
-      name_i18n: { es: 'Intruso' },
+      name_i18n: { es: "Intruso" },
     }),
     expectedInsertRejection: RLS_REJECTION,
-    updateColumn: 'sort_order',
+    updateColumn: "sort_order",
     updateValue: 999,
   },
   venues: {
     insertPayload: ({ tenantB }) => ({
       tenant_id: tenantB.tenantId,
       slug: `intruso-venue-${nonce()}`,
-      name: 'Intruso',
+      name: "Intruso",
     }),
     expectedInsertRejection: RLS_REJECTION,
-    updateColumn: 'timezone',
-    updateValue: 'Pacific/Auckland',
+    updateColumn: "timezone",
+    updateValue: "Pacific/Auckland",
   },
   tenant_settings: {
     insertPayload: ({ tenantB }) => ({
       tenant_id: tenantB.tenantId,
-      branding: { colors: { primary: '#000000' } },
+      branding: { colors: { primary: "#000000" } },
     }),
     expectedInsertRejection: RLS_REJECTION,
-    updateColumn: 'locale',
-    updateValue: 'en',
+    updateColumn: "locale",
+    updateValue: "en",
   },
   products: {
     // category_id apunta a la categoría real de B: para que el trigger la aceptase
@@ -98,11 +98,11 @@ const WRITE_FIXTURES: Record<string, WriteFixture> = {
     insertPayload: ({ tenantB, seedB }) => ({
       tenant_id: tenantB.tenantId,
       category_id: seedB.categoryId,
-      name_i18n: { es: 'Intruso' },
+      name_i18n: { es: "Intruso" },
       price: 9.5,
     }),
     expectedInsertRejection: SAME_TENANT_TRIGGER_REJECTION,
-    updateColumn: 'sort_order',
+    updateColumn: "sort_order",
     updateValue: 999,
   },
   product_extras: {
@@ -110,11 +110,11 @@ const WRITE_FIXTURES: Record<string, WriteFixture> = {
     insertPayload: ({ tenantB, seedB }) => ({
       tenant_id: tenantB.tenantId,
       product_id: seedB.productId,
-      name_i18n: { es: 'Intruso' },
+      name_i18n: { es: "Intruso" },
       price: 1.5,
     }),
     expectedInsertRejection: SAME_TENANT_TRIGGER_REJECTION,
-    updateColumn: 'price',
+    updateColumn: "price",
     updateValue: 999.99,
   },
   memberships: {
@@ -122,244 +122,249 @@ const WRITE_FIXTURES: Record<string, WriteFixture> = {
     insertPayload: ({ tenantA, tenantB }) => ({
       tenant_id: tenantB.tenantId,
       user_id: tenantA.userId,
-      role: 'owner',
+      role: "owner",
     }),
     expectedInsertRejection: RLS_REJECTION,
-    updateColumn: 'role',
-    updateValue: 'admin',
+    updateColumn: "role",
+    updateValue: "admin",
   },
   allergens: {
     insertPayload: ({ tenantB }) => ({
       tenant_id: tenantB.tenantId,
-      name_i18n: { es: 'Intruso' },
+      name_i18n: { es: "Intruso" },
     }),
     expectedInsertRejection: RLS_REJECTION,
-    updateColumn: 'icon',
-    updateValue: 'intruso',
+    updateColumn: "icon",
+    updateValue: "intruso",
   },
-}
+};
 
-let tenantA: TenantFixture
-let tenantB: TenantFixture
-let seedB: SeedResult
-let tables: string[]
+let tenantA: TenantFixture;
+let tenantB: TenantFixture;
+let seedB: SeedResult;
+let tables: string[];
 
 afterAll(async () => {
   // Acotado a los dos usuarios creados por esta suite (nunca un wipe de auth.users).
   for (const fixture of [tenantA, tenantB]) {
-    if (fixture) await deleteTenantFixture(fixture)
+    if (fixture) await deleteTenantFixture(fixture);
   }
-})
+});
 
 beforeAll(async () => {
-  tables = await listTenantScopedTables()
+  tables = await listTenantScopedTables();
 
   // Limpieza acotada SOLO a las fixtures de esta suite (slugs `leak-%`), nunca a datos de
   // otros tenants del stack local compartido.
   const { data: leakTenants, error: leakTenantsError } = await admin
-    .from('tenants')
-    .select('id')
-    .like('slug', 'leak-%')
-  if (leakTenantsError) throw leakTenantsError
-  const leakTenantIds = (leakTenants ?? []).map((row) => row.id as string)
+    .from("tenants")
+    .select("id")
+    .like("slug", "leak-%");
+  if (leakTenantsError) throw leakTenantsError;
+  const leakTenantIds = (leakTenants ?? []).map((row) => row.id as string);
 
   if (leakTenantIds.length > 0) {
     for (const table of tables) {
-      await admin.from(table).delete().in('tenant_id', leakTenantIds)
+      await admin.from(table).delete().in("tenant_id", leakTenantIds);
     }
   }
-  await admin.from('tenants').delete().like('slug', 'leak-%')
+  await admin.from("tenants").delete().like("slug", "leak-%");
 
-  tenantA = await createTenantFixture(`leak-a-${nonce()}`)
-  tenantB = await createTenantFixture(`leak-b-${nonce()}`)
-  await seedCatalog(tenantA.tenantId, 'a')
-  seedB = await seedCatalog(tenantB.tenantId, 'b')
-})
+  tenantA = await createTenantFixture(`leak-a-${nonce()}`);
+  tenantB = await createTenantFixture(`leak-b-${nonce()}`);
+  await seedCatalog(tenantA.tenantId, "a");
+  seedB = await seedCatalog(tenantB.tenantId, "b");
+});
 
-it('descubre al menos las tablas de dominio conocidas', () => {
+it("descubre al menos las tablas de dominio conocidas", () => {
   expect(tables).toEqual(
     expect.arrayContaining([
-      'allergens',
-      'categories',
-      'memberships',
-      'product_extras',
-      'products',
-      'tenant_settings',
-      'venues',
+      "allergens",
+      "categories",
+      "memberships",
+      "product_extras",
+      "products",
+      "tenant_settings",
+      "venues",
     ]),
-  )
-})
+  );
+});
 
-describe('aislamiento entre tenants', () => {
-  it('cada tabla con tenant_id tiene RLS activada', async () => {
-    expect(tables.length, 'no se descubrieron tablas con tenant_id').toBeGreaterThan(0)
+describe("aislamiento entre tenants", () => {
+  it("cada tabla con tenant_id tiene RLS activada", async () => {
+    expect(tables.length, "no se descubrieron tablas con tenant_id").toBeGreaterThan(0);
 
     for (const table of tables) {
       const { data: rls, error: rlsError } = await admin
-        .from('pg_tables_rls_check')
-        .select('*')
-        .eq('tablename', table)
-        .maybeSingle()
-      expect(rlsError, `${table}: error consultando pg_tables_rls_check`).toBeNull()
-      expect(rls?.rowsecurity, `${table} sin RLS`).toBe(true)
+        .from("pg_tables_rls_check")
+        .select("*")
+        .eq("tablename", table)
+        .maybeSingle();
+      expect(rlsError, `${table}: error consultando pg_tables_rls_check`).toBeNull();
+      expect(rls?.rowsecurity, `${table} sin RLS`).toBe(true);
     }
-  })
+  });
 
-  it('cada policy de tablas tenant-scoped usa una forma canónica exactamente permitida en USING/WITH CHECK', async () => {
-    expect(tables.length, 'no se descubrieron tablas con tenant_id').toBeGreaterThan(0)
+  it("cada policy de tablas tenant-scoped usa una forma canónica exactamente permitida en USING/WITH CHECK", async () => {
+    expect(tables.length, "no se descubrieron tablas con tenant_id").toBeGreaterThan(0);
 
     const { data, error } = await admin
-      .from('pg_policies_tenant_check')
-      .select('*')
-      .in('tablename', tables)
-    expect(error, 'error consultando pg_policies_tenant_check').toBeNull()
-    const policies = (data ?? []) as PolicyRow[]
+      .from("pg_policies_tenant_check")
+      .select("*")
+      .in("tablename", tables);
+    expect(error, "error consultando pg_policies_tenant_check").toBeNull();
+    const policies = (data ?? []) as PolicyRow[];
 
     for (const table of tables) {
-      const tablePolicies = policies.filter((p) => p.tablename === table)
-      expect(tablePolicies.length, `${table}: no tiene ninguna policy de RLS`).toBeGreaterThan(0)
+      const tablePolicies = policies.filter((p) => p.tablename === table);
+      expect(tablePolicies.length, `${table}: no tiene ninguna policy de RLS`).toBeGreaterThan(0);
 
       for (const policy of tablePolicies) {
         // Semántica de Postgres: USING aplica a SELECT/UPDATE/DELETE/ALL;
         // WITH CHECK aplica a INSERT/UPDATE/ALL. No se asume "ALL" para simplificar:
         // se deriva de policy.cmd tal cual lo reporta pg_policy.
-        const needsQual = policy.cmd === 'SELECT' || policy.cmd === 'UPDATE' || policy.cmd === 'DELETE' || policy.cmd === 'ALL'
-        const needsWithCheck = policy.cmd === 'INSERT' || policy.cmd === 'UPDATE' || policy.cmd === 'ALL'
+        const needsQual =
+          policy.cmd === "SELECT" ||
+          policy.cmd === "UPDATE" ||
+          policy.cmd === "DELETE" ||
+          policy.cmd === "ALL";
+        const needsWithCheck =
+          policy.cmd === "INSERT" || policy.cmd === "UPDATE" || policy.cmd === "ALL";
 
         if (needsQual) {
           expect(
-            isPermittedPolicyForm(policy.qual, 'qual', policy.cmd),
+            isPermittedPolicyForm(policy.qual, "qual", policy.cmd),
             `${table}.${policy.policyname}: USING (${policy.cmd}) no coincide byte a byte con ninguna forma canónica permitida: "${policy.qual}"`,
-          ).toBe(true)
+          ).toBe(true);
         }
         if (needsWithCheck) {
           expect(
-            isPermittedPolicyForm(policy.with_check, 'with_check', policy.cmd),
+            isPermittedPolicyForm(policy.with_check, "with_check", policy.cmd),
             `${table}.${policy.policyname}: WITH CHECK (${policy.cmd}) no coincide byte a byte con ninguna forma canónica permitida: "${policy.with_check}"`,
-          ).toBe(true)
+          ).toBe(true);
         }
       }
     }
-  })
+  });
 
-  it('SELECT nunca devuelve filas de otro tenant y sí ve las propias', async () => {
-    expect(tables.length, 'no se descubrieron tablas con tenant_id').toBeGreaterThan(0)
+  it("SELECT nunca devuelve filas de otro tenant y sí ve las propias", async () => {
+    expect(tables.length, "no se descubrieron tablas con tenant_id").toBeGreaterThan(0);
 
     for (const table of tables) {
-      const { data, error } = await tenantA.client.from(table).select('tenant_id')
-      expect(error, `${table}: SELECT devolvió error inesperado`).toBeNull()
+      const { data, error } = await tenantA.client.from(table).select("tenant_id");
+      expect(error, `${table}: SELECT devolvió error inesperado`).toBeNull();
 
-      const rows = (data ?? []) as { tenant_id: string | null }[]
+      const rows = (data ?? []) as { tenant_id: string | null }[];
 
       const foreign = rows.filter((row) => {
-        if (row.tenant_id === null) return !SHARED_READ_TABLES.has(table)
-        return row.tenant_id !== tenantA.tenantId
-      })
-      expect(foreign, `${table}: fuga de ${foreign.length} filas`).toHaveLength(0)
+        if (row.tenant_id === null) return !SHARED_READ_TABLES.has(table);
+        return row.tenant_id !== tenantA.tenantId;
+      });
+      expect(foreign, `${table}: fuga de ${foreign.length} filas`).toHaveLength(0);
 
       // Control positivo: una policy deny-all (`using (false)`) también devolvería 0
       // filas para "foreign", pasando en falso. Probar que A además VE sus propias
       // filas descarta ese falso positivo.
-      const own = rows.filter((row) => row.tenant_id === tenantA.tenantId)
+      const own = rows.filter((row) => row.tenant_id === tenantA.tenantId);
       expect(
         own.length,
         `${table}: A no ve ninguna fila propia (control positivo ausente; ¿policy deny-all?)`,
-      ).toBeGreaterThan(0)
+      ).toBeGreaterThan(0);
     }
-  })
+  });
 
-  it('INSERT con el tenant_id de otro es rechazado por RLS', async () => {
-    expect(tables.length, 'no se descubrieron tablas con tenant_id').toBeGreaterThan(0)
+  it("INSERT con el tenant_id de otro es rechazado por RLS", async () => {
+    expect(tables.length, "no se descubrieron tablas con tenant_id").toBeGreaterThan(0);
 
     for (const table of tables) {
-      const fixture = WRITE_FIXTURES[table]
+      const fixture = WRITE_FIXTURES[table];
       if (!fixture) {
         expect.fail(
           `Tabla '${table}' descubierta sin entrada en WRITE_FIXTURES: añade su payload de escritura antes de continuar.`,
-        )
+        );
       }
 
-      const payload = fixture.insertPayload({ tenantA, tenantB, seedB })
-      const { error } = await tenantA.client.from(table).insert(payload)
-      expect(error, `${table}: INSERT cross-tenant NO fue rechazado`).not.toBeNull()
+      const payload = fixture.insertPayload({ tenantA, tenantB, seedB });
+      const { error } = await tenantA.client.from(table).insert(payload);
+      expect(error, `${table}: INSERT cross-tenant NO fue rechazado`).not.toBeNull();
       // No basta con "hubo un error": una violación NOT NULL también lo satisfaría.
       // Debe ser específicamente la guarda de aislamiento esperada para esta tabla
       // (RLS 42501, o el trigger assert_same_tenant para las tablas con FK a un padre
       // de otro tenant), no un fallo incidental.
-      const expected = fixture.expectedInsertRejection
+      const expected = fixture.expectedInsertRejection;
       expect(
         error?.code,
         `${table}: INSERT cross-tenant fue rechazado por otra razón (${error?.message}), no por la guarda de aislamiento esperada (${expected.code})`,
-      ).toBe(expected.code)
+      ).toBe(expected.code);
       if (expected.messageIncludes) {
         expect(
           error?.message,
           `${table}: el mensaje de error no confirma la guarda de aislamiento esperada`,
-        ).toContain(expected.messageIncludes)
+        ).toContain(expected.messageIncludes);
       }
     }
-  })
+  });
 
-  it('UPDATE sobre filas de otro tenant no afecta a ninguna fila', async () => {
-    expect(tables.length, 'no se descubrieron tablas con tenant_id').toBeGreaterThan(0)
+  it("UPDATE sobre filas de otro tenant no afecta a ninguna fila", async () => {
+    expect(tables.length, "no se descubrieron tablas con tenant_id").toBeGreaterThan(0);
 
     for (const table of tables) {
-      const fixture = WRITE_FIXTURES[table]
+      const fixture = WRITE_FIXTURES[table];
       if (!fixture) {
         expect.fail(
           `Tabla '${table}' descubierta sin entrada en WRITE_FIXTURES: añade su columna/valor de UPDATE antes de continuar.`,
-        )
+        );
       }
-      const { updateColumn, updateValue } = fixture
+      const { updateColumn, updateValue } = fixture;
 
       const { data, error } = await tenantA.client
         .from(table)
         .update({ [updateColumn]: updateValue })
-        .eq('tenant_id', tenantB.tenantId)
-        .select()
-      expect(error, `${table}: UPDATE cross-tenant devolvió error inesperado`).toBeNull()
-      expect(data ?? [], `${table}: UPDATE cross-tenant afectó filas`).toHaveLength(0)
+        .eq("tenant_id", tenantB.tenantId)
+        .select();
+      expect(error, `${table}: UPDATE cross-tenant devolvió error inesperado`).toBeNull();
+      expect(data ?? [], `${table}: UPDATE cross-tenant afectó filas`).toHaveLength(0);
 
       const { data: intact, error: intactError } = await admin
         .from(table)
-        .select('*')
-        .eq('tenant_id', tenantB.tenantId)
-      expect(intactError, `${table}: error verificando integridad tras UPDATE`).toBeNull()
+        .select("*")
+        .eq("tenant_id", tenantB.tenantId);
+      expect(intactError, `${table}: error verificando integridad tras UPDATE`).toBeNull();
       expect(
         (intact ?? []).length,
         `${table}: no había fila de B para probar el UPDATE cross-tenant (control positivo ausente)`,
-      ).toBeGreaterThan(0)
+      ).toBeGreaterThan(0);
       expect(
         (intact ?? []).every((row) => row[updateColumn] !== updateValue),
         `${table}: UPDATE cross-tenant modificó datos de B`,
-      ).toBe(true)
+      ).toBe(true);
     }
-  })
+  });
 
-  it('DELETE sobre filas de otro tenant no borra nada', async () => {
-    expect(tables.length, 'no se descubrieron tablas con tenant_id').toBeGreaterThan(0)
+  it("DELETE sobre filas de otro tenant no borra nada", async () => {
+    expect(tables.length, "no se descubrieron tablas con tenant_id").toBeGreaterThan(0);
 
     for (const table of tables) {
       if (!WRITE_FIXTURES[table]) {
-        expect.fail(`Tabla '${table}' descubierta sin entrada en WRITE_FIXTURES.`)
+        expect.fail(`Tabla '${table}' descubierta sin entrada en WRITE_FIXTURES.`);
       }
 
       const before = await admin
         .from(table)
-        .select('*', { count: 'exact', head: true })
-        .eq('tenant_id', tenantB.tenantId)
+        .select("*", { count: "exact", head: true })
+        .eq("tenant_id", tenantB.tenantId);
       expect(
         before.count ?? 0,
         `${table}: no había fila de B para probar el DELETE cross-tenant (control positivo ausente)`,
-      ).toBeGreaterThan(0)
+      ).toBeGreaterThan(0);
 
-      await tenantA.client.from(table).delete().eq('tenant_id', tenantB.tenantId)
+      await tenantA.client.from(table).delete().eq("tenant_id", tenantB.tenantId);
 
       const after = await admin
         .from(table)
-        .select('*', { count: 'exact', head: true })
-        .eq('tenant_id', tenantB.tenantId)
-      expect(after.count).toBe(before.count)
+        .select("*", { count: "exact", head: true })
+        .eq("tenant_id", tenantB.tenantId);
+      expect(after.count).toBe(before.count);
     }
-  })
-})
+  });
+});

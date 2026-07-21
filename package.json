@@ -2,11 +2,14 @@
   "name": "suarex-platform",
   "private": true,
   "packageManager": "pnpm@10.33.0",
-  "engines": { "node": ">=22.12.0" },
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
     "build": "turbo build",
     "test": "turbo test",
-    "typecheck": "turbo typecheck",
+    "typecheck": "turbo typecheck && pnpm typecheck:tests",
+    "typecheck:tests": "tsc --noEmit -p tests/tsconfig.json",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "db:start": "supabase start",
@@ -17,6 +20,7 @@
   "devDependencies": {
     "@biomejs/biome": "2.4.12",
     "@supabase/supabase-js": "^2.110.7",
+    "@types/node": "^26.1.1",
     "dotenv": "^17.4.2",
     "turbo": "^2.5.0",
     "typescript": "^5.9.3",

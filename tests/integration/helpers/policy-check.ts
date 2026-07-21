@@ -11,18 +11,18 @@
  * el agujero de fuga cross-tenant que esta suite existe para cerrar.
  */
 
-export type PolicyCmd = 'SELECT' | 'INSERT' | 'UPDATE' | 'DELETE' | 'ALL'
+export type PolicyCmd = "SELECT" | "INSERT" | "UPDATE" | "DELETE" | "ALL";
 
 export type PolicyRow = {
-  schemaname: string
-  tablename: string
-  policyname: string
-  cmd: PolicyCmd
-  qual: string | null
-  with_check: string | null
-}
+  schemaname: string;
+  tablename: string;
+  policyname: string;
+  cmd: PolicyCmd;
+  qual: string | null;
+  with_check: string | null;
+};
 
-export type PolicyClause = 'qual' | 'with_check'
+export type PolicyClause = "qual" | "with_check";
 
 /**
  * Forma canónica estándar. Postgres renderiza las expresiones de policy de forma
@@ -30,7 +30,7 @@ export type PolicyClause = 'qual' | 'with_check'
  * `.superpowers/sdd/task-4-report.md`, sección "Fix round 3", para la consulta exacta
  * usada y su salida byte a byte).
  */
-const TENANT_SCOPED_FORM = '(tenant_id = current_tenant_id())'
+const TENANT_SCOPED_FORM = "(tenant_id = current_tenant_id())";
 
 /**
  * Excepción declarada única: `allergens_read` admite además las filas globales del catálogo
@@ -41,13 +41,13 @@ const TENANT_SCOPED_FORM = '(tenant_id = current_tenant_id())'
  * forma. `allergens_write` (`FOR ALL`) sigue exigiendo la forma estándar en ambas
  * cláusulas y falla si se degrada a esta excepción.
  */
-const ALLERGENS_READ_EXCEPTION_FORM = '((tenant_id IS NULL) OR (tenant_id = current_tenant_id()))'
+const ALLERGENS_READ_EXCEPTION_FORM = "((tenant_id IS NULL) OR (tenant_id = current_tenant_id()))";
 
 type PermittedForm = {
-  expr: string
-  clause: PolicyClause
-  commands: readonly PolicyCmd[]
-}
+  expr: string;
+  clause: PolicyClause;
+  commands: readonly PolicyCmd[];
+};
 
 /**
  * Lista corta A PROPÓSITO. El punto de una allowlist es fallar cerrado: una policy
@@ -62,26 +62,26 @@ type PermittedForm = {
 const PERMITTED_FORMS: readonly PermittedForm[] = [
   {
     expr: TENANT_SCOPED_FORM,
-    clause: 'qual',
-    commands: ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'ALL'],
+    clause: "qual",
+    commands: ["SELECT", "INSERT", "UPDATE", "DELETE", "ALL"],
   },
   {
     expr: TENANT_SCOPED_FORM,
-    clause: 'with_check',
-    commands: ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'ALL'],
+    clause: "with_check",
+    commands: ["SELECT", "INSERT", "UPDATE", "DELETE", "ALL"],
   },
   {
     expr: ALLERGENS_READ_EXCEPTION_FORM,
-    clause: 'qual',
-    commands: ['SELECT'],
+    clause: "qual",
+    commands: ["SELECT"],
   },
-]
+];
 
 /** Normaliza SOLO espacios en blanco (colapsa runs, recorta extremos). Nunca quita
  * paréntesis, operadores ni cláusulas: la comparación final sigue siendo byte-a-byte
  * contra la forma canónica completa. */
 function normalizeWhitespace(expr: string): string {
-  return expr.trim().replace(/\s+/g, ' ')
+  return expr.trim().replace(/\s+/g, " ");
 }
 
 /**
@@ -94,9 +94,9 @@ export function isPermittedPolicyForm(
   clause: PolicyClause,
   cmd: PolicyCmd,
 ): boolean {
-  if (!expr) return false
-  const normalized = normalizeWhitespace(expr)
+  if (!expr) return false;
+  const normalized = normalizeWhitespace(expr);
   return PERMITTED_FORMS.some(
     (form) => form.clause === clause && form.expr === normalized && form.commands.includes(cmd),
-  )
+  );
 }
