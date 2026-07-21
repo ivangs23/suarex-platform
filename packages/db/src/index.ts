@@ -7,7 +7,7 @@ export {
   markOrderPaid,
 } from "./orders.js";
 export { findTableByToken } from "./tables.js";
-export { findTenantByHost, getTenantSettings } from "./tenants.js";
+export { findTenantByHost, getTenantSettings, getTenantStripeAccount } from "./tenants.js";
 export type {
   CartLineInput,
   Category,

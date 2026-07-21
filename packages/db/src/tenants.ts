@@ -28,6 +28,22 @@ export async function findTenantByHost(
   };
 }
 
+/**
+ * Identificador de la cuenta de Stripe conectada del tenant (`acct_...`), o null
+ * si aún no ha completado el onboarding de Connect. NO es un secreto: es el
+ * identificador público de una cuenta. La clave secreta de un cliente nunca
+ * llega a esta plataforma, que es justamente el motivo de usar Connect.
+ */
+export async function getTenantStripeAccount(tenantId: string): Promise<string | null> {
+  const { data, error } = await tenantsTableForHostResolution()
+    .select("stripe_account_id")
+    .eq("id", tenantId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return (data?.stripe_account_id as string | null) ?? null;
+}
+
 export async function getTenantSettings(tenantId: string): Promise<TenantSettingsRow | null> {
   const { data, error } = await tenantScoped("tenant_settings", tenantId)
     .select("tenant_id, branding, fiscal, locale, currency, channels, features")
