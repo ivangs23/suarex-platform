@@ -8,10 +8,14 @@ type Category = { id: string; name: string };
 
 export function CartClient({
   tableToken,
+  locale,
+  currency,
   categories,
   products,
 }: {
   tableToken: string;
+  locale: string;
+  currency: string;
   categories: Category[];
   products: Product[];
 }) {
@@ -63,7 +67,7 @@ export function CartClient({
               .filter((product) => product.categoryId === category.id)
               .map((product) => (
                 <li key={product.id} data-testid="product">
-                  {product.name} — {formatCents(product.priceCents, "es-ES", "EUR")}
+                  {product.name} — {formatCents(product.priceCents, locale, currency)}
                   <button type="button" data-testid="add-to-cart" onClick={() => add(product.id)}>
                     Añadir
                   </button>
@@ -73,7 +77,7 @@ export function CartClient({
         </section>
       ))}
 
-      <p data-testid="cart-total">{formatCents(totalCents, "es-ES", "EUR")}</p>
+      <p data-testid="cart-total">{formatCents(totalCents, locale, currency)}</p>
       {error ? <p role="alert">{error}</p> : null}
       <button type="button" disabled={totalCents === 0} onClick={checkout}>
         Pagar

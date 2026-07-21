@@ -1,17 +1,16 @@
-import { findTableByToken, getCategories, getProducts } from "@suarex/db";
+import { loadTableMenu } from "@suarex/db";
 import { notFound } from "next/navigation";
 import { CartClient } from "./CartClient";
 
 export default async function MesaPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
 
-  const table = await findTableByToken(token);
-  if (!table?.isActive) notFound();
+  const menu = await loadTableMenu(token);
+  if (!menu) notFound();
 
-  const [categories, products] = await Promise.all([
-    getCategories(table.tenantId),
-    getProducts(table.tenantId),
-  ]);
+  const { table, categories, products, settings } = menu;
+  const locale = settings?.locale ?? "es";
+  const currency = settings?.currency ?? "EUR";
 
   return (
     <main>
@@ -20,6 +19,8 @@ export default async function MesaPage({ params }: { params: Promise<{ token: st
       </h1>
       <CartClient
         tableToken={token}
+        locale={locale}
+        currency={currency}
         categories={categories.map((c) => ({ id: c.id, name: c.nameI18n.es ?? c.slug }))}
         products={products.map((p) => ({
           id: p.id,

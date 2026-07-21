@@ -1,4 +1,6 @@
 export { getCategories, getProducts } from "./catalog.js";
+export type { TableMenu } from "./menu.js";
+export { loadTableMenu } from "./menu.js";
 export type { MarkPaidOutcome } from "./orders.js";
 export {
   attachPaymentIntent,

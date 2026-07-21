@@ -12,7 +12,7 @@ test("un token de mesa desconocido devuelve 404", async ({ page }) => {
 test("la carta de la mesa muestra los productos del tenant", async ({ page }) => {
   await page.goto(MESA_1);
   await expect(page.getByTestId("mesa-label")).toHaveText("1");
-  await expect(page.getByTestId("product")).toContainText("Ribera del Duero");
+  await expect(page.getByTestId("product").filter({ hasText: "Ribera del Duero" })).toBeVisible();
 });
 
 test("añadir al carrito acumula el total del lado del cliente", async ({ page }) => {
