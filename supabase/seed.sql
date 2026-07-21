@@ -43,3 +43,16 @@ select v.tenant_id, v.id, m.label, m.token, m.sort_order
     ('2', '22222222-2222-2222-2222-222222222222'::uuid, 1)
   ) as m(label, token, sort_order)
  where t.slug = 'garum';
+
+-- Mesa de manuela: sin esto, `tests/e2e/staff-board.spec.ts` no podría crear un pedido
+-- real para manuela por la API pública (`POST /api/orders` exige un `tableToken` válido,
+-- ver `findTableByToken`) y su test de aislamiento (control positivo con dos tenants
+-- reales) no tendría con qué probar que un pedido de manuela SÍ aparece en su propio
+-- panel. El canal declarado de manuela en `tenant_settings` es `kiosko`, no `qr-mesa`,
+-- pero `POST /api/orders` no distingue canales hoy (ver `apps/web/app/api/orders/route.ts`)
+-- -- una mesa válida basta, sea cual sea el canal nominal del tenant.
+insert into public.tables (tenant_id, venue_id, label, token, sort_order)
+select v.tenant_id, v.id, '1', '33333333-3333-3333-3333-333333333333'::uuid, 0
+  from public.venues v
+  join public.tenants t on t.id = v.tenant_id
+ where t.slug = 'manuela';

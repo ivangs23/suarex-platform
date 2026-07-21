@@ -66,7 +66,7 @@ export function CartClient({
             {products
               .filter((product) => product.categoryId === category.id)
               .map((product) => (
-                <li key={product.id} data-testid="product">
+                <li key={product.id} data-testid="product" data-product-id={product.id}>
                   {product.name} — {formatCents(product.priceCents, locale, currency)}
                   <button type="button" data-testid="add-to-cart" onClick={() => add(product.id)}>
                     Añadir

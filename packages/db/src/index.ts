@@ -10,6 +10,8 @@ export {
   markOrderPaid,
   OrderCartError,
 } from "./orders.js";
+export type { StaffOrder, StaffOrderItem, StationStatus } from "./staff-orders.js";
+export { listActiveOrders, markStationDone } from "./staff-orders.js";
 export { findTableByToken } from "./tables.js";
 export { findTenantByHost, getTenantSettings, getTenantStripeAccount } from "./tenants.js";
 export type {
