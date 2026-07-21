@@ -1251,15 +1251,18 @@ NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...
 ```ts
 import { describe, expect, it } from "vitest";
 import { markOrderPaid } from "@suarex/db";
-import { admin, nonce } from "./helpers/tenants.js";
+import { nonce } from "./helpers/tenants.js";
 
 describe("markOrderPaid", () => {
-  it("no falla si el PaymentIntent no corresponde a ningún pedido", async () => {
-    const result = await markOrderPaid(`pi_desconocido_${nonce()}`);
-    expect(result.alreadyPaid).toBe(false);
+  it("distingue un PaymentIntent que no corresponde a ningún pedido", async () => {
+    // No es un caso benigno: significa que se cobró algo de lo que este sistema
+    // no tiene registro, o que el webhook apunta al entorno equivocado.
+    expect(await markOrderPaid(`pi_desconocido_${nonce()}`)).toBe("order-not-found");
   });
 });
 ```
+
+Nota: `markOrderPaid` devuelve `MarkPaidOutcome` (`"marked" | "already-paid" | "order-not-found"`), no un booleano. La cobertura de los tres casos ya vive en `tests/integration/orders.test.ts`; este fichero solo añade el caso que le importa al webhook.
 
 - [ ] **Step 3: Implementar el cliente de Stripe**
 
@@ -1373,7 +1376,18 @@ export async function POST(request: Request) {
   }
 
   if (event.type === "payment_intent.succeeded") {
-    await markOrderPaid(event.data.object.id);
+    const outcome = await markOrderPaid(event.data.object.id);
+
+    // Se responde 200 en los tres casos: devolver un error haría que Stripe
+    // reintentara indefinidamente algo que no va a cambiar. Pero un pedido
+    // inexistente no es benigno -- significa que se cobró algo de lo que este
+    // sistema no tiene registro, o que el webhook apunta al entorno equivocado --
+    // así que se registra de forma distinguible.
+    if (outcome === "order-not-found") {
+      console.error(
+        `[stripe-webhook] PaymentIntent sin pedido asociado: ${event.data.object.id}`,
+      );
+    }
   }
 
   return NextResponse.json({ received: true });
