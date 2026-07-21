@@ -4,28 +4,167 @@ import {
   createTenantFixture,
   listTenantScopedTables,
   seedCatalog,
+  type SeedResult,
   type TenantFixture,
 } from './helpers/tenants.js'
 
 /** Tablas cuya lectura admite filas compartidas (tenant_id NULL), declaradas a propósito. */
 const SHARED_READ_TABLES = new Set(['allergens'])
 
+/** Entropía para evitar colisiones de slug entre ejecuciones repetidas/concurrentes. */
+function nonce(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+type WriteFixtureCtx = {
+  tenantA: TenantFixture
+  tenantB: TenantFixture
+  seedB: SeedResult
+}
+
+type WriteFixture = {
+  /** Payload de INSERT que, como tenant A, intenta crear una fila para el tenant B.
+   *  Debe ser válido en todo lo demás (NOT NULL, FKs) para que la ÚNICA razón de
+   *  rechazo posible sea una guarda de aislamiento deliberada (RLS o el trigger
+   *  assert_same_tenant), nunca un fallo incidental (NOT NULL, FK inexistente...). */
+  insertPayload: (ctx: WriteFixtureCtx) => Record<string, unknown>
+  /**
+   * Código de error de Postgres esperado y, opcionalmente, un fragmento del mensaje que
+   * debe contener. Por defecto es el rechazo de RLS (42501). categories/products/
+   * product_extras tienen además el trigger `assert_same_tenant` (BEFORE INSERT), que
+   * al ejecutarse con los privilegios (y por tanto la RLS) del invocador no puede ver la
+   * fila padre de otro tenant y dispara su propia excepción (P0001) ANTES de que la
+   * cláusula WITH CHECK de la policy llegue a evaluarse. Es una guarda igual de real y
+   * deliberada, solo que en una capa distinta: se declara explícitamente aquí en vez de
+   * asumir un único código para todas las tablas.
+   */
+  expectedInsertRejection: { code: string; messageIncludes?: string }
+  /** Columna+valor usados para el intento de UPDATE cross-tenant sobre la fila de B. */
+  updateColumn: string
+  updateValue: unknown
+}
+
+const RLS_REJECTION = { code: '42501' }
+const SAME_TENANT_TRIGGER_REJECTION = {
+  code: 'P0001',
+  messageIncludes: 'cross-tenant reference rejected',
+}
+
+/**
+ * Configuración de CÓMO probar cada tabla en el camino de escritura. Esto NO filtra qué
+ * tablas se testean (esas se descubren dinámicamente vía listTenantScopedTables()): si una
+ * tabla descubierta no tiene entrada aquí, el test falla explícitamente nombrándola, para
+ * que una tabla nueva no pueda escapar en silencio a la cobertura de escritura.
+ */
+const WRITE_FIXTURES: Record<string, WriteFixture> = {
+  categories: {
+    // parent_id queda null: el trigger assert_same_tenant se cortocircuita en ese caso
+    // (ver su código), así que aquí el rechazo observado es genuinamente el de RLS.
+    insertPayload: ({ tenantB }) => ({
+      tenant_id: tenantB.tenantId,
+      slug: `intruso-cat-${nonce()}`,
+      name_i18n: { es: 'Intruso' },
+    }),
+    expectedInsertRejection: RLS_REJECTION,
+    updateColumn: 'sort_order',
+    updateValue: 999,
+  },
+  venues: {
+    insertPayload: ({ tenantB }) => ({
+      tenant_id: tenantB.tenantId,
+      slug: `intruso-venue-${nonce()}`,
+      name: 'Intruso',
+    }),
+    expectedInsertRejection: RLS_REJECTION,
+    updateColumn: 'timezone',
+    updateValue: 'Pacific/Auckland',
+  },
+  tenant_settings: {
+    insertPayload: ({ tenantB }) => ({
+      tenant_id: tenantB.tenantId,
+      branding: { colors: { primary: '#000000' } },
+    }),
+    expectedInsertRejection: RLS_REJECTION,
+    updateColumn: 'locale',
+    updateValue: 'en',
+  },
+  products: {
+    // category_id apunta a la categoría real de B: para que el trigger la aceptase
+    // haría falta verla, y como A no tiene visibilidad de datos de B bajo su propia RLS,
+    // el trigger (no security definer) dispara P0001 antes de que la policy de products
+    // llegue a evaluar su WITH CHECK. Ver SAME_TENANT_TRIGGER_REJECTION.
+    insertPayload: ({ tenantB, seedB }) => ({
+      tenant_id: tenantB.tenantId,
+      category_id: seedB.categoryId,
+      name_i18n: { es: 'Intruso' },
+      price: 9.5,
+    }),
+    expectedInsertRejection: SAME_TENANT_TRIGGER_REJECTION,
+    updateColumn: 'sort_order',
+    updateValue: 999,
+  },
+  product_extras: {
+    // Mismo razonamiento que products: product_id pertenece a B y es invisible para A.
+    insertPayload: ({ tenantB, seedB }) => ({
+      tenant_id: tenantB.tenantId,
+      product_id: seedB.productId,
+      name_i18n: { es: 'Intruso' },
+      price: 1.5,
+    }),
+    expectedInsertRejection: SAME_TENANT_TRIGGER_REJECTION,
+    updateColumn: 'price',
+    updateValue: 999.99,
+  },
+  memberships: {
+    // El ataque más relevante: A intenta auto-concederse membresía en el tenant de B.
+    insertPayload: ({ tenantA, tenantB }) => ({
+      tenant_id: tenantB.tenantId,
+      user_id: tenantA.userId,
+      role: 'owner',
+    }),
+    expectedInsertRejection: RLS_REJECTION,
+    updateColumn: 'role',
+    updateValue: 'admin',
+  },
+  allergens: {
+    insertPayload: ({ tenantB }) => ({
+      tenant_id: tenantB.tenantId,
+      name_i18n: { es: 'Intruso' },
+    }),
+    expectedInsertRejection: RLS_REJECTION,
+    updateColumn: 'icon',
+    updateValue: 'intruso',
+  },
+}
+
 let tenantA: TenantFixture
 let tenantB: TenantFixture
+let seedB: SeedResult
 let tables: string[]
 
 beforeAll(async () => {
-  for (const table of ['product_extras', 'products', 'categories', 'venues', 'tenant_settings']) {
-    await admin.from(table).delete().not('tenant_id', 'is', null)
+  tables = await listTenantScopedTables()
+
+  // Limpieza acotada SOLO a las fixtures de esta suite (slugs `leak-%`), nunca a datos de
+  // otros tenants del stack local compartido.
+  const { data: leakTenants, error: leakTenantsError } = await admin
+    .from('tenants')
+    .select('id')
+    .like('slug', 'leak-%')
+  if (leakTenantsError) throw leakTenantsError
+  const leakTenantIds = (leakTenants ?? []).map((row) => row.id as string)
+
+  if (leakTenantIds.length > 0) {
+    for (const table of tables) {
+      await admin.from(table).delete().in('tenant_id', leakTenantIds)
+    }
   }
   await admin.from('tenants').delete().like('slug', 'leak-%')
 
-  tenantA = await createTenantFixture(`leak-a-${Date.now()}`)
-  tenantB = await createTenantFixture(`leak-b-${Date.now()}`)
+  tenantA = await createTenantFixture(`leak-a-${nonce()}`)
+  tenantB = await createTenantFixture(`leak-b-${nonce()}`)
   await seedCatalog(tenantA.tenantId, 'a')
-  await seedCatalog(tenantB.tenantId, 'b')
-
-  tables = await listTenantScopedTables()
+  seedB = await seedCatalog(tenantB.tenantId, 'b')
 })
 
 it('descubre al menos las tablas de dominio conocidas', () => {
@@ -47,75 +186,140 @@ describe('aislamiento entre tenants', () => {
     const { data, error } = await admin.rpc('list_tenant_scoped_tables')
     expect(error).toBeNull()
     const names = (data as { table_name: string }[]).map((r) => r.table_name)
+    expect(names.length, 'no se descubrieron tablas con tenant_id').toBeGreaterThan(0)
 
     for (const table of names) {
-      const { data: rls } = await admin
+      const { data: rls, error: rlsError } = await admin
         .from('pg_tables_rls_check')
         .select('*')
         .eq('tablename', table)
         .maybeSingle()
+      expect(rlsError, `${table}: error consultando pg_tables_rls_check`).toBeNull()
       expect(rls?.rowsecurity, `${table} sin RLS`).toBe(true)
     }
   })
 
-  it('SELECT nunca devuelve filas de otro tenant', async () => {
+  it('SELECT nunca devuelve filas de otro tenant y sí ve las propias', async () => {
+    expect(tables.length, 'no se descubrieron tablas con tenant_id').toBeGreaterThan(0)
+
     for (const table of tables) {
       const { data, error } = await tenantA.client.from(table).select('tenant_id')
       expect(error, `${table}: SELECT devolvió error inesperado`).toBeNull()
 
-      const foreign = (data ?? []).filter((row) => {
-        const value = (row as { tenant_id: string | null }).tenant_id
-        if (value === null) return !SHARED_READ_TABLES.has(table)
-        return value !== tenantA.tenantId
+      const rows = (data ?? []) as { tenant_id: string | null }[]
+
+      const foreign = rows.filter((row) => {
+        if (row.tenant_id === null) return !SHARED_READ_TABLES.has(table)
+        return row.tenant_id !== tenantA.tenantId
       })
       expect(foreign, `${table}: fuga de ${foreign.length} filas`).toHaveLength(0)
+
+      // Control positivo: una policy deny-all (`using (false)`) también devolvería 0
+      // filas para "foreign", pasando en falso. Probar que A además VE sus propias
+      // filas descarta ese falso positivo.
+      const own = rows.filter((row) => row.tenant_id === tenantA.tenantId)
+      expect(
+        own.length,
+        `${table}: A no ve ninguna fila propia (control positivo ausente; ¿policy deny-all?)`,
+      ).toBeGreaterThan(0)
     }
   })
 
-  it('INSERT con el tenant_id de otro es rechazado', async () => {
-    for (const table of ['categories', 'venues', 'tenant_settings']) {
-      const payload: Record<string, unknown> = { tenant_id: tenantB.tenantId }
-      if (table === 'categories') {
-        payload.slug = `intruso-${Date.now()}`
-        payload.name_i18n = { es: 'Intruso' }
-      }
-      if (table === 'venues') {
-        payload.slug = `intruso-${Date.now()}`
-        payload.name = 'Intruso'
+  it('INSERT con el tenant_id de otro es rechazado por RLS', async () => {
+    expect(tables.length, 'no se descubrieron tablas con tenant_id').toBeGreaterThan(0)
+
+    for (const table of tables) {
+      const fixture = WRITE_FIXTURES[table]
+      if (!fixture) {
+        expect.fail(
+          `Tabla '${table}' descubierta sin entrada en WRITE_FIXTURES: añade su payload de escritura antes de continuar.`,
+        )
+        continue
       }
 
+      const payload = fixture.insertPayload({ tenantA, tenantB, seedB })
       const { error } = await tenantA.client.from(table).insert(payload)
       expect(error, `${table}: INSERT cross-tenant NO fue rechazado`).not.toBeNull()
+      // No basta con "hubo un error": una violación NOT NULL también lo satisfaría.
+      // Debe ser específicamente la guarda de aislamiento esperada para esta tabla
+      // (RLS 42501, o el trigger assert_same_tenant para las tablas con FK a un padre
+      // de otro tenant), no un fallo incidental.
+      const expected = fixture.expectedInsertRejection
+      expect(
+        error?.code,
+        `${table}: INSERT cross-tenant fue rechazado por otra razón (${error?.message}), no por la guarda de aislamiento esperada (${expected.code})`,
+      ).toBe(expected.code)
+      if (expected.messageIncludes) {
+        expect(
+          error?.message,
+          `${table}: el mensaje de error no confirma la guarda de aislamiento esperada`,
+        ).toContain(expected.messageIncludes)
+      }
     }
   })
 
   it('UPDATE sobre filas de otro tenant no afecta a ninguna fila', async () => {
-    const { data } = await tenantA.client
-      .from('categories')
-      .update({ sort_order: 999 })
-      .eq('tenant_id', tenantB.tenantId)
-      .select('id')
-    expect(data ?? []).toHaveLength(0)
+    expect(tables.length, 'no se descubrieron tablas con tenant_id').toBeGreaterThan(0)
 
-    const { data: intact } = await admin
-      .from('categories')
-      .select('sort_order')
-      .eq('tenant_id', tenantB.tenantId)
-    expect((intact ?? []).every((row) => row.sort_order === 0)).toBe(true)
+    for (const table of tables) {
+      const fixture = WRITE_FIXTURES[table]
+      if (!fixture) {
+        expect.fail(
+          `Tabla '${table}' descubierta sin entrada en WRITE_FIXTURES: añade su columna/valor de UPDATE antes de continuar.`,
+        )
+        continue
+      }
+      const { updateColumn, updateValue } = fixture
+
+      const { data, error } = await tenantA.client
+        .from(table)
+        .update({ [updateColumn]: updateValue })
+        .eq('tenant_id', tenantB.tenantId)
+        .select()
+      expect(error, `${table}: UPDATE cross-tenant devolvió error inesperado`).toBeNull()
+      expect(data ?? [], `${table}: UPDATE cross-tenant afectó filas`).toHaveLength(0)
+
+      const { data: intact, error: intactError } = await admin
+        .from(table)
+        .select('*')
+        .eq('tenant_id', tenantB.tenantId)
+      expect(intactError, `${table}: error verificando integridad tras UPDATE`).toBeNull()
+      expect(
+        (intact ?? []).length,
+        `${table}: no había fila de B para probar el UPDATE cross-tenant (control positivo ausente)`,
+      ).toBeGreaterThan(0)
+      expect(
+        (intact ?? []).every((row) => row[updateColumn] !== updateValue),
+        `${table}: UPDATE cross-tenant modificó datos de B`,
+      ).toBe(true)
+    }
   })
 
   it('DELETE sobre filas de otro tenant no borra nada', async () => {
-    const before = await admin
-      .from('categories')
-      .select('id', { count: 'exact', head: true })
-      .eq('tenant_id', tenantB.tenantId)
+    expect(tables.length, 'no se descubrieron tablas con tenant_id').toBeGreaterThan(0)
 
-    await tenantA.client.from('categories').delete().eq('tenant_id', tenantB.tenantId)
+    for (const table of tables) {
+      if (!WRITE_FIXTURES[table]) {
+        expect.fail(`Tabla '${table}' descubierta sin entrada en WRITE_FIXTURES.`)
+        continue
+      }
 
-    const after = await admin
-      .from('categories')
-      .select('id', { count: 'exact', head: true })
-      .eq('tenant_id', tenantB.tenantId)
-    expect(after.count).toBe(before.count)
+      const before = await admin
+        .from(table)
+        .select('*', { count: 'exact', head: true })
+        .eq('tenant_id', tenantB.tenantId)
+      expect(
+        before.count ?? 0,
+        `${table}: no había fila de B para probar el DELETE cross-tenant (control positivo ausente)`,
+      ).toBeGreaterThan(0)
+
+      await tenantA.client.from(table).delete().eq('tenant_id', tenantB.tenantId)
+
+      const after = await admin
+        .from(table)
+        .select('*', { count: 'exact', head: true })
+        .eq('tenant_id', tenantB.tenantId)
+      expect(after.count).toBe(before.count)
+    }
   })
 })

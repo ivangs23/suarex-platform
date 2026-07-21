@@ -14,9 +14,16 @@ export const admin = createClient(url, serviceKey, {
 
 export type TenantFixture = {
   tenantId: string
+  userId: string
   slug: string
   email: string
   client: SupabaseClient
+}
+
+/** Filas propias creadas por seedCatalog, usadas como referencias válidas en payloads cross-tenant. */
+export type SeedResult = {
+  categoryId: string
+  productId: string
 }
 
 const PASSWORD = 'fixture-password-1234'
@@ -48,10 +55,10 @@ export async function createTenantFixture(slug: string): Promise<TenantFixture> 
   const { error: signInError } = await client.auth.signInWithPassword({ email, password: PASSWORD })
   if (signInError) throw signInError
 
-  return { tenantId: tenant.id, slug, email, client }
+  return { tenantId: tenant.id, userId: user.user.id, slug, email, client }
 }
 
-export async function seedCatalog(tenantId: string, label: string): Promise<void> {
+export async function seedCatalog(tenantId: string, label: string): Promise<SeedResult> {
   const { data: category, error: categoryError } = await admin
     .from('categories')
     .insert({ tenant_id: tenantId, slug: `cat-${label}`, name_i18n: { es: `Cat ${label}` } })
@@ -88,6 +95,17 @@ export async function seedCatalog(tenantId: string, label: string): Promise<void
     .from('tenant_settings')
     .insert({ tenant_id: tenantId, branding: { colors: { primary: '#000000' } } })
   if (settingsError) throw settingsError
+
+  // allergens también es tenant-scoped (aparte de las 14 filas globales con tenant_id
+  // NULL): cada tenant puede declarar sus propios alérgenos personalizados. Se siembra
+  // aquí para que el control positivo de lectura y la cobertura de escritura cross-tenant
+  // no traten esta tabla como excepción silenciosa.
+  const { error: allergenError } = await admin
+    .from('allergens')
+    .insert({ tenant_id: tenantId, name_i18n: { es: `Alérgeno ${label}` } })
+  if (allergenError) throw allergenError
+
+  return { categoryId: category.id, productId: product.id }
 }
 
 /** Tablas de public con columna tenant_id, descubiertas en runtime. */
