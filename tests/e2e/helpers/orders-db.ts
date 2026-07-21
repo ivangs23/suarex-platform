@@ -61,3 +61,23 @@ export async function deleteOrder(orderId: string): Promise<void> {
   const { error } = await admin.from("orders").delete().eq("id", orderId);
   if (error) throw error;
 }
+
+/**
+ * Fix round 2 (Finding 3): `POST /api/orders` deja el pedido en `status: "pending"` --
+ * el webhook de Stripe (`apps/web/app/api/webhook/stripe/route.ts`, fuera de alcance de
+ * este fix) es quien lo marca `paid` en el mundo real, y este e2e nunca completa un
+ * cobro de verdad, así que ese webhook no llega a dispararse. Con el trigger
+ * `orders_auto_serve` (`20260721000008_orders_auto_serve.sql`), un pedido `pending` con
+ * ambas estaciones resueltas YA NO pasa a `served` -- por diseño, ver Finding 3 -- así
+ * que este test necesita simular lo que haría ese webhook (un UPDATE directo a `status:
+ * "paid"`, igual que `markOrderPaid` en `packages/db/src/orders.ts`) para poder seguir
+ * probando que "marcar hecho" hace desaparecer un pedido YA PAGADO del tablero.
+ */
+export async function markOrderPaidForTest(orderId: string): Promise<void> {
+  const { error } = await admin
+    .from("orders")
+    .update({ status: "paid" })
+    .eq("id", orderId)
+    .eq("status", "pending");
+  if (error) throw error;
+}

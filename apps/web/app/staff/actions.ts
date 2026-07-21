@@ -2,6 +2,7 @@
 
 import { markStationDone as markStationDoneInDb } from "@suarex/db";
 import { revalidatePath } from "next/cache";
+import { parseMarkStationDoneInput } from "@/lib/staff-order-input";
 import { getStaffSession } from "@/lib/supabase-server";
 import { requireTenant } from "@/lib/tenant-context";
 
@@ -20,14 +21,26 @@ import { requireTenant } from "@/lib/tenant-context";
  *
  * `revalidatePath` cubre el caso sin JS / recarga dura; el refresco normal en vivo lo
  * hace `OrdersBoard` al recibir un evento de Realtime, no esta llamada.
+ *
+ * Fix round 2 (Finding 4): `station` se tipa aquí como `string`, no como
+ * `"cocina" | "barra"` -- ese tipo más estrecho es el contrato que usa el botón de
+ * `OrdersBoard.tsx`, pero una Server Action es, bajo el capó, un endpoint HTTP normal, y
+ * un caller que la invoque directamente (no a través del botón) no pasa por ningún
+ * tipado en tiempo de ejecución. `parseMarkStationDoneInput` (`lib/staff-order-input.ts`)
+ * valida `station` (exactamente "cocina" o "barra") y `orderId` (UUID) ANTES de resolver
+ * sesión o tocar la base de datos, y lanza `InvalidStaffOrderInputError` -- un error
+ * limpio -- en vez de dejar que un `station` inválido se enrute en silencio o que un
+ * `orderId` malformado llegue crudo a Postgres.
  */
-export async function markStationDone(orderId: string, station: "cocina" | "barra"): Promise<void> {
+export async function markStationDone(orderId: string, station: string): Promise<void> {
+  const input = parseMarkStationDoneInput(orderId, station);
+
   const tenant = await requireTenant();
   const session = await getStaffSession(tenant);
   if (!session) {
     throw new Error("No autenticado");
   }
 
-  await markStationDoneInDb(session.tenantId, orderId, station);
+  await markStationDoneInDb(session.tenantId, input.orderId, input.station);
   revalidatePath("/staff");
 }

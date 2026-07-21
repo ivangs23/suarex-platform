@@ -155,9 +155,13 @@ describe("listActiveOrders", () => {
 
 describe("markStationDone", () => {
   it("marca la estación pedida y dos veces seguidas no hace nada la segunda vez", async () => {
+    // Fix round 2 (Finding 3): `status: "paid"` explícito -- un pedido "pending" (sin
+    // confirmar por el webhook de Stripe) ya NO se autosirve al resolver su única
+    // estación, ver el test dedicado a Finding 3 más abajo ("un pedido pending...").
     const orderId = await insertOrder(tenantA.tenantId, venueA, productA, {
       orderNumber: 201,
       destination: "barra",
+      status: "paid",
     });
 
     await markStationDone(tenantA.tenantId, orderId, "barra");
@@ -168,7 +172,8 @@ describe("markStationDone", () => {
       .eq("id", orderId)
       .single();
     expect(afterFirst?.bar_status).toBe("done");
-    // Única estación (barra) resuelta, cocina era "na" -> el pedido pasa a servido.
+    // Única estación (barra) resuelta, cocina era "na", pedido ya pagado -> el trigger
+    // `orders_auto_serve` lo sirve en la misma sentencia del UPDATE.
     expect(afterFirst?.status).toBe("served");
 
     // Segunda llamada: la estación ya no está "pending", así que no encuentra fila que
@@ -185,13 +190,14 @@ describe("markStationDone", () => {
   });
 
   it("el pedido pasa a servido solo cuando AMBAS estaciones quedan fuera de pending", async () => {
+    // Fix round 2 (Finding 3): `status: "paid"` -- ver el comentario del test anterior.
     const { data: order, error } = await admin
       .from("orders")
       .insert({
         tenant_id: tenantA.tenantId,
         venue_id: venueA,
         order_number: 202,
-        status: "pending",
+        status: "paid",
         kitchen_status: "pending",
         bar_status: "pending",
       })
@@ -207,8 +213,9 @@ describe("markStationDone", () => {
       .eq("id", order.id)
       .single();
     expect(afterKitchen?.kitchen_status).toBe("done");
-    // Barra sigue pendiente: el pedido NO pasa a servido todavía.
-    expect(afterKitchen?.status).toBe("pending");
+    // Barra sigue pendiente: el pedido NO pasa a servido todavía (aunque ya esté
+    // "paid" -- el trigger exige AMBAS estaciones fuera de "pending").
+    expect(afterKitchen?.status).toBe("paid");
 
     await markStationDone(tenantA.tenantId, order.id, "barra");
 
@@ -236,6 +243,50 @@ describe("markStationDone", () => {
       .single();
     expect(data?.kitchen_status).toBe("na");
     expect(data?.status).toBe("pending");
+  });
+
+  it("Finding 3: un pedido pending con ambas estaciones resueltas NO se autosirve, y sí en cuanto se paga", async () => {
+    // Pedido recién creado, sin confirmar por el webhook de Stripe todavía
+    // (`status: "pending"`, el valor por defecto de `insertOrder` -- ver su firma).
+    const orderId = await insertOrder(tenantA.tenantId, venueA, productA, {
+      orderNumber: 301,
+      destination: "barra", // kitchen_status queda "na"
+    });
+
+    // El personal puede preparar por adelantado sobre un pedido no pagado: marcar la
+    // única estación real (barra) SÍ tiene efecto sobre esa columna...
+    await markStationDone(tenantA.tenantId, orderId, "barra");
+
+    const { data: stillPending } = await admin
+      .from("orders")
+      .select("kitchen_status, bar_status, status")
+      .eq("id", orderId)
+      .single();
+    expect(stillPending?.bar_status).toBe("done");
+    expect(stillPending?.kitchen_status).toBe("na");
+    // ...pero ambas estaciones ya resueltas (barra "done", cocina "na") NO basta para
+    // servir un pedido "pending": el trigger `orders_auto_serve` exige explícitamente
+    // que el pedido esté "paid" o "preparing" antes de tocar `status`.
+    expect(stillPending?.status).toBe("pending");
+
+    // Simula lo que hace el webhook real de Stripe (`markOrderPaid`,
+    // `packages/db/src/orders.ts`): marca el pedido pagado con un UPDATE directo sobre
+    // `status`. Como las estaciones ya estaban resueltas de antemano, ESE MISMO UPDATE
+    // reevalúa la condición del trigger y sirve el pedido en el acto -- sin ningún paso
+    // adicional ni una segunda llamada a `markStationDone`.
+    const { error: payError } = await admin
+      .from("orders")
+      .update({ status: "paid" })
+      .eq("id", orderId)
+      .eq("status", "pending");
+    if (payError) throw payError;
+
+    const { data: afterPaid } = await admin
+      .from("orders")
+      .select("status")
+      .eq("id", orderId)
+      .single();
+    expect(afterPaid?.status).toBe("served");
   });
 
   it("SECURITY: un tenantId ajeno no puede mutar el pedido de otro tenant", async () => {

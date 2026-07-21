@@ -1,5 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
-import { deleteOrder, findOrderByPublicToken } from "./helpers/orders-db.js";
+import { deleteOrder, findOrderByPublicToken, markOrderPaidForTest } from "./helpers/orders-db.js";
 
 // Igual que `REALTIME_READY_TIMEOUT_MS` en `tests/integration/realtime-isolation.test.ts`:
 // justo tras `supabase db reset` (o bajo varios workers de Playwright compitiendo por CPU
@@ -64,6 +64,13 @@ test("un pedido pagado aparece en el panel", async ({ page }) => {
   // del test (incluido un fallo de aserción a mitad), el `finally` lo borra. El test es
   // dueño de este pedido, no del estado global del tablero.
   try {
+    // Fix round 2 (Finding 3): simula lo que haría el webhook de Stripe -- este test
+    // nunca completa un cobro real, así que sin esto el pedido queda "pending" para
+    // siempre y "Marcar hecho" ya NO lo autosirve (por diseño, ver el trigger
+    // `orders_auto_serve`). El nombre del test ("un pedido PAGADO aparece en el panel")
+    // asume precisamente este paso.
+    await markOrderPaidForTest(orderId);
+
     const card = cardFor(page, orderId);
 
     // Llega solo, sin recargar: eso es lo que prueba Realtime. La página se cargó ANTES
@@ -163,6 +170,13 @@ test("el personal de un tenant no ve los pedidos del otro (con control positivo)
       timeout: REALTIME_WAIT_MS,
     });
     await expect(cardFor(garumPage, manuelaOrderId)).toHaveCount(0);
+
+    // Fix round 2 (Finding 3): sin marcar pagado, "Marcar hecho" ya no autosirve el
+    // pedido (ver el comentario equivalente en el test anterior) y las aserciones de
+    // "desaparece del tablero" de abajo fallarían por una razón ajena a este test
+    // (aislamiento), no por una fuga real.
+    await markOrderPaidForTest(garumOrderId);
+    await markOrderPaidForTest(manuelaOrderId);
 
     // Cobertura de "marcar hecho" en ambos tenants antes de limpiar.
     await cardFor(garumPage, garumOrderId)

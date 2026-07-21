@@ -89,9 +89,9 @@ export async function listActiveOrders(tenantId: string): Promise<StaffOrder[]> 
  * Marca UNA estación (cocina o barra) de UN pedido como `done`. `tenantId` debe venir de
  * `getStaffSession()` -- ver docstring de `apps/web/app/staff/actions.ts` -- nunca de un
  * argumento que el navegador pueda fijar: `tenantScoped` lo hace obligatorio y lo aplica
- * tanto al UPDATE como (implícitamente) a cualquier lectura posterior.
+ * al UPDATE.
  *
- * Dos guardas de concurrencia/autorización en un único UPDATE, sin lectura previa:
+ * UN SOLO UPDATE, con dos guardas de concurrencia/autorización, sin lectura previa:
  *   - `.eq("id", orderId)`: solo esta comanda.
  *   - `.eq(column, "pending")`: la estación debe estar `pending` para que el UPDATE
  *     alcance alguna fila. Esto hace la función IDEMPOTENTE por construcción -- marcar
@@ -103,6 +103,15 @@ export async function listActiveOrders(tenantId: string): Promise<StaffOrder[]> 
  * otro tenant antes de que estos dos `.eq()` adicionales entren en juego: un `orderId`
  * ajeno (adivinado o robado) sencillamente no encuentra fila, exactamente igual que en
  * `tests/integration/tenant-filter-structural.test.ts` para `categories`.
+ *
+ * Fix round 2 (Finding 1): esta función YA NO decide por sí misma cuándo el pedido pasa
+ * a `served` -- eso lo hace, dentro de esta MISMA sentencia, el trigger
+ * `orders_auto_serve` (`20260721000008_orders_auto_serve.sql`). Antes había un segundo
+ * UPDATE aquí ("si ambas estaciones quedaron resueltas, marca `served`"): si el proceso
+ * moría entre los dos UPDATEs, el pedido quedaba con las estaciones resueltas pero
+ * `status` varado para siempre (reintentar era un no-op garantizado, ver el commit de
+ * este fix). Con el trigger, no existe ese "entre medias": o el UPDATE entero se aplica
+ * -- estación Y, si corresponde, `served` -- o no se aplica nada.
  */
 export async function markStationDone(
   tenantId: string,
@@ -111,27 +120,9 @@ export async function markStationDone(
 ): Promise<void> {
   const column = station === "cocina" ? "kitchen_status" : "bar_status";
 
-  const { data: updated, error } = await tenantScoped("orders", tenantId)
+  const { error } = await tenantScoped("orders", tenantId)
     .update({ [column]: "done" })
     .eq("id", orderId)
-    .eq(column, "pending")
-    .select("kitchen_status, bar_status")
-    .maybeSingle();
+    .eq(column, "pending");
   if (error) throw error;
-  // No se actualizó ninguna fila: la comanda no existe para este tenant, ya estaba
-  // `done`, o esa estación es `na`. Ninguno de los tres casos es un error del llamante.
-  if (!updated) return;
-
-  const row = updated as { kitchen_status: StationStatus; bar_status: StationStatus };
-  const bothStationsResolved = row.kitchen_status !== "pending" && row.bar_status !== "pending";
-  if (!bothStationsResolved) return;
-
-  // Ambas estaciones fuera de `pending` (cada una `done` o `na`): el pedido pasa a
-  // `served`. `.neq("status", "cancelled")` evita resucitar un pedido que, por lo que
-  // sea, se canceló entre medias (huérfano de Stripe, ver `cancelOrphanedPendingOrder`).
-  const { error: servedError } = await tenantScoped("orders", tenantId)
-    .update({ status: "served" })
-    .eq("id", orderId)
-    .neq("status", "cancelled");
-  if (servedError) throw servedError;
 }
