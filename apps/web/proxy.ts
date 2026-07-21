@@ -1,7 +1,12 @@
+import { resolveRootDomains } from "@suarex/config";
 import { findTenantByHost } from "@suarex/db";
 import { type NextRequest, NextResponse } from "next/server";
 
-const ROOT_DOMAINS = (process.env.TENANT_ROOT_DOMAINS ?? "localhost").split(",");
+// Ver resolveRootDomains (@suarex/config/tenant-host.ts): recorta y descarta entradas
+// vacías, y lanza fuera de `development` si la variable no está definida en vez de
+// defaultear en silencio a "localhost" (ver su docstring para los dos modos de fallo que
+// esto cierra).
+const ROOT_DOMAINS = resolveRootDomains(process.env);
 
 const TENANT_ID_HEADER = "x-suarex-tenant-id";
 const TENANT_SLUG_HEADER = "x-suarex-tenant-slug";
