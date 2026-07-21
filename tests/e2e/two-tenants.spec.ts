@@ -26,10 +26,21 @@ test("manuela sirve un catálogo y una marca distintos", async ({ page }) => {
 });
 
 test("ningún producto de un tenant aparece en el otro", async ({ page }) => {
+  // `product-count` refleja el tamaño crudo de getProducts(tenant.id), sin
+  // pasar por el filtrado por category_id que hace MenuPage al renderizar.
+  // Si solo se comprobara la ausencia del texto del otro tenant, un
+  // getProducts() sin `tenant_id` seguiría sin fugar nada visible aquí: el
+  // producto huérfano no tendría ninguna category_id de este tenant y el
+  // `.filter((product) => product.categoryId === category.id)` de MenuPage lo
+  // ocultaría igualmente. Comprobar el conteo crudo sí depende únicamente del
+  // scoping de getProducts, independiente de si getCategories está bien
+  // acotado.
   await page.goto("http://garum.localhost:3000/1");
+  await expect(page.getByTestId("product-count")).toHaveText("1");
   await expect(page.getByText("Tosta de jamón")).toHaveCount(0);
 
   await page.goto("http://manuela.localhost:3000/1");
+  await expect(page.getByTestId("product-count")).toHaveText("1");
   await expect(page.getByText("Ribera del Duero")).toHaveCount(0);
 });
 
