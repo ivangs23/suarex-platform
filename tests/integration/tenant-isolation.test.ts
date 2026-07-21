@@ -1,7 +1,8 @@
-import { beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import {
   admin,
   createTenantFixture,
+  deleteTenantFixture,
   listTenantScopedTables,
   seedCatalog,
   type SeedResult,
@@ -137,10 +138,51 @@ const WRITE_FIXTURES: Record<string, WriteFixture> = {
   },
 }
 
+type PolicyRow = {
+  schemaname: string
+  tablename: string
+  policyname: string
+  cmd: 'SELECT' | 'INSERT' | 'UPDATE' | 'DELETE' | 'ALL'
+  qual: string | null
+  with_check: string | null
+}
+
+/**
+ * Verdadero solo si la expresión (USING o WITH CHECK de una policy) exige de verdad
+ * `tenant_id = current_tenant_id()` (en cualquier orden), y no una tautología disfrazada:
+ * - `true` desnudo (degradación total) se rechaza.
+ * - una expresión que solo mencione current_tenant_id() sin ninguna referencia genuina a
+ *   la columna tenant_id (p. ej. `current_tenant_id() = current_tenant_id()`) se rechaza:
+ *   se comprueba quitando primero toda ocurrencia de `current_tenant_id()` y exigiendo que
+ *   aun así quede una referencia a `tenant_id` (así "current_tenant_id" en sí mismo, que
+ *   contiene la subcadena "tenant_id", no cuenta como referencia genuina a la columna).
+ * No exige la ausencia de "is null": allergens_read admite legítimamente filas globales
+ * (tenant_id is null) además de las propias, y sigue pasando esta comprobación.
+ */
+function hasGenuineTenantCheck(expr: string | null): boolean {
+  if (!expr) return false
+  const trimmed = expr.trim().toLowerCase()
+  if (trimmed === 'true') return false
+
+  const fnCallPattern = /(?:public\.)?current_tenant_id\s*\(\s*\)/gi
+  const referencesFunction = fnCallPattern.test(expr)
+  const withoutFnCalls = expr.replace(fnCallPattern, '')
+  const referencesColumn = /\btenant_id\b/i.test(withoutFnCalls)
+
+  return referencesFunction && referencesColumn
+}
+
 let tenantA: TenantFixture
 let tenantB: TenantFixture
 let seedB: SeedResult
 let tables: string[]
+
+afterAll(async () => {
+  // Acotado a los dos usuarios creados por esta suite (nunca un wipe de auth.users).
+  for (const fixture of [tenantA, tenantB]) {
+    if (fixture) await deleteTenantFixture(fixture)
+  }
+})
 
 beforeAll(async () => {
   tables = await listTenantScopedTables()
@@ -183,12 +225,9 @@ it('descubre al menos las tablas de dominio conocidas', () => {
 
 describe('aislamiento entre tenants', () => {
   it('cada tabla con tenant_id tiene RLS activada', async () => {
-    const { data, error } = await admin.rpc('list_tenant_scoped_tables')
-    expect(error).toBeNull()
-    const names = (data as { table_name: string }[]).map((r) => r.table_name)
-    expect(names.length, 'no se descubrieron tablas con tenant_id').toBeGreaterThan(0)
+    expect(tables.length, 'no se descubrieron tablas con tenant_id').toBeGreaterThan(0)
 
-    for (const table of names) {
+    for (const table of tables) {
       const { data: rls, error: rlsError } = await admin
         .from('pg_tables_rls_check')
         .select('*')
@@ -196,6 +235,43 @@ describe('aislamiento entre tenants', () => {
         .maybeSingle()
       expect(rlsError, `${table}: error consultando pg_tables_rls_check`).toBeNull()
       expect(rls?.rowsecurity, `${table} sin RLS`).toBe(true)
+    }
+  })
+
+  it('cada policy de tablas tenant-scoped exige tenant_id = current_tenant_id(), nunca using/with check triviales', async () => {
+    expect(tables.length, 'no se descubrieron tablas con tenant_id').toBeGreaterThan(0)
+
+    const { data, error } = await admin
+      .from('pg_policies_tenant_check')
+      .select('*')
+      .in('tablename', tables)
+    expect(error, 'error consultando pg_policies_tenant_check').toBeNull()
+    const policies = (data ?? []) as PolicyRow[]
+
+    for (const table of tables) {
+      const tablePolicies = policies.filter((p) => p.tablename === table)
+      expect(tablePolicies.length, `${table}: no tiene ninguna policy de RLS`).toBeGreaterThan(0)
+
+      for (const policy of tablePolicies) {
+        // Semántica de Postgres: USING aplica a SELECT/UPDATE/DELETE/ALL;
+        // WITH CHECK aplica a INSERT/UPDATE/ALL. No se asume "ALL" para simplificar:
+        // se deriva de policy.cmd tal cual lo reporta pg_policy.
+        const needsQual = policy.cmd === 'SELECT' || policy.cmd === 'UPDATE' || policy.cmd === 'DELETE' || policy.cmd === 'ALL'
+        const needsWithCheck = policy.cmd === 'INSERT' || policy.cmd === 'UPDATE' || policy.cmd === 'ALL'
+
+        if (needsQual) {
+          expect(
+            hasGenuineTenantCheck(policy.qual),
+            `${table}.${policy.policyname}: USING no exige tenant_id = current_tenant_id() o es trivial: "${policy.qual}"`,
+          ).toBe(true)
+        }
+        if (needsWithCheck) {
+          expect(
+            hasGenuineTenantCheck(policy.with_check),
+            `${table}.${policy.policyname}: WITH CHECK no exige tenant_id = current_tenant_id() o es trivial: "${policy.with_check}"`,
+          ).toBe(true)
+        }
+      }
     }
   })
 
@@ -234,7 +310,6 @@ describe('aislamiento entre tenants', () => {
         expect.fail(
           `Tabla '${table}' descubierta sin entrada en WRITE_FIXTURES: añade su payload de escritura antes de continuar.`,
         )
-        continue
       }
 
       const payload = fixture.insertPayload({ tenantA, tenantB, seedB })
@@ -267,7 +342,6 @@ describe('aislamiento entre tenants', () => {
         expect.fail(
           `Tabla '${table}' descubierta sin entrada en WRITE_FIXTURES: añade su columna/valor de UPDATE antes de continuar.`,
         )
-        continue
       }
       const { updateColumn, updateValue } = fixture
 
@@ -301,7 +375,6 @@ describe('aislamiento entre tenants', () => {
     for (const table of tables) {
       if (!WRITE_FIXTURES[table]) {
         expect.fail(`Tabla '${table}' descubierta sin entrada en WRITE_FIXTURES.`)
-        continue
       }
 
       const before = await admin

@@ -58,6 +58,16 @@ export async function createTenantFixture(slug: string): Promise<TenantFixture> 
   return { tenantId: tenant.id, userId: user.user.id, slug, email, client }
 }
 
+/**
+ * Borra el usuario de auth creado por createTenantFixture. Acotado por diseño: solo
+ * recibe el userId concreto de la fixture (nunca un patrón/wildcard), para que no pueda
+ * derivar en un borrado masivo de auth.users por accidente.
+ */
+export async function deleteTenantFixture(fixture: TenantFixture): Promise<void> {
+  const { error } = await admin.auth.admin.deleteUser(fixture.userId)
+  if (error) throw error
+}
+
 export async function seedCatalog(tenantId: string, label: string): Promise<SeedResult> {
   const { data: category, error: categoryError } = await admin
     .from('categories')
