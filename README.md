@@ -42,6 +42,15 @@ contraseña en ningún sitio real, y no la escribas en ningún fichero del repo.
 `STAFF_SEED_PASSWORD` solo se pasa como variable de entorno al ejecutar el
 script.
 
+`tests/e2e/staff-auth.spec.ts` inicia sesión de verdad contra ese usuario
+sembrado: exporta la MISMA `STAFF_SEED_PASSWORD` al correr `pnpm test:e2e`
+(o esos dos tests se saltan con `test.skip`, nunca fallan en silencio por
+falta de credencial):
+
+```bash
+STAFF_SEED_PASSWORD='<la-misma-que-usaste-en-seed:staff>' pnpm test:e2e
+```
+
 ## Verificación
 
 ```bash
