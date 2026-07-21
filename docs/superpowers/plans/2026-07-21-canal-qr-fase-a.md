@@ -1221,6 +1221,10 @@ git commit -m "feat(db): order creation with server-side price recomputation"
 
 ### Task 6: Cobro con Stripe y webhook
 
+> **Preparada para Stripe Connect.** Cada cliente de la plataforma cobra en SU propia cuenta de Stripe, conectada por OAuth. La plataforma nunca ve la clave secreta de nadie: solo guarda un identificador de cuenta (`tenants.stripe_account_id`, columna que ya existe) y actúa sobre ella con la clave de la plataforma.
+>
+> El onboarding de Connect llega en el sub-proyecto 5, pero el cobro se escribe con su forma desde ahora: se lee `stripe_account_id` del tenant y, si tiene valor, se pasa como `stripeAccount`. Si está vacío se cobra contra la cuenta de la plataforma, que es lo que ocurre en local. Así activar Connect más adelante no obliga a reescribir el flujo de pago, el webhook ni los tests.
+
 **Files:**
 - Create: `apps/web/lib/stripe.ts`, `apps/web/app/api/orders/route.ts`, `apps/web/app/api/webhook/stripe/route.ts`
 - Modify: `apps/web/package.json`, `apps/web/.env.local`
@@ -1330,12 +1334,21 @@ export async function POST(request: Request) {
     );
   }
 
-  const intent = await stripeClient().paymentIntents.create({
-    amount: order.totalCents,
-    currency: order.currency.toLowerCase(),
-    automatic_payment_methods: { enabled: true },
-    metadata: { order_id: order.orderId, tenant_id: table.tenantId },
-  });
+  // Forma Connect: si el tenant tiene cuenta conectada, el cargo se crea SOBRE
+  // ella y el dinero va a su cuenta, no a la de la plataforma. Sin cuenta
+  // conectada (desarrollo local, o un tenant que aún no ha completado el
+  // onboarding) se cobra contra la cuenta de la plataforma.
+  const connectedAccount = await getTenantStripeAccount(table.tenantId);
+
+  const intent = await stripeClient().paymentIntents.create(
+    {
+      amount: order.totalCents,
+      currency: order.currency.toLowerCase(),
+      automatic_payment_methods: { enabled: true },
+      metadata: { order_id: order.orderId, tenant_id: table.tenantId },
+    },
+    connectedAccount ? { stripeAccount: connectedAccount } : undefined,
+  );
 
   await attachPaymentIntent(table.tenantId, order.orderId, intent.id);
 
@@ -1345,6 +1358,28 @@ export async function POST(request: Request) {
   });
 }
 ```
+
+Añadir a `packages/db/src/tenants.ts` el lector de la cuenta conectada:
+
+```ts
+/**
+ * Identificador de la cuenta de Stripe conectada del tenant (`acct_...`), o null
+ * si aún no ha completado el onboarding de Connect. NO es un secreto: es el
+ * identificador público de una cuenta. La clave secreta de un cliente nunca
+ * llega a esta plataforma, que es justamente el motivo de usar Connect.
+ */
+export async function getTenantStripeAccount(tenantId: string): Promise<string | null> {
+  const { data, error } = await tenantsTableForHostResolution()
+    .select("stripe_account_id")
+    .eq("id", tenantId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return (data?.stripe_account_id as string | null) ?? null;
+}
+```
+
+**Importante sobre el webhook con Connect:** un cargo creado sobre una cuenta conectada emite el evento en ESA cuenta, no en la de la plataforma. Stripe lo entrega con `event.account` relleno. El webhook debe funcionar en ambos casos, así que no asumas que el evento llega siempre de la plataforma. Con `stripe listen` en local se prueba el caso sin Connect; el caso con cuenta conectada se verifica en el sub-proyecto 5, cuando exista una cuenta real conectada. Deja constancia de esa limitación en tu informe en vez de simularla.
 
 - [ ] **Step 5: Implementar el webhook**
 
