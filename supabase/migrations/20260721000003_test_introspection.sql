@@ -72,3 +72,28 @@ as
 
 revoke all on public.pg_policies_tenant_check from anon, authenticated, public;
 grant select on public.pg_policies_tenant_check to service_role;
+
+-- Introspección de los privilegios efectivos de `anon` sobre tablas de public. RLS
+-- habilitada se auto-verifica ya (pg_tables_rls_check), pero un GRANT residual no: los
+-- privilegios por defecto de Postgres re-conceden a `anon` en cada tabla nueva, y cada
+-- migración de este proyecto termina con un `revoke all ... from anon` explícito que
+-- alguien tiene que recordar escribir. Esta vista deja que la suite anti-fuga verifique
+-- ese revoke sola, para cualquier tabla descubierta, hoy y en las que añadan los
+-- subproyectos 2-6. `aclexplode(coalesce(relacl, acldefault(...)))` es el patrón estándar
+-- de Postgres para leer el ACL efectivo de un objeto incluyendo el caso de ACL nula
+-- (privilegios por defecto: solo el owner, nada para `anon`).
+create or replace view public.pg_anon_grants_check
+with (security_invoker = true)
+as
+  select
+    c.relname as tablename,
+    acl.privilege_type
+  from pg_class c
+  join pg_namespace n on n.oid = c.relnamespace
+  cross join lateral aclexplode(coalesce(c.relacl, acldefault('r', c.relowner))) as acl
+  where n.nspname = 'public'
+    and c.relkind = 'r'
+    and acl.grantee = (select oid from pg_roles where rolname = 'anon');
+
+revoke all on public.pg_anon_grants_check from anon, authenticated, public;
+grant select on public.pg_anon_grants_check to service_role;

@@ -235,6 +235,30 @@ describe("aislamiento entre tenants", () => {
     }
   });
 
+  it("el rol anon no tiene ningún privilegio sobre ninguna tabla tenant-scoped descubierta", async () => {
+    // Los privilegios por defecto de Postgres re-conceden a `anon` en cada tabla nueva de
+    // public; cada migración termina con un `revoke all ... from anon` explícito que hay
+    // que recordar escribir. RLS-enabled ya se auto-verifica arriba; esto cierra el mismo
+    // hueco para los GRANTs, para esta tabla y para cualquiera que añadan los
+    // subproyectos 2-6.
+    expect(tables.length, "no se descubrieron tablas con tenant_id").toBeGreaterThan(0);
+
+    const { data, error } = await admin
+      .from("pg_anon_grants_check")
+      .select("*")
+      .in("tablename", tables);
+    expect(error, "error consultando pg_anon_grants_check").toBeNull();
+    const grants = (data ?? []) as { tablename: string; privilege_type: string }[];
+
+    for (const table of tables) {
+      const tableGrants = grants.filter((g) => g.tablename === table);
+      expect(
+        tableGrants,
+        `${table}: anon tiene privilegio(s) [${tableGrants.map((g) => g.privilege_type).join(", ")}] -- añade 'revoke all on public.${table} from anon' a su migración`,
+      ).toHaveLength(0);
+    }
+  });
+
   it("cada policy de tablas tenant-scoped usa una forma canónica exactamente permitida en USING/WITH CHECK", async () => {
     expect(tables.length, "no se descubrieron tablas con tenant_id").toBeGreaterThan(0);
 
