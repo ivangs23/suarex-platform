@@ -107,7 +107,7 @@ Notas de diseño:
 
 El pedido se crea **antes** de pagar, con `status = 'pending'`, para que el webhook pueda encontrarlo por `stripe_payment_intent_id`.
 
-El servidor recalcula subtotal, impuesto (desde `tenant_settings.fiscal.tax_rate`) y total leyendo los precios de la base de datos. Lo que envía el navegador se usa solo para saber **qué** se pide, nunca **cuánto** cuesta.
+El servidor recalcula subtotal, impuesto (desde `tenant_settings.fiscal.taxRate`) y total leyendo los precios de la base de datos. Lo que envía el navegador se usa solo para saber **qué** se pide, nunca **cuánto** cuesta.
 
 El webhook de Stripe es la única cosa que marca un pedido como pagado. Es idempotente por `stripe_payment_intent_id`: recibirlo dos veces deja el pedido igual. La pantalla de agradecimiento no marca nada, solo consulta — si lo hiciera, un cliente podría marcar su propio pedido como pagado sin pagar.
 

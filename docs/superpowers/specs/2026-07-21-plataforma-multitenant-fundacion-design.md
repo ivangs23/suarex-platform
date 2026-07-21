@@ -105,7 +105,7 @@ venues           id uuid PK, tenant_id uuid FK, name text, slug text,
 
 tenant_settings  tenant_id uuid PK FK,
                  branding jsonb,   -- { colors, logo_url, fonts }
-                 fiscal   jsonb,   -- { legal_name, cif, address, phone, tax_rate }
+                 fiscal   jsonb,   -- { legalName, cif, address, phone, taxRate }
                  locale text, currency text,
                  channels text[],  -- ['qr-mesa','kiosko']
                  features jsonb
