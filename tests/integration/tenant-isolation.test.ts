@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { isPermittedPolicyForm, type PolicyRow } from './helpers/policy-check.js'
 import {
   admin,
   createTenantFixture,
@@ -138,40 +139,6 @@ const WRITE_FIXTURES: Record<string, WriteFixture> = {
   },
 }
 
-type PolicyRow = {
-  schemaname: string
-  tablename: string
-  policyname: string
-  cmd: 'SELECT' | 'INSERT' | 'UPDATE' | 'DELETE' | 'ALL'
-  qual: string | null
-  with_check: string | null
-}
-
-/**
- * Verdadero solo si la expresión (USING o WITH CHECK de una policy) exige de verdad
- * `tenant_id = current_tenant_id()` (en cualquier orden), y no una tautología disfrazada:
- * - `true` desnudo (degradación total) se rechaza.
- * - una expresión que solo mencione current_tenant_id() sin ninguna referencia genuina a
- *   la columna tenant_id (p. ej. `current_tenant_id() = current_tenant_id()`) se rechaza:
- *   se comprueba quitando primero toda ocurrencia de `current_tenant_id()` y exigiendo que
- *   aun así quede una referencia a `tenant_id` (así "current_tenant_id" en sí mismo, que
- *   contiene la subcadena "tenant_id", no cuenta como referencia genuina a la columna).
- * No exige la ausencia de "is null": allergens_read admite legítimamente filas globales
- * (tenant_id is null) además de las propias, y sigue pasando esta comprobación.
- */
-function hasGenuineTenantCheck(expr: string | null): boolean {
-  if (!expr) return false
-  const trimmed = expr.trim().toLowerCase()
-  if (trimmed === 'true') return false
-
-  const fnCallPattern = /(?:public\.)?current_tenant_id\s*\(\s*\)/gi
-  const referencesFunction = fnCallPattern.test(expr)
-  const withoutFnCalls = expr.replace(fnCallPattern, '')
-  const referencesColumn = /\btenant_id\b/i.test(withoutFnCalls)
-
-  return referencesFunction && referencesColumn
-}
-
 let tenantA: TenantFixture
 let tenantB: TenantFixture
 let seedB: SeedResult
@@ -238,7 +205,7 @@ describe('aislamiento entre tenants', () => {
     }
   })
 
-  it('cada policy de tablas tenant-scoped exige tenant_id = current_tenant_id(), nunca using/with check triviales', async () => {
+  it('cada policy de tablas tenant-scoped usa una forma canónica exactamente permitida en USING/WITH CHECK', async () => {
     expect(tables.length, 'no se descubrieron tablas con tenant_id').toBeGreaterThan(0)
 
     const { data, error } = await admin
@@ -261,14 +228,14 @@ describe('aislamiento entre tenants', () => {
 
         if (needsQual) {
           expect(
-            hasGenuineTenantCheck(policy.qual),
-            `${table}.${policy.policyname}: USING no exige tenant_id = current_tenant_id() o es trivial: "${policy.qual}"`,
+            isPermittedPolicyForm(policy.qual, 'qual', policy.cmd),
+            `${table}.${policy.policyname}: USING (${policy.cmd}) no coincide byte a byte con ninguna forma canónica permitida: "${policy.qual}"`,
           ).toBe(true)
         }
         if (needsWithCheck) {
           expect(
-            hasGenuineTenantCheck(policy.with_check),
-            `${table}.${policy.policyname}: WITH CHECK no exige tenant_id = current_tenant_id() o es trivial: "${policy.with_check}"`,
+            isPermittedPolicyForm(policy.with_check, 'with_check', policy.cmd),
+            `${table}.${policy.policyname}: WITH CHECK (${policy.cmd}) no coincide byte a byte con ninguna forma canónica permitida: "${policy.with_check}"`,
           ).toBe(true)
         }
       }

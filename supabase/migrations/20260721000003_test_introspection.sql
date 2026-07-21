@@ -26,7 +26,7 @@ as
     join pg_namespace n on n.oid = c.relnamespace
    where n.nspname = 'public' and c.relkind = 'r';
 
-revoke all on public.pg_tables_rls_check from anon, authenticated;
+revoke all on public.pg_tables_rls_check from anon, authenticated, public;
 grant select on public.pg_tables_rls_check to service_role;
 
 -- Introspección de las policies mismas (qual/with_check), usada por la suite anti-fuga
