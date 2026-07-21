@@ -1,5 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { resolveStaffSession, type StaffSession } from "./staff-session";
+import type { ResolvedTenant } from "./tenant-context";
 
 /**
  * Cliente de servidor con la sesión del personal, basado en cookies. Usa la
@@ -21,21 +23,22 @@ export async function staffServerClient() {
   });
 }
 
-export type StaffSession = { userId: string; tenantId: string };
+export type { StaffSession };
 
 /**
- * Devuelve la sesión del personal, o null. El `tenant_id` se lee del CLAIM del
- * JWT, no de una cabecera ni de un parámetro: es lo único que el usuario no
- * puede falsificar.
+ * SECURITY: obtiene la sesión del personal para el tenant resuelto por Host,
+ * o `null`. Es el único punto de entrada de producción a `resolveStaffSession`
+ * (ver su docstring en `./staff-session.ts` para el invariante que hace
+ * cumplir, qué devuelve un mismatch de tenant y por qué, y la limitación
+ * conocida de cuentas multi-tenant): esta función solo añade el cliente real
+ * basado en cookies (`staffServerClient()`), nunca relaja ni repite la lógica
+ * de autorización, que vive enteramente en `resolveStaffSession`.
+ *
+ * El `tenant_id` se lee del CLAIM verificado del JWT (`getClaims()`, nunca
+ * `getSession()`), no de una cabecera ni de un parámetro: es lo único que el
+ * usuario no puede falsificar.
  */
-export async function getStaffSession(): Promise<StaffSession | null> {
+export async function getStaffSession(hostTenant: ResolvedTenant): Promise<StaffSession | null> {
   const client = await staffServerClient();
-  const { data } = await client.auth.getClaims();
-  const claims = data?.claims;
-  if (!claims) return null;
-
-  const tenantId = claims.tenant_id;
-  if (typeof tenantId !== "string") return null;
-
-  return { userId: claims.sub as string, tenantId };
+  return resolveStaffSession(client, hostTenant);
 }

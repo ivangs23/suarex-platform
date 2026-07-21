@@ -53,7 +53,34 @@ async function refreshStaffSession(request: NextRequest, response: NextResponse)
   // la sesión), sin tomar ninguna decisión de autorización: esa decisión sigue
   // viviendo en `getStaffSession()` (apps/web/lib/supabase-server.ts), que lee
   // el claim `tenant_id` ya verificado, nunca en este middleware.
-  await supabase.auth.getUser();
+  //
+  // Envuelto en try/catch a propósito, en profundidad: `@supabase/auth-js`
+  // (verificado contra su fuente instalada, v2.110.7) ya envuelve internamente
+  // los fallos de red del propio fetch como `AuthRetryableFetchError` (un
+  // `AuthError` reconocido) y los devuelve como `{ data, error }` en vez de
+  // lanzarlos -- confirmado también empíricamente aquí apuntando
+  // `NEXT_PUBLIC_SUPABASE_URL` a un host inalcanzable/inexistente con el dev
+  // server real corriendo (ver informe, sección "Fix round 1"): ninguna de
+  // esas pruebas produjo un throw sin capturar. Pero esa garantía es interna
+  // de auth-js, no de este código: `_getUser` solo evita relanzar errores que
+  // `isAuthError` reconoce, así que cualquier excepción de OTRO tipo --p. ej.
+  // una que viniera de nuestro propio adaptador de cookies (`request.cookies.getAll()`/
+  // `response.cookies.set()`), o de una versión futura de la librería que ya
+  // no envuelva algún fallo como AuthError-- sí se propagaría sin capturar.
+  // Este try/catch cierra esa vía de una vez, para que NINGÚN fallo al
+  // refrescar la sesión pueda convertirse en un 500 incondicional para CADA
+  // petición a /staff/*, incluida /staff/login -- eso bloquearía incluso el
+  // intento de volver a iniciar sesión. Degradamos con gracia: la sesión
+  // simplemente no se refresca en esta petición (el usuario podría necesitar
+  // reautenticarse si su access token ya expiró), pero la petición sigue
+  // sirviéndose con normalidad. Esto no relaja ninguna autorización:
+  // `getStaffSession()` sigue fallando cerrado si el JWT ya no es válido.
+  try {
+    await supabase.auth.getUser();
+  } catch {
+    // Degradación intencional -- ver comentario de arriba. Nada que
+    // propagar: la petición continúa sin la sesión refrescada.
+  }
 }
 
 export async function proxy(request: NextRequest) {

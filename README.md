@@ -27,18 +27,20 @@ estado sin autenticación.
 El personal de cocina/sala inicia sesión en `/staff/login` (por ejemplo
 `http://garum.localhost:3000/staff/login`) con email y contraseña, vía
 Supabase Auth. Para sembrar un usuario de personal por tenant demo (rol
-`staff` en `memberships`):
+`staff` en `memberships`), elige tú mismo una contraseña de desarrollo
+(cualquier valor sirve — solo existe en tu stack local) y pásala como
+variable de entorno:
 
 ```bash
-STAFF_SEED_PASSWORD='Personal-Suarex-Dev-2026' pnpm seed:staff
+STAFF_SEED_PASSWORD='<elige-tu-contraseña-de-desarrollo>' pnpm seed:staff
 ```
 
 Esto crea (si no existen ya) `staff@garum.local` y `staff@manuela.local` con
 esa contraseña. Es un usuario y una contraseña **del stack local desechable**
 (`supabase db reset` los destruye junto con todo lo demás) — no reutilices esta
-contraseña en ningún sitio real. `STAFF_SEED_PASSWORD` solo se pasa como
-variable de entorno al ejecutar el script; no se guarda en ningún fichero del
-repo.
+contraseña en ningún sitio real, y no la escribas en ningún fichero del repo.
+`STAFF_SEED_PASSWORD` solo se pasa como variable de entorno al ejecutar el
+script.
 
 ## Verificación
 

@@ -21,6 +21,20 @@ export const admin = createClient(url, serviceKey, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
+/**
+ * Cliente anon "desnudo", nunca autenticado por sí solo -- para pruebas que
+ * necesitan pasar un `jwt` explícito (p. ej. a `getClaims(jwt)`) sin depender
+ * de haber iniciado sesión con este cliente en concreto. Exportado desde aquí
+ * (en vez de que cada test importe `@supabase/supabase-js` directamente) para
+ * mantener acotada a `tests/integration/helpers/**` la única excepción de
+ * `noRestrictedImports` que cubre los tests (ver `biome.json`).
+ */
+export function anonClient(): SupabaseClient {
+  return createClient(url, anonKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
+
 export type TenantFixture = {
   tenantId: string;
   userId: string;
