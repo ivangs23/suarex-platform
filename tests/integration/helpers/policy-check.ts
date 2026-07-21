@@ -43,10 +43,22 @@ const TENANT_SCOPED_FORM = "(tenant_id = current_tenant_id())";
  */
 const ALLERGENS_READ_EXCEPTION_FORM = "((tenant_id IS NULL) OR (tenant_id = current_tenant_id()))";
 
+/**
+ * Segunda excepción declarada: `public.tenants` no lleva columna `tenant_id` -- su
+ * propia `id` ES el identificador de tenant -- así que su policy usa `id =
+ * current_tenant_id()` en vez de `tenant_id = current_tenant_id()`. Permitida
+ * ÚNICAMENTE para `tablename = 'tenants'` (ver `tables` en `PermittedForm` y su uso en
+ * `isPermittedPolicyForm`): ninguna otra tabla puede colarse con una policy con ámbito
+ * por `id` a través de esta forma.
+ */
+const SELF_SCOPED_FORM = "(id = current_tenant_id())";
+
 type PermittedForm = {
   expr: string;
   clause: PolicyClause;
   commands: readonly PolicyCmd[];
+  /** Si se define, la forma solo se permite para estas tablas (comparación exacta de nombre). */
+  tables?: ReadonlySet<string>;
 };
 
 /**
@@ -75,6 +87,18 @@ const PERMITTED_FORMS: readonly PermittedForm[] = [
     clause: "qual",
     commands: ["SELECT"],
   },
+  {
+    expr: SELF_SCOPED_FORM,
+    clause: "qual",
+    commands: ["SELECT", "INSERT", "UPDATE", "DELETE", "ALL"],
+    tables: new Set(["tenants"]),
+  },
+  {
+    expr: SELF_SCOPED_FORM,
+    clause: "with_check",
+    commands: ["SELECT", "INSERT", "UPDATE", "DELETE", "ALL"],
+    tables: new Set(["tenants"]),
+  },
 ];
 
 /** Normaliza SOLO espacios en blanco (colapsa runs, recorta extremos). Nunca quita
@@ -87,16 +111,24 @@ function normalizeWhitespace(expr: string): string {
 /**
  * true únicamente si `expr`, tras normalizar espacios, es EXACTAMENTE IGUAL (no
  * subcadena, no prefijo, no regex) a una de las formas de `PERMITTED_FORMS` válidas para
- * esa combinación de cláusula (`qual`/`with_check`) y comando de policy (`cmd`).
+ * esa combinación de cláusula (`qual`/`with_check`), comando de policy (`cmd`) y tabla
+ * (`tablename`) -- una forma con `tables` declarado (hoy solo `SELF_SCOPED_FORM`) exige
+ * además que `tablename` esté en ese conjunto, para que ninguna otra tabla pueda adoptar
+ * un ámbito por `id` en vez de por `tenant_id`.
  */
 export function isPermittedPolicyForm(
   expr: string | null,
   clause: PolicyClause,
   cmd: PolicyCmd,
+  tablename: string,
 ): boolean {
   if (!expr) return false;
   const normalized = normalizeWhitespace(expr);
   return PERMITTED_FORMS.some(
-    (form) => form.clause === clause && form.expr === normalized && form.commands.includes(cmd),
+    (form) =>
+      form.clause === clause &&
+      form.expr === normalized &&
+      form.commands.includes(cmd) &&
+      (!form.tables || form.tables.has(tablename)),
   );
 }

@@ -14,6 +14,18 @@ import {
 /** Tablas cuya lectura admite filas compartidas (tenant_id NULL), declaradas a propósito. */
 const SHARED_READ_TABLES = new Set(["allergens"]);
 
+/**
+ * Columna que delimita el tenant en cada tabla descubierta. Todas usan `tenant_id`
+ * salvo `tenants`, que se aísla por su propia `id` (ver
+ * `20260721000003_test_introspection.sql` y `helpers/policy-check.ts`): la fila
+ * "propia" de un tenant en `tenants` es la que tiene `id = <su tenantId>`, no una con
+ * `tenant_id = <su tenantId>` (esa columna ni siquiera existe en esa tabla).
+ */
+const SCOPE_COLUMN: Record<string, string> = { tenants: "id" };
+function scopeColumnFor(table: string): string {
+  return SCOPE_COLUMN[table] ?? "tenant_id";
+}
+
 type WriteFixtureCtx = {
   tenantA: TenantFixture;
   tenantB: TenantFixture;
@@ -133,6 +145,22 @@ const WRITE_FIXTURES: Record<string, WriteFixture> = {
     updateColumn: "icon",
     updateValue: "intruso",
   },
+  tenants: {
+    // Ataque: A (current_tenant_id() = tenantA.tenantId) intenta insertar una fila de
+    // `tenants` reclamando la identidad de B (`id: tenantB.tenantId`). Confirmado
+    // empíricamente contra la base local que el WITH CHECK de RLS (ExecWithCheckOptions)
+    // se evalúa ANTES de que el índice único de `id` pueda siquiera rechazar el
+    // duplicado, así que el 42501 observado es genuinamente el de RLS, no un efecto
+    // colateral de reusar un id ya existente.
+    insertPayload: ({ tenantB }) => ({
+      id: tenantB.tenantId,
+      slug: `intruso-tenant-${nonce()}`,
+      name: "Intruso",
+    }),
+    expectedInsertRejection: RLS_REJECTION,
+    updateColumn: "plan",
+    updateValue: "hacked",
+  },
 };
 
 let tenantA: TenantFixture;
@@ -161,7 +189,12 @@ beforeAll(async () => {
 
   if (leakTenantIds.length > 0) {
     for (const table of tables) {
-      await admin.from(table).delete().in("tenant_id", leakTenantIds);
+      // `tenants` está incluida en `tables` (ver list_tenant_scoped_tables) pero se
+      // aísla por su propia `id`, no por `tenant_id`; sin esto, este delete fallaría en
+      // silencio para esa tabla (columna inexistente) y quedaría cubierto igualmente
+      // por el `.delete().like("slug", "leak-%")` de abajo -- pero es más claro no
+      // depender de eso.
+      await admin.from(table).delete().in(scopeColumnFor(table), leakTenantIds);
     }
   }
   await admin.from("tenants").delete().like("slug", "leak-%");
@@ -181,6 +214,7 @@ it("descubre al menos las tablas de dominio conocidas", () => {
       "product_extras",
       "products",
       "tenant_settings",
+      "tenants",
       "venues",
     ]),
   );
@@ -229,13 +263,13 @@ describe("aislamiento entre tenants", () => {
 
         if (needsQual) {
           expect(
-            isPermittedPolicyForm(policy.qual, "qual", policy.cmd),
+            isPermittedPolicyForm(policy.qual, "qual", policy.cmd, table),
             `${table}.${policy.policyname}: USING (${policy.cmd}) no coincide byte a byte con ninguna forma canónica permitida: "${policy.qual}"`,
           ).toBe(true);
         }
         if (needsWithCheck) {
           expect(
-            isPermittedPolicyForm(policy.with_check, "with_check", policy.cmd),
+            isPermittedPolicyForm(policy.with_check, "with_check", policy.cmd, table),
             `${table}.${policy.policyname}: WITH CHECK (${policy.cmd}) no coincide byte a byte con ninguna forma canónica permitida: "${policy.with_check}"`,
           ).toBe(true);
         }
@@ -247,21 +281,31 @@ describe("aislamiento entre tenants", () => {
     expect(tables.length, "no se descubrieron tablas con tenant_id").toBeGreaterThan(0);
 
     for (const table of tables) {
-      const { data, error } = await tenantA.client.from(table).select("tenant_id");
+      // Para la mayoría de tablas esto es "tenant_id"; para `tenants` es "id" (ver
+      // SCOPE_COLUMN). La fila "propia" de A se identifica por esta columna, no
+      // asumiendo siempre `tenant_id`.
+      const scopeColumn = scopeColumnFor(table);
+      const { data, error } = await tenantA.client.from(table).select(scopeColumn);
       expect(error, `${table}: SELECT devolvió error inesperado`).toBeNull();
 
-      const rows = (data ?? []) as { tenant_id: string | null }[];
+      // supabase-js no puede tipar el resultado de `.select()` con un nombre de columna
+      // dinámico (no-literal): infiere un tipo de error genérico en vez de una fila real.
+      // El `as unknown` intermedio es deliberado, no un `any` encubierto -- la forma real
+      // en runtime (una fila con una única columna `scopeColumn`) ya se verifica más
+      // abajo comparando sus valores, no aquí en el tipo.
+      const rows = (data ?? []) as unknown as Record<string, string | null>[];
 
       const foreign = rows.filter((row) => {
-        if (row.tenant_id === null) return !SHARED_READ_TABLES.has(table);
-        return row.tenant_id !== tenantA.tenantId;
+        const value = row[scopeColumn];
+        if (value === null) return !SHARED_READ_TABLES.has(table);
+        return value !== tenantA.tenantId;
       });
       expect(foreign, `${table}: fuga de ${foreign.length} filas`).toHaveLength(0);
 
       // Control positivo: una policy deny-all (`using (false)`) también devolvería 0
       // filas para "foreign", pasando en falso. Probar que A además VE sus propias
       // filas descarta ese falso positivo.
-      const own = rows.filter((row) => row.tenant_id === tenantA.tenantId);
+      const own = rows.filter((row) => row[scopeColumn] === tenantA.tenantId);
       expect(
         own.length,
         `${table}: A no ve ninguna fila propia (control positivo ausente; ¿policy deny-all?)`,
@@ -312,11 +356,12 @@ describe("aislamiento entre tenants", () => {
         );
       }
       const { updateColumn, updateValue } = fixture;
+      const scopeColumn = scopeColumnFor(table);
 
       const { data, error } = await tenantA.client
         .from(table)
         .update({ [updateColumn]: updateValue })
-        .eq("tenant_id", tenantB.tenantId)
+        .eq(scopeColumn, tenantB.tenantId)
         .select();
       expect(error, `${table}: UPDATE cross-tenant devolvió error inesperado`).toBeNull();
       expect(data ?? [], `${table}: UPDATE cross-tenant afectó filas`).toHaveLength(0);
@@ -324,7 +369,7 @@ describe("aislamiento entre tenants", () => {
       const { data: intact, error: intactError } = await admin
         .from(table)
         .select("*")
-        .eq("tenant_id", tenantB.tenantId);
+        .eq(scopeColumn, tenantB.tenantId);
       expect(intactError, `${table}: error verificando integridad tras UPDATE`).toBeNull();
       expect(
         (intact ?? []).length,
@@ -345,21 +390,23 @@ describe("aislamiento entre tenants", () => {
         expect.fail(`Tabla '${table}' descubierta sin entrada en WRITE_FIXTURES.`);
       }
 
+      const scopeColumn = scopeColumnFor(table);
+
       const before = await admin
         .from(table)
         .select("*", { count: "exact", head: true })
-        .eq("tenant_id", tenantB.tenantId);
+        .eq(scopeColumn, tenantB.tenantId);
       expect(
         before.count ?? 0,
         `${table}: no había fila de B para probar el DELETE cross-tenant (control positivo ausente)`,
       ).toBeGreaterThan(0);
 
-      await tenantA.client.from(table).delete().eq("tenant_id", tenantB.tenantId);
+      await tenantA.client.from(table).delete().eq(scopeColumn, tenantB.tenantId);
 
       const after = await admin
         .from(table)
         .select("*", { count: "exact", head: true })
-        .eq("tenant_id", tenantB.tenantId);
+        .eq(scopeColumn, tenantB.tenantId);
       expect(after.count).toBe(before.count);
     }
   });

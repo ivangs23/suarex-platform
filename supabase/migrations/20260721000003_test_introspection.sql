@@ -1,4 +1,15 @@
 -- Utilidad de introspección usada por la suite anti-fuga. Solo lectura de metadatos.
+--
+-- `public.tenants` NUNCA aparecía aquí: se aísla por su propia `id`, no por una
+-- columna `tenant_id`, así que el descubrimiento original (`column_name =
+-- 'tenant_id'`) la saltaba en silencio -- junto con ella, RLS-enabled, el
+-- allowlist de forma de policy y las cuatro comprobaciones de comportamiento
+-- cross-tenant, dejando sin cubrir la tabla que guarda `custom_domain`, `plan`,
+-- `stripe_account_id` y `stripe_customer_id`. La segunda rama de este UNION
+-- añade explícitamente las tablas "auto-delimitadas" (su propia `id` ES el
+-- identificador de tenant); `tenants` es la única hoy, pero cualquier futura
+-- tabla con esta misma forma debe añadirse aquí, no dejarse fuera del
+-- descubrimiento.
 create or replace function public.list_tenant_scoped_tables()
 returns table (table_name text)
 language sql
@@ -12,7 +23,9 @@ as $$
    where c.table_schema = 'public'
      and c.column_name = 'tenant_id'
      and t.table_type = 'BASE TABLE'
-   order by c.table_name
+  union
+  select self_scoped.table_name from (values ('tenants')) as self_scoped (table_name)
+  order by 1
 $$;
 
 grant execute on function public.list_tenant_scoped_tables () to service_role;
