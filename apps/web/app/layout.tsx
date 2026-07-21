@@ -13,7 +13,23 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   // contrario un host desconocido o un tenant suspendido responderían 500 en
   // lugar de los 404/503 que exige el rewrite.
   const tenant = await requireTenant().catch(() => null);
-  const settings = tenant ? await getTenantSettings(tenant.id) : null;
+  // getTenantSettings() can throw after tenant resolution already succeeded
+  // (e.g. the DB becomes unreachable between the middleware's Host lookup and
+  // this render). That is NOT a resolution failure -- we already know which
+  // tenant owns this Host -- so it is deliberately treated as a degradation,
+  // not an error: fall back to `null` the same way "no settings row yet"
+  // already does below via `parseBranding(undefined)`.
+  //
+  // A hard 503 is not available here even if we wanted a stricter posture:
+  // the App Router's only status-fallback mechanism from a Server Component
+  // (`notFound()`/`forbidden()`/`unauthorized()`) is hardcoded to 404/403/401
+  // (see next/dist/client/components/http-access-fallback), so a layout can
+  // never itself emit an arbitrary status like 503 -- an uncaught throw here
+  // just becomes a generic 500, which is the one outcome that's definitely
+  // wrong. Letting it degrade to default branding instead is deliberate and
+  // bounded: it only ever masks *branding*, never which tenant is served
+  // (`data-tenant` below still reflects the real, already-resolved tenant).
+  const settings = tenant ? await getTenantSettings(tenant.id).catch(() => null) : null;
   const branding = parseBranding(settings?.branding);
 
   return (
