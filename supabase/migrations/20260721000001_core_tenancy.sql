@@ -52,21 +52,33 @@ create index memberships_tenant_id_idx on public.memberships (tenant_id);
 
 create or replace function public.current_tenant_id()
 returns uuid
-language sql
+language plpgsql
 stable
 set search_path = ''
 as $$
-  select nullif(
+begin
+  return nullif(
     current_setting('request.jwt.claims', true)::jsonb ->> 'tenant_id',
     ''
-  )::uuid
+  )::uuid;
+exception
+  when invalid_text_representation then
+    return null;
+end;
 $$;
 
 -- Inyecta tenant_id y tenant_role en el access token al iniciar sesión.
+-- SECURITY DEFINER: GoTrue invoca esta función como supabase_auth_admin, que no
+-- pertenece al rol authenticated y por tanto no pasaría la RLS de memberships.
+-- La función corre con los privilegios de su dueño (el rol que ejecuta la
+-- migración) para poder leer memberships; el grant/revoke de abajo asegura que
+-- solo supabase_auth_admin puede invocarla, y search_path = '' con referencias
+-- totalmente cualificadas evita hijacking de search_path.
 create or replace function public.custom_access_token_hook(event jsonb)
 returns jsonb
 language plpgsql
 stable
+security definer
 set search_path = ''
 as $$
 declare
