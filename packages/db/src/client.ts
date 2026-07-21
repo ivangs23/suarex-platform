@@ -106,3 +106,35 @@ export function tenantScoped(table: TenantScopedTable, tenantId: string) {
 export function tenantsTableForHostResolution() {
   return serviceClient().from("tenants");
 }
+
+/**
+ * SEGUNDA EXENCIÓN DELIBERADA, con el mismo razonamiento que
+ * `tenantsTableForHostResolution`: el token del QR es lo que determina a qué tenant
+ * pertenece la mesa, así que la búsqueda no puede filtrarse por un tenant que aún no
+ * se conoce. Acotado por firma a `tables`; no es un escape hatch reutilizable.
+ */
+export function tablesTableForTokenResolution() {
+  return serviceClient().from("tables");
+}
+
+/**
+ * TERCERA EXENCIÓN DELIBERADA. El webhook de Stripe identifica el pedido por
+ * `stripe_payment_intent_id` y no sabe nada de tenants: Stripe no los conoce. La
+ * búsqueda es por una columna con índice único global, así que devuelve una fila o
+ * ninguna -- no puede usarse para barrer datos de nadie. Acotado por firma a `orders`.
+ */
+export function ordersTableForPaymentResolution() {
+  return serviceClient().from("orders");
+}
+
+/**
+ * CUARTA EXENCIÓN DELIBERADA. `next_order_number` es SECURITY DEFINER y recibe el
+ * tenant como parámetro, así que el filtro va dentro de la propia función SQL.
+ * Acotado por firma a esa única RPC.
+ */
+export function nextOrderNumberRpc(tenantId: string, venueId: string) {
+  return serviceClient().rpc("next_order_number", {
+    p_tenant_id: tenantId,
+    p_venue_id: venueId,
+  });
+}

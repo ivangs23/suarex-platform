@@ -31,3 +31,25 @@ export type Product = {
   isAvailable: boolean;
   sortOrder: number;
 };
+
+export type TableRow = {
+  id: string;
+  tenantId: string;
+  venueId: string;
+  label: string;
+  isActive: boolean;
+};
+
+export type CartLineInput = {
+  productId: string;
+  quantity: number;
+  extraIds: string[];
+  notes: string | null;
+};
+
+export type OrderStatus = {
+  orderNumber: number;
+  status: string;
+  totalCents: number;
+  currency: string;
+};
