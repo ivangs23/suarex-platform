@@ -39,6 +39,19 @@ Problemas medidos:
 | Punto de partida | Repo nuevo, copiando de GARUM lo que ya está bien resuelto |
 | Routing de tenant | Subdominio por defecto, dominio propio opcional |
 
+## Restricción: no se tocan los repos en producción
+
+Todo el trabajo ocurre exclusivamente dentro de `suarex-platform`. Los cinco repositorios actuales quedan intactos:
+
+- No se modifica ningún fichero de `GARUM`, `web-manuela`, `kiosko-manuela`, `agente-impresora-v2` ni `web-prueba`.
+- No se aplican migraciones a los proyectos Supabase existentes (`vjrttuhdrkljcdixartp` de Garum, `mapaaxihjyxfeaalhcjo` de Manuela). La plataforma usa un proyecto Supabase nuevo y vacío.
+- El código que se reutiliza de GARUM se **copia** al repo nuevo y se adapta ahí. No se extrae a un paquete compartido entre repos, no se enlaza por symlink ni por workspace.
+- `web-prueba` se copiará a `apps/marketing` en el sub-proyecto 6; el repo original sigue existiendo hasta entonces.
+
+Los negocios actuales siguen operando sobre su código actual sin interrupción. La desactivación de los repos antiguos ocurre solo cuando su tenant equivalente esté migrado y verificado en producción, y es un paso explícito al final de cada sub-proyecto de migración (2, 3, 4 y 6), nunca antes.
+
+Cambios permitidos en los repos antiguos, y únicamente estos: correcciones de fallos que afecten a un negocio en producción, y la rotación de credenciales descrita en la sección de trabajo previo.
+
 ## Arquitectura general
 
 Repositorio nuevo `suarex-platform`, pnpm workspaces + Turborepo.
@@ -185,6 +198,7 @@ Logos y fuentes se almacenan en Supabase Storage bajo `tenant/{id}/`.
 | Un fallo en una policy RLS filtra datos entre clientes | Suite anti-fuga generada por tabla, que falla el build ante una tabla sin policy |
 | El service role en Server Components se usa sin acotar por tenant | Un único módulo exporta el cliente ya acotado; regla de lint que prohíbe importar el cliente crudo fuera de `packages/db` |
 | Divergencia entre la plataforma nueva y los repos en producción | Los repos actuales entran en modo mantenimiento: solo correcciones, nada de features |
+| Se toca por descuido un repo en producción | Restricción declarada arriba; el trabajo se hace con `suarex-platform` como único directorio de escritura |
 
 ## Trabajo previo no relacionado con este diseño
 
