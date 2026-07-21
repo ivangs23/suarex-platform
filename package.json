@@ -15,10 +15,12 @@
     "db:start": "supabase start",
     "db:reset": "supabase db reset",
     "db:env": "node scripts/write-test-env.mjs",
-    "test:integration": "vitest run --config vitest.config.ts"
+    "test:integration": "vitest run --config vitest.config.ts",
+    "test:e2e": "playwright test"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.12",
+    "@playwright/test": "^1.61.1",
     "@suarex/db": "workspace:*",
     "@supabase/supabase-js": "^2.110.7",
     "@types/node": "^26.1.1",
