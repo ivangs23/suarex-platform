@@ -10,6 +10,10 @@ let stop: (() => void) | null = null;
  * Windows; en otra plataforma el sink por defecto de `@suarex/printing` ya falla limpio y el
  * agente solo podría imprimir por red) y llama a `runAgent`. Guarda la función de parada. */
 export async function startAgent(creds: StoredCredentials): Promise<void> {
+  // Para un agente ya en marcha antes de arrancar otro (p. ej. re-emparejar sin
+  // des-emparejar): sin esto, la función de parada anterior se perdería y quedaría un
+  // segundo agente vivo -- subs de Realtime duplicadas y, peor, tickets impresos dos veces.
+  stopAgent();
   if (process.platform === "win32") {
     registerUsbRawSink(makeUsbSink(await loadWinspoolBinding()));
   }
