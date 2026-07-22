@@ -18,3 +18,6 @@ playwright-report/
 blob-report/
 playwright/.cache/
 .claude/
+
+# Volcados de catálogo de clientes para importar: datos de negocio ajenos, no van al repo.
+.import/

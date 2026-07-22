@@ -11,6 +11,7 @@
       "!**/.claude",
       "!**/test-results",
       "!**/playwright-report",
+      "!**/.import",
       "!packages/db/src/__compile_fixtures__"
     ]
   },
@@ -46,7 +47,7 @@
       "linter": { "rules": { "style": { "noRestrictedImports": "off" } } }
     },
     {
-      "includes": ["scripts/seed-staff.mjs"],
+      "includes": ["scripts/seed-staff.mjs", "scripts/import-catalog.mjs"],
       "linter": { "rules": { "style": { "noRestrictedImports": "off" } } }
     },
     {
