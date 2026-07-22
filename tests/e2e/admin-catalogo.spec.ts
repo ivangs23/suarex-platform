@@ -1,4 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
+import { deleteCategoryForTest } from "./helpers/catalog-db.js";
 
 // Igual que `tests/e2e/staff-auth.spec.ts`: requiere que el personal demo Y el owner
 // demo ya estén sembrados (`pnpm seed:staff`, ver README). Nunca hardcodeamos ninguna
@@ -35,6 +36,29 @@ test.beforeAll(() => {
 const PIXEL_PNG_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
 
+/**
+ * Id de la categoría creada por el test del owner, capturado en cuanto existe (ver más
+ * abajo) para que `test.afterEach` -- que SIEMPRE corre, a diferencia del cuerpo del
+ * test si una aserción anterior revienta -- pueda borrarla igualmente. `undefined`
+ * mientras no hay nada que limpiar (test del staff, o el propio owner aún no llegó a
+ * crear la categoría).
+ */
+let createdCategoryId: string | undefined;
+
+test.afterEach(async () => {
+  if (!createdCategoryId) return;
+  const categoryId = createdCategoryId;
+  createdCategoryId = undefined;
+  try {
+    await deleteCategoryForTest(categoryId);
+  } catch (error) {
+    // No relanzar: un fallo de limpieza no debe enmascarar el fallo real del test (si lo
+    // hubo, es lo que Playwright debe reportar) ni tumbar un test que ya había pasado.
+    // Se deja constancia en consola para poder investigarlo a mano si hiciera falta.
+    console.error(`No se pudo borrar la categoría de prueba ${categoryId}:`, error);
+  }
+});
+
 async function login(page: Page, email: string, password: string): Promise<void> {
   await page.goto("http://garum.localhost:3000/staff/login");
   await page.getByLabel("Email", { exact: true }).fill(email);
@@ -69,22 +93,34 @@ test("un owner crea una categoría y un producto (con imagen), y aparecen en la 
   // 1. Crea la categoría "Vinos E2E" (destino barra). El slug lleva un sufijo con
   // timestamp para que el test sea repetible sin chocar contra `unique (tenant_id,
   // slug)` (`20260721000002_catalog.sql`) si se corre varias veces sobre el mismo
-  // stack sin `supabase db reset` de por medio.
-  const categoryName = `Vinos E2E ${Date.now()}`;
-  const slug = `vinos-e2e-${Date.now()}`;
+  // stack sin `supabase db reset` de por medio. Un único `Date.now()` para categoría,
+  // slug y producto (más abajo) -- no una llamada por nombre -- para que los tres
+  // sufijos coincidan y sea trivial correlacionarlos/limpiarlos a mano si hiciera falta.
+  const testRunId = Date.now();
+  const categoryName = `Vinos E2E ${testRunId}`;
+  const slug = `vinos-e2e-${testRunId}`;
   await page.getByLabel("Slug").fill(slug);
   await page.getByLabel("Nombre de la categoría").fill(categoryName);
   await page.getByLabel("Destino").selectOption("barra");
   await page.getByRole("button", { name: "Crear categoría" }).click();
 
-  await expect(page.getByTestId("admin-category").filter({ hasText: categoryName })).toBeVisible({
-    timeout: 15_000,
-  });
+  const categoryRow = page.getByTestId("admin-category").filter({ hasText: categoryName });
+  await expect(categoryRow).toBeVisible({ timeout: 15_000 });
+
+  // Captura el id real de la categoría desde el propio panel (el hidden input que
+  // alimenta `deleteCategoryAction`, ver `ConfirmDeleteForm`) -- `createCategoryAction`
+  // no devuelve nada (`apps/web/app/admin/catalogo/actions.ts`), así que esta es la única
+  // forma de conocerlo sin tocar la base a mano. Guardarlo en la variable de módulo que
+  // lee `test.afterEach` (arriba) es lo que permite que la limpieza sobreviva a un fallo
+  // de aserción en cualquiera de los pasos siguientes.
+  createdCategoryId = await categoryRow
+    .locator('input[type="hidden"][name="category_id"]')
+    .inputValue();
 
   // 2. Crea el producto "Ribera" a 18,00 € en esa categoría, con una imagen adjunta --
   // ejerce de verdad el camino de subida (`uploadProductImage`), no solo el campo
   // vacío.
-  const productName = `Ribera E2E ${Date.now()}`;
+  const productName = `Ribera E2E ${testRunId}`;
   await page.getByLabel("Categoría", { exact: true }).selectOption({ label: categoryName });
   await page.getByLabel("Nombre del producto").fill(productName);
   await page.getByLabel("Precio del producto (€)").fill("18.00");
@@ -118,12 +154,16 @@ test("un owner crea una categoría y un producto (con imagen), y aparecen en la 
   // resto de la suite (`workers: 1` en `playwright.config.ts` hace que esto corra antes
   // que `two-tenants.spec.ts`, pero da igual el orden: cada fichero debe encontrar el
   // catálogo tal como lo dejó `supabase/seed.sql`).
+  //
+  // Esto es el camino feliz (además ejerce el botón "Borrar categoría" del panel, que
+  // ningún otro test de la suite toca); el `test.afterEach` de arriba es la red de
+  // seguridad que borra por id directamente en la base si CUALQUIER aserción anterior
+  // revienta antes de llegar aquí -- de ahí que se limpie `createdCategoryId` justo
+  // después de confirmar que este borrado por UI ya surtió efecto: evita un segundo
+  // (inofensivo, pero innecesario) intento de borrado en el `afterEach`.
   await page.goto("http://garum.localhost:3000/admin/catalogo");
   page.once("dialog", (dialog) => dialog.accept());
-  await page
-    .getByTestId("admin-category")
-    .filter({ hasText: categoryName })
-    .getByRole("button", { name: "Borrar categoría" })
-    .click();
-  await expect(page.getByTestId("admin-category").filter({ hasText: categoryName })).toHaveCount(0);
+  await categoryRow.getByRole("button", { name: "Borrar categoría" }).click();
+  await expect(categoryRow).toHaveCount(0);
+  createdCategoryId = undefined;
 });
