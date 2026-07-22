@@ -16,6 +16,7 @@ export type { PrintableItem, PrintableOrder } from "./print-jobs.js";
 export { reservePrinted, unprintedPaidOrders } from "./print-jobs.js";
 export type { StaffOrder, StaffOrderItem, StationStatus } from "./staff-orders.js";
 export { listActiveOrders, markStationDone } from "./staff-orders.js";
+export { uploadProductImage } from "./storage.js";
 export { findTableByToken } from "./tables.js";
 export { findTenantByHost, getTenantSettings, getTenantStripeAccount } from "./tenants.js";
 export type {

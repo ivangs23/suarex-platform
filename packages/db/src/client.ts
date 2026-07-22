@@ -219,3 +219,17 @@ export function reservePrintedRpc(
     p_at: at,
   });
 }
+
+/**
+ * OCTAVA EXENCIÓN DELIBERADA. Expone únicamente `.storage` del cliente de service
+ * role -- no el cliente completo -- así que quien la use puede subir/listar objetos
+ * del bucket, pero no puede colarse a ninguna tabla sin pasar por `tenantScoped`. El
+ * bucket `catalog` (ver `supabase/migrations/20260722000007_catalog_storage.sql`) es
+ * público en lectura y sin policies de escritura para anon/authenticated: solo el
+ * service role escribe, y solo a través de esta función. Acotado por firma a
+ * `uploadProductImage` (`src/storage.ts`), el único punto del paquete que sube
+ * imágenes de producto.
+ */
+export function storageServiceClient() {
+  return serviceClient().storage;
+}
