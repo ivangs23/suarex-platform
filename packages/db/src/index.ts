@@ -65,6 +65,7 @@ export {
   markOrderPaid,
   OrderCartError,
 } from "./orders.js";
+export { checkPairRateLimit } from "./pair-rate-limit.js";
 export type {
   EnabledPrinterRow,
   PaidOrderRow,

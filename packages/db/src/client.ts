@@ -287,3 +287,16 @@ export function globalAllergensTable() {
 export function authAdminForStaffCreation() {
   return serviceClient().auth.admin;
 }
+
+/**
+ * UNDÉCIMA EXENCIÓN DELIBERADA. `check_pair_rate_limit` es SECURITY DEFINER y no depende de
+ * ningún tenant (limita por IP el endpoint público de emparejamiento); se concede solo a
+ * `service_role`. Acotado por firma a `checkPairRateLimit` (`src/pair-rate-limit.ts`).
+ */
+export function pairRateLimitRpc(ip: string, windowSeconds: number, max: number) {
+  return serviceClient().rpc("check_pair_rate_limit", {
+    p_ip: ip,
+    p_window_seconds: windowSeconds,
+    p_max: max,
+  });
+}
