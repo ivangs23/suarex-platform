@@ -1,4 +1,12 @@
-import { createPendingOrder, reservePrinted, unprintedPaidOrders } from "@suarex/db";
+import {
+  attachPaymentIntent,
+  cancelOrphanedPendingOrder,
+  createPendingOrder,
+  markOrderPaid,
+  markStationDone,
+  reservePrinted,
+  unprintedPaidOrders,
+} from "@suarex/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   admin,
@@ -402,6 +410,108 @@ describe("unprintedPaidOrders", () => {
     expect(pending.some((o) => o.id === orderId)).toBe(true);
     // El pedido ajeno nunca aparece, aunque también esté pagado y sin imprimir.
     expect(pending.some((o) => o.id === otherOrderId)).toBe(false);
+  });
+});
+
+/**
+ * Revisión final whole-branch (seam entre fases): `unprintedPaidOrders` filtraba por
+ * `status = 'paid'`, pero `paid` NO es un estado estable -- el trigger `orders_auto_serve`
+ * (`20260721000008_orders_auto_serve.sql`) puede saltar de `paid` a `served` en la MISMA
+ * sentencia que lo marca pagado, si el personal ya había resuelto ambas estaciones ANTES
+ * de que el webhook de Stripe confirmara el cobro (el tablero de cocina/barra no espera al
+ * pago -- ver `listActiveOrders`, `packages/db/src/staff-orders.ts`). El pedido nunca
+ * "descansa" en `paid`, así que un filtro `status = 'paid'` nunca lo ve: su ticket no se
+ * imprime jamás y nada lo registra ("targets vacío = trivialmente cubierto" no aplica
+ * aquí -- el pedido ni siquiera entra en la consulta).
+ *
+ * Este test reproduce el camino EXACTO que dispara el seam, con las mismas funciones que
+ * usa el personal/webhook reales (no un UPDATE directo a status='served'):
+ *   1. `createPendingOrder`: pedido `pending` con línea de cocina Y de barra.
+ *   2. `attachPaymentIntent`: liga el `stripe_payment_intent_id` que usará el webhook.
+ *   3. `markStationDone` para AMBAS estaciones, mientras el pedido sigue `pending` -- el
+ *      trigger no actúa todavía (`new.status in ('paid','preparing')` es falso).
+ *   4. `markOrderPaid`: el UPDATE deja `status='paid'` y `paid_at` en la misma sentencia
+ *      que el trigger reevalúa -- como las dos estaciones YA estaban `done`, salta directo
+ *      a `served` sin que el pedido llegue a persistir como `paid`.
+ *
+ * DEBE fallar contra `status = 'paid'` (el pedido ya está `served`, nunca `paid`) y DEBE
+ * pasar contra el predicado corregido `paid_at is not null and printed_at is null`
+ * (estable frente al avance de `status`, ver `unprintedPaidOrders` en
+ * `packages/db/src/print-jobs.ts`).
+ */
+describe("unprintedPaidOrders — seam: estaciones resueltas ANTES del pago (revisión final whole-branch)", () => {
+  it("un pedido que salta paid→served en el propio markOrderPaid sigue apareciendo como pendiente de imprimir", async () => {
+    const order = await createPendingOrder({
+      tenantId: tenant.tenantId,
+      venueId: venue.venueId,
+      tableId: venue.tableId,
+      lines: [
+        { productId: venue.kitchenProductId, quantity: 1, extraIds: [], notes: null },
+        { productId: venue.barProductId, quantity: 1, extraIds: [], notes: null },
+      ],
+      taxRate: 0.1,
+    });
+
+    const paymentIntentId = `pi_seam_${nonce()}`;
+    await attachPaymentIntent(tenant.tenantId, order.orderId, paymentIntentId);
+
+    // El personal resuelve las dos estaciones en el tablero ANTES de que Stripe confirme
+    // el cobro -- el pedido sigue `pending` en este punto, el trigger no ha actuado.
+    await markStationDone(tenant.tenantId, order.orderId, "cocina");
+    await markStationDone(tenant.tenantId, order.orderId, "barra");
+
+    const outcome = await markOrderPaid(paymentIntentId);
+    expect(outcome).toBe("marked");
+
+    // Control: el pedido de verdad saltó pending -> served, nunca se quedó en `paid`, y
+    // sigue sin imprimir -- exactamente el estado que el print-agent de recuperación debe
+    // poder recuperar.
+    const { data: row, error: rowError } = await admin
+      .from("orders")
+      .select("status, paid_at, printed_at, kitchen_status, bar_status")
+      .eq("id", order.orderId)
+      .single();
+    if (rowError) throw rowError;
+    expect(row?.status).toBe("served");
+    expect(row?.paid_at).not.toBeNull();
+    expect(row?.printed_at).toBeNull();
+    expect(row?.kitchen_status).toBe("done");
+    expect(row?.bar_status).toBe("done");
+
+    // La aserción que reproduce el seam: contra `status = 'paid'` este pedido (ya
+    // `served`) NUNCA aparece aquí y el test FALLA. Contra `paid_at is not null and
+    // printed_at is null` sigue apareciendo, porque de verdad está pagado y sin imprimir.
+    const pending = await unprintedPaidOrders(tenant.tenantId);
+    const found = pending.find((o) => o.id === order.orderId);
+    expect(found).toBeDefined();
+    expect(found?.items.map((i) => i.destination).sort()).toEqual(["barra", "cocina"]);
+  });
+
+  it("un pedido cancelado (nunca pagado) no aparece nunca como pendiente de imprimir", async () => {
+    const order = await createPendingOrder({
+      tenantId: tenant.tenantId,
+      venueId: venue.venueId,
+      tableId: venue.tableId,
+      lines: [{ productId: venue.barProductId, quantity: 1, extraIds: [], notes: null }],
+      taxRate: 0.1,
+    });
+
+    // Mismo camino que un carrito abandonado / fallo de Stripe justo tras crear el
+    // pedido: `cancelOrphanedPendingOrder` solo actúa sobre `pending` y jamás toca
+    // `paid_at` (nunca hubo cobro) -- ver `packages/db/src/orders.ts`.
+    await cancelOrphanedPendingOrder(tenant.tenantId, order.orderId);
+
+    const { data: row, error: rowError } = await admin
+      .from("orders")
+      .select("status, paid_at")
+      .eq("id", order.orderId)
+      .single();
+    if (rowError) throw rowError;
+    expect(row?.status).toBe("cancelled");
+    expect(row?.paid_at).toBeNull();
+
+    const pending = await unprintedPaidOrders(tenant.tenantId);
+    expect(pending.some((o) => o.id === order.orderId)).toBe(false);
   });
 });
 

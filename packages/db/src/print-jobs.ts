@@ -107,6 +107,43 @@ function targetPrinterIds(
  * recuperación de la fase C: cualquier proceso que llame a esto en bucle reintenta
  * exactamente lo que falta, ni más ni menos.
  *
+ * Fix (revisión final whole-branch, seam entre fases): el predicado YA NO es
+ * `status = 'paid'`. `paid` no es un estado estable -- el trigger `orders_auto_serve`
+ * (`20260721000008_orders_auto_serve.sql`) puede saltar `paid -> served` dentro de la
+ * MISMA sentencia que `markOrderPaid` ejecuta, si el personal ya había resuelto ambas
+ * estaciones en el tablero ANTES de que el webhook de Stripe confirmara el cobro (el
+ * tablero no espera al pago, ver `listActiveOrders`/`markStationDone` en
+ * `staff-orders.ts`). El pedido nunca "descansa" en `paid`, así que un filtro
+ * `status = 'paid'` no lo ve jamás: su ticket no se imprime nunca y nada lo registra.
+ *
+ * El predicado correcto es "pagado pero todavía no completamente impreso",
+ * independiente de cuánto haya avanzado `status` después del pago:
+ * `paid_at is not null and printed_at is null`. `paid_at` solo lo escribe `markOrderPaid`
+ * (`packages/db/src/orders.ts`), UNA sola vez, cuando el pedido sale de `pending`; nada
+ * más en el paquete lo toca. `printed_at` solo lo escribe `reserve_printed` (SQL, ver
+ * `supabase/migrations/20260722000003_print_reservation.sql`) cuando TODAS las
+ * impresoras de destino quedan cubiertas. Esto hace el filtro estable frente a
+ * `preparing`/`served`: el pedido sigue apareciendo aquí mientras le falte imprimir,
+ * pase por los estados que pase, y deja de aparecer en cuanto `reserve_printed` fija
+ * `printed_at`, sin importar en qué `status` esté entonces.
+ *
+ * Un pedido `cancelled` NUNCA puede colarse aquí: los dos únicos caminos que escriben
+ * `status = 'cancelled'` (`cancelOrphanedPendingOrder` en `orders.ts`, y la función SQL
+ * `expire_pending_orders` en `20260721000009_expire_pending_orders.sql`) llevan
+ * `where status = 'pending'` -- un pedido solo puede cancelarse ANTES de que
+ * `markOrderPaid` llegue a escribir `paid_at` nunca. Por construcción, `cancelled`
+ * implica `paid_at is null`, así que ya queda excluido por el propio predicado sin
+ * necesitar (ni querer) una comprobación explícita de `status <> 'cancelled'` --
+ * añadirla sería redundante y, peor, sugeriría (falsamente) que un pedido cancelado
+ * SÍ podría tener `paid_at` puesto en algún camino de escritura de este sistema. El
+ * segundo test de "seam" de abajo (`tests/integration/print-jobs.test.ts`) fija este
+ * comportamiento con un pedido cancelado real, no solo con esta nota.
+ *
+ * El índice que sirve esta consulta es `orders_unprinted_v2_idx`
+ * (`supabase/migrations/20260722000004_orders_unprinted_predicate_fix.sql`), parcial
+ * sobre exactamente este mismo predicado -- ver esa migración para la justificación de
+ * su forma.
+ *
  * El filtro por tenant lo aplica `tenantScoped` tanto para `orders` como para
  * `printers`: un pedido o una impresora de otro tenant sencillamente no aparecen en las
  * filas leídas aquí, así que no pueden colarse en el cálculo de qué está cubierto.
@@ -122,7 +159,8 @@ export async function unprintedPaidOrders(tenantId: string): Promise<PrintableOr
       "id, order_number, created_at, printed_targets, venue_id, kitchen_status, bar_status, " +
         "tables(label), order_items(name_snapshot, quantity, destination, notes)",
     )
-    .eq("status", "paid")
+    .not("paid_at", "is", null)
+    .is("printed_at", null)
     .order("created_at", { ascending: true });
   if (ordersError) throw ordersError;
 

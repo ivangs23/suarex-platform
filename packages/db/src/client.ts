@@ -106,18 +106,25 @@ export function tenantScoped(table: TenantScopedTable, tenantId: string) {
 }
 
 /**
- * EXENCIÓN DELIBERADA Y ÚNICA a la regla de arriba. `findTenantByHost` resuelve qué
- * tenant corresponde al header `Host` de la petición ANTES de que exista ningún
- * tenantId -- es precisamente la búsqueda que determina cuál es el tenant, así que no
- * puede filtrarse por `tenant_id` (esa columna ni siquiera existe en `tenants`) ni por
- * `id` (es justo lo que se busca resolver).
- *
- * Por eso tiene su propio accessor, con nombre explícito y acotado por firma a la tabla
- * `tenants` (no un `serviceClient()` genérico ni un parámetro de tabla): ningún otro
- * código puede colarse por aquí para leer sin filtro ninguna otra tabla. Esto NO es un
- * escape hatch de propósito general -- si en el futuro hace falta otro acceso sin
- * tenant_id, necesita su propio accessor igual de estrecho y documentado, no una
- * reutilización de este.
+ * EXENCIÓN DELIBERADA a la regla de arriba, acotada por firma a la tabla `tenants` (no un
+ * `serviceClient()` genérico ni un parámetro de tabla): `tenants` no tiene `tenant_id`
+ * propio (se identifica por su propia `id`), así que no encaja en `tenantScoped`.
+ * Ningún otro código puede colarse por aquí para leer sin filtro ninguna otra tabla.
+ * Esto NO es un escape hatch de propósito general -- si en el futuro hace falta otro
+ * acceso sin `tenant_id` a una tabla DISTINTA, necesita su propio accessor igual de
+ * estrecho y documentado, no una reutilización de este. Dos usos legítimos, ambos
+ * búsquedas de una sola fila (nunca un barrido):
+ *   1. `findTenantByHost` (`./tenants.js`): resuelve qué tenant corresponde al header
+ *      `Host` de la petición ANTES de que exista ningún tenantId -- es precisamente la
+ *      búsqueda que determina cuál es el tenant, así que no puede filtrarse por `id`
+ *      (es justo lo que se busca resolver). Filtra por `slug`/`custom_domain`, cada uno
+ *      con índice único.
+ *   2. `getTenantStripeAccount` (`./tenants.js`): lee la fila del PROPIO tenant por su
+ *      `id` (primary key) una vez que `tenantId` ya se conoce -- no es una búsqueda de
+ *      resolución de host, pero sigue siendo una consulta de una sola fila acotada por
+ *      clave única, y `tenants` no admite `tenantScoped` por el mismo motivo que el
+ *      caso 1 (sin columna `tenant_id`). No amplía lo que este accessor puede hacer:
+ *      sigue siendo lectura de una sola fila de `tenants`, nunca un barrido.
  */
 export function tenantsTableForHostResolution() {
   return serviceClient().from("tenants");
