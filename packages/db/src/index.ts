@@ -80,3 +80,5 @@ export type {
   Tenant,
   TenantSettingsRow,
 } from "./types.js";
+export type { VenueRow } from "./venues.js";
+export { listVenues } from "./venues.js";

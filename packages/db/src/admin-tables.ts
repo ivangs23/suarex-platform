@@ -70,6 +70,7 @@ type TableRowDb = {
   venue_id: string;
   label: string;
   is_active: boolean;
+  token: string;
 };
 
 /**
@@ -78,10 +79,15 @@ type TableRowDb = {
  * `TableRow` -- el mismo tipo público que usa `findTableByToken` (`src/tables.ts`) para
  * la resolución de un pedido, reutilizado aquí a propósito en vez de inventar un tipo
  * `AdminTableRow` paralelo para una diferencia que no lo justifica todavía.
+ *
+ * Selecciona `token` (ahora parte de `TableRow`, ver `types.ts`): la pantalla de gestión
+ * de mesas (Task 5) lo necesita para componer `https://{host}/m/{token}` y generar el QR
+ * de cada mesa con `tableQrSvg` -- sin este campo no había forma de que esa pantalla
+ * supiera qué token dibujar.
  */
 export async function listTables(tenantId: string): Promise<TableRow[]> {
   const { data, error } = await tenantScoped("tables", tenantId)
-    .select("id, tenant_id, venue_id, label, is_active")
+    .select("id, tenant_id, venue_id, label, is_active, token")
     .order("sort_order", { ascending: true });
   if (error) throw error;
 
@@ -91,5 +97,6 @@ export async function listTables(tenantId: string): Promise<TableRow[]> {
     venueId: row.venue_id,
     label: row.label,
     isActive: row.is_active,
+    token: row.token,
   }));
 }
