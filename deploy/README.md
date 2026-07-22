@@ -124,27 +124,28 @@ cd suarex-supabase && mv .env.example .env
 
 ### Generar los secretos
 
+Un script los genera todos **en el servidor** y los escribe en `.env` sin imprimir ninguno
+por pantalla — incluidos los dos JWT (`ANON_KEY`, `SERVICE_ROLE_KEY`), que firma con el
+`JWT_SECRET` recién creado:
+
 ```bash
-# JWT_SECRET: 40+ caracteres
-openssl rand -base64 48 | tr -d '\n='
-# POSTGRES_PASSWORD y los dos de Studio
-openssl rand -base64 32 | tr -d '\n='
+/opt/suarex/deploy/scripts/gen-secrets.sh
 ```
 
-`ANON_KEY` y `SERVICE_ROLE_KEY` son JWT firmados con ese `JWT_SECRET`. Genéralos en
-<https://supabase.com/docs/guides/self-hosting#api-keys> (payloads `{"role":"anon"}` y
-`{"role":"service_role"}`) — es una página estática, la firma ocurre en tu navegador.
+Deja también puestos `DISABLE_SIGNUP=true` y el `COMPOSE_FILE` que carga el override.
 
-### Editar `.env`
+### El override — el único cambio sobre el compose oficial
+
+```bash
+cp /opt/suarex/deploy/supabase-override.yml /opt/suarex-supabase/docker-compose.override.yml
+```
+
+Hace dos cosas, y **las dos son de seguridad**: activa el hook del JWT y ata Postgres y el
+pooler a loopback. Lee sus comentarios antes de tocarlo.
+
+### Editar `.env` (lo que el script no puede saber)
 
 ```ini
-POSTGRES_PASSWORD=<generado>
-JWT_SECRET=<generado>
-ANON_KEY=<jwt anon>
-SERVICE_ROLE_KEY=<jwt service_role>
-DASHBOARD_USERNAME=suarex
-DASHBOARD_PASSWORD=<generado>
-
 SITE_URL=https://suarex.app
 API_EXTERNAL_URL=https://api.suarex.app
 SUPABASE_PUBLIC_URL=https://api.suarex.app
@@ -169,15 +170,14 @@ DISABLE_SIGNUP=true
 
 Todo el modelo multi-cliente depende de que el JWT lleve el `tenant_id`. Lo inyecta
 `custom_access_token_hook` (`supabase/migrations/20260721000001_core_tenancy.sql`). Si el
-hook no está activado, **RLS no acota nada y cada usuario ve la base entera**. Añade al
-`.env`:
+hook no está activado, **RLS no acota nada y cada usuario ve la base entera**.
 
-```ini
-GOTRUE_HOOK_CUSTOM_ACCESS_TOKEN_ENABLED=true
-GOTRUE_HOOK_CUSTOM_ACCESS_TOKEN_URI=pg-functions://postgres/public/custom_access_token_hook
-```
+Va en `supabase-override.yml`, **no en el `.env`**: el compose oficial solo propaga al
+contenedor de `auth` la lista de `GOTRUE_*` que él conoce, y estas dos no están en ella.
+Ponerlas en el `.env` no da ningún error: el contenedor arranca sano, sin el hook, y la
+instalación parece correcta.
 
-El paso 7 lo verifica. **No pases de ahí sin que dé verde.**
+El paso 7 lo verifica de extremo a extremo. **No pases de ahí sin que dé verde.**
 
 ### Arrancar
 
@@ -185,20 +185,11 @@ El `-p supabase` no es opcional: fija el nombre de la red a `supabase_default`, 
 que busca `docker-compose.app.yml`.
 
 ```bash
-docker compose -p supabase up -d
-docker compose -p supabase ps
+cd /opt/suarex-supabase && docker compose -p supabase up -d
 ```
 
-### Aligerar (opcional, recomendado)
-
-`analytics` (Logflare) come ~1 GB y es la pieza más frágil del Supabase autoalojado. Con
-8 GB entra todo, pero si prefieres el margen:
-
-```bash
-docker compose -p supabase stop analytics vector studio
-```
-
-Studio se puede levantar solo cuando lo necesites.
+Los 11 servicios deben quedar `healthy`. Si `realtime` entra en bucle de reinicio, mira sus
+registros: casi siempre es `REALTIME_DB_ENC_KEY` con una longitud distinta de 16.
 
 ---
 
@@ -206,14 +197,17 @@ Studio se puede levantar solo cuando lo necesites.
 
 ```bash
 cd /opt
-git clone <url-de-este-repo> suarex && cd suarex
-
-curl -fsSL https://github.com/supabase/cli/releases/latest/download/supabase_linux_amd64.tar.gz \
-  | tar -xz -C /tmp && sudo mv /tmp/supabase /usr/local/bin/
-
-export SUPABASE_DB_URL="postgresql://postgres:<POSTGRES_PASSWORD>@localhost:5432/postgres"
-supabase db push --db-url "$SUPABASE_DB_URL"
+git clone <url-de-este-repo> suarex
+/opt/suarex/deploy/scripts/apply-migrations.sh
 ```
+
+El script ejecuta los ficheros en orden y registra cada versión en
+`supabase_migrations.schema_migrations`, así que es idempotente y deja la base en el estado
+que espera `supabase db push` para los despliegues siguientes.
+
+No se usa el CLI directamente porque **exige TLS incluso contra `127.0.0.1`** y el Postgres
+del compose oficial no lo sirve: falla con `tls error (server refused TLS connection)`, y
+`?sslmode=disable` no lo evita.
 
 **No ejecutes `supabase/seed.sql`.** Crea los clientes de demostración (garum, manuela) con
 catálogo de muestra. En producción los clientes se dan de alta desde el panel.
@@ -257,13 +251,34 @@ curl -sS -o /dev/null -w '%{http_code}\n' https://nadie.suarex.app/1
 curl -sS https://api.suarex.app/rest/v1/ -H "apikey: <ANON_KEY>" -o /dev/null -w '%{http_code}\n'
 ```
 
-**El hook de token inyecta el `tenant_id`** — la comprobación que de verdad importa. Da de
-alta un cliente y un owner desde el panel, inicia sesión, y pega el `access_token` en
-<https://jwt.io>. El payload tiene que traer `tenant_id` y `tenant_role`.
+**El hook de token inyecta el `tenant_id`** — la comprobación que de verdad importa:
 
-Si no están: el hook no está activo. Revisa las dos variables `GOTRUE_HOOK_*`, reinicia
-`auth` (`docker compose -p supabase restart auth`) y **vuelve a iniciar sesión** — un token
-ya emitido no se rellena solo.
+```bash
+/opt/suarex/deploy/scripts/verify-hook.sh
+```
+
+Crea un cliente y un usuario de usar y tirar, inicia sesión de verdad, decodifica el JWT y
+comprueba que trae `tenant_id` y `tenant_role`. Limpia lo que crea, pase o falle.
+
+Si falla: el hook no está activo. Comprueba que el contenedor los tiene de verdad —
+
+```bash
+docker inspect supabase-auth --format '{{range .Config.Env}}{{println .}}{{end}}' | grep -i hook
+```
+
+— y si no aparecen, es que Compose está ignorando el override: revisa `COMPOSE_FILE` en el
+`.env`. Tras arreglarlo, `docker compose -p supabase up -d --force-recreate auth` y **vuelve
+a iniciar sesión**: un token ya emitido no se rellena solo.
+
+**`anon` no puede leer ninguna tabla de clientes:**
+
+```bash
+ANON=$(grep '^ANON_KEY=' /opt/suarex-supabase/.env | cut -d= -f2-)
+curl -sS "http://127.0.0.1:8000/rest/v1/tenants?select=id" -H "apikey: $ANON"
+```
+
+Debe responder `permission denied for table tenants`. Si devuelve filas, para: los `REVOKE`
+de las migraciones no se aplicaron.
 
 **Aislamiento entre clientes:** con dos clientes dados de alta, entra con el personal de uno
 y comprueba que su panel de comandas no ve los pedidos del otro. Es el mismo control que
