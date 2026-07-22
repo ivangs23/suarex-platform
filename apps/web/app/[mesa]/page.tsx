@@ -1,4 +1,5 @@
-import { getCategories, getProducts } from "@suarex/db";
+import { parseBranding } from "@suarex/config";
+import { getCategories, getProducts, getTenantSettings } from "@suarex/db";
 import { notFound } from "next/navigation";
 import { requireTenant } from "@/lib/tenant-context";
 
@@ -33,14 +34,16 @@ export default async function MenuPage({ params }: { params: Promise<{ mesa: str
     notFound();
   }
 
-  const [categories, products] = await Promise.all([
+  const [categories, products, settings] = await Promise.all([
     getCategories(tenant.id),
     getProducts(tenant.id),
+    getTenantSettings(tenant.id).catch(() => null),
   ]);
+  const businessName = parseBranding(settings?.branding).name ?? tenant.slug;
 
   return (
     <main>
-      <h1 data-testid="tenant-name">{tenant.slug}</h1>
+      <h1 data-testid="tenant-name">{businessName}</h1>
       <p data-testid="mesa">Mesa {mesa}</p>
       {/* Cuenta cruda de getProducts(tenant.id), sin filtrar por categoría:
           si el filtro tenant_id de getProducts se perdiera, este número
