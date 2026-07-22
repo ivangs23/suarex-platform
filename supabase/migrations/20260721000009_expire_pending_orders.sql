@@ -64,27 +64,65 @@ $$;
 revoke execute on function public.expire_pending_orders (int) from anon, authenticated, public;
 grant execute on function public.expire_pending_orders (int) to service_role;
 
--- pg_cron: disponible en el stack local (`select * from pg_available_extensions where
--- name = 'pg_cron'` lo lista, y `shared_preload_libraries` ya lo precarga en la imagen
--- de Postgres de Supabase CLI -- comprobado antes de escribir esto), así que se activa
--- aquí. En un proyecto Supabase gestionado (staging/producción), pg_cron se habilita
--- desde el dashboard/API de integraciones del proyecto, no desde una migración de
--- esquema corriente -- si esta migración llegara a aplicarse contra un entorno donde la
--- extensión no está disponible, `create extension` fallaría ahí; el job y la función
--- viajan igualmente en el repositorio, listos para activarse en cuanto ese entorno
--- tenga la extensión, que es exactamente lo que pide el brief de esta tarea.
+-- pg_cron: activación CONDICIONADA a que la extensión esté realmente disponible, para
+-- que esta migración se aplique limpiamente tanto si pg_cron está presente como si no.
+-- `supabase db reset` aplica las migraciones como un lote todo-o-nada: si `create
+-- extension pg_cron` fallara sin guarda, abortaría no solo esta migración sino TODAS
+-- las posteriores -- en cualquier entorno donde pg_cron no esté precargado en
+-- `shared_preload_libraries` (la imagen Docker de otro desarrollador, un bump de la
+-- CLI/imagen, un runner de CI, un proyecto Supabase gestionado sin la extensión
+-- habilitada todavía), un reset limpio rompería el esquema entero. El brief de esta
+-- tarea pide exactamente esto: programar por pg_cron SI está disponible; si no, dejar
+-- la función lista y documentar que el disparador se conecta en el despliegue.
+--
+-- Predicado de disponibilidad elegido: `pg_available_extensions` indica que la
+-- extensión PUEDE instalarse (su control file está presente en el servidor), pero NO
+-- garantiza que `create extension` vaya a tener éxito -- eso depende también de que
+-- `shared_preload_libraries` la precargue, algo que solo se fija en el arranque de
+-- Postgres y no es observable desde SQL antes de intentarlo. Por eso hay dos guardas,
+-- no una: (1) el chequeo de `pg_available_extensions` evita ni intentarlo cuando la
+-- extensión no existe en absoluto en el servidor, y (2) el propio bloque `create
+-- extension`/`cron.schedule` va envuelto en su `exception when others`, que degrada a
+-- un `NOTICE` cualquier fallo de activación que sobreviva a la guarda (1) -- por
+-- ejemplo, "aparece en pg_available_extensions pero falta en
+-- shared_preload_libraries", el caso exacto que este finding señala. Ninguna de las dos
+-- guardas por sí sola cubre el problema completo; juntas sí.
+--
 -- Sin cláusula `with schema`: el control file de pg_cron fija su propio esquema
 -- (comprobado en el stack local -- pedir `with schema extensions` no cambia el
 -- resultado, la extensión igualmente termina en `pg_catalog`; sus objetos de trabajo
 -- -- `cron.job`, `cron.schedule()` -- viven en el esquema `cron` que la propia
 -- extensión crea, aparte).
-create extension if not exists pg_cron;
+--
+-- Idempotencia: `cron.schedule` con un nombre de job ya existente actualiza ese job
+-- (upsert por `jobname`), no lanza error de duplicado -- comprobado en el stack local
+-- antes de confiar en ello -- así que reejecutar este bloque entero (otro `db reset`, o
+-- reaplicar la migración) es seguro.
+--
+-- Si en los logs de un `db reset`/`db push` aparece "pg_cron scheduling skipped": la
+-- extensión no quedó activa y el job NO quedó programado en ese entorno (el resto de
+-- esta migración -- la función y sus grants -- sigue en vigor igualmente, sin depender
+-- de esto). Hay que habilitar pg_cron para ese proyecto (dashboard/API de integraciones
+-- en Supabase gestionado, o `shared_preload_libraries` + reinicio en un servidor
+-- propio) y entonces ejecutar a mano, una vez, en el despliegue:
+--   select cron.schedule('expire-pending-orders', '*/5 * * * *',
+--     'select public.expire_pending_orders();');
+do $pg_cron_activation$
+begin
+  if exists (select 1 from pg_available_extensions where name = 'pg_cron') then
+    begin
+      create extension if not exists pg_cron;
 
--- `cron.schedule` con un nombre de job ya existente actualiza ese job (upsert), no
--- lanza un error de duplicado -- comprobado en el stack local antes de confiar en
--- ello -- así que esta migración es reejecutable sin guardas adicionales.
-select cron.schedule(
-  'expire-pending-orders',
-  '*/5 * * * *',
-  $$select public.expire_pending_orders();$$
-);
+      perform cron.schedule(
+        'expire-pending-orders',
+        '*/5 * * * *',
+        $sql$select public.expire_pending_orders();$sql$
+      );
+    exception when others then
+      raise notice 'pg_cron scheduling skipped: CREATE EXTENSION/cron.schedule failed (%). pg_cron figuraba en pg_available_extensions pero no se pudo activar (típicamente: ausente de shared_preload_libraries). Debe programarse a mano en el despliegue: select cron.schedule(''expire-pending-orders'', ''*/5 * * * *'', ''select public.expire_pending_orders();'');', sqlerrm;
+    end;
+  else
+    raise notice 'pg_cron scheduling skipped: pg_cron no aparece en pg_available_extensions en este servidor. Debe programarse a mano en el despliegue, una vez la extensión esté habilitada: select cron.schedule(''expire-pending-orders'', ''*/5 * * * *'', ''select public.expire_pending_orders();'');';
+  end if;
+end;
+$pg_cron_activation$;
