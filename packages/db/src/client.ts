@@ -246,3 +246,20 @@ export function reservePrintedRpc(
 export function storageServiceClient() {
   return serviceClient().storage;
 }
+
+/**
+ * NOVENA EXENCIÓN DELIBERADA. Los 14 alérgenos globales de la UE (`tenant_id` NULL, ver
+ * `20260721000002_catalog.sql`) son un catálogo de referencia compartido por todos los
+ * tenants -- no pertenecen a ninguno, así que no encajan en `tenantScoped` (que exige
+ * `tenant_id = tenantId`) ni tiene sentido inventarles un tenant ficticio para colarlos
+ * ahí. El filtro `tenant_id is null` va DENTRO de esta función, no expuesto como
+ * parámetro: quien llama solo puede pedir "los globales", nunca los de un tenant
+ * arbitrario (para eso ya existe `tenantScoped("allergens", tenantId)`). Acotado por
+ * firma a `listAssignableAllergens` (`src/admin-catalog.ts`, Task 5): el formulario de
+ * producto del panel de administración necesita ofrecer como casillas los 14 globales
+ * MÁS los propios del tenant, y `listAdminCatalog` deliberadamente solo devuelve estos
+ * últimos (ver su docstring).
+ */
+export function globalAllergensTable() {
+  return serviceClient().from("allergens").select("id, name_i18n, icon").is("tenant_id", null);
+}

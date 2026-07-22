@@ -22,6 +22,7 @@ export {
   deleteProduct,
   deleteTenantAllergen,
   listAdminCatalog,
+  listAssignableAllergens,
   setProductAvailability,
   updateCategory,
   updateProduct,

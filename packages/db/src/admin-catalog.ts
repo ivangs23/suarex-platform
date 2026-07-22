@@ -1,4 +1,4 @@
-import { tenantScoped } from "./client.js";
+import { globalAllergensTable, tenantScoped } from "./client.js";
 
 export type CategoryDestination = "cocina" | "barra";
 
@@ -348,4 +348,31 @@ export async function listAdminCatalog(tenantId: string): Promise<AdminCatalog> 
   }));
 
   return { categories, allergens };
+}
+
+/**
+ * Alérgenos ASIGNABLES a un producto (Task 5): los 14 globales de la UE (`tenant_id`
+ * NULL, vía `globalAllergensTable()` -- ver su docstring en `src/client.ts`) MÁS los
+ * propios del tenant (vía `tenantScoped`, igual que `listAdminCatalog`). Existe como
+ * función separada -- en vez de ampliar `listAdminCatalog` -- porque son dos lecturas
+ * con propósitos distintos: `listAdminCatalog` refleja el catálogo TAL CUAL existe hoy
+ * (solo lo propio del tenant, para no confundir "mis alérgenos" con "los globales" en
+ * la pantalla de gestión de alérgenos propios); esta función responde a una pregunta
+ * distinta -- "¿qué alérgenos puede marcar un gestor en el formulario de producto?" --
+ * que sí necesita ambos conjuntos combinados.
+ */
+export async function listAssignableAllergens(tenantId: string): Promise<AdminAllergen[]> {
+  const [globalResult, tenantResult] = await Promise.all([
+    globalAllergensTable(),
+    tenantScoped("allergens", tenantId).select("id, name_i18n, icon"),
+  ]);
+  if (globalResult.error) throw globalResult.error;
+  if (tenantResult.error) throw tenantResult.error;
+
+  const globalRows = globalResult.data as unknown as AdminAllergenRow[];
+  const tenantRows = tenantResult.data as unknown as AdminAllergenRow[];
+
+  return [...globalRows, ...tenantRows]
+    .sort((a, b) => a.id - b.id)
+    .map((allergen) => ({ id: allergen.id, nameI18n: allergen.name_i18n, icon: allergen.icon }));
 }

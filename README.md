@@ -64,6 +64,30 @@ no hay personal sembrado (nunca corriste `pnpm seed:staff`, o hiciste
 explícito en vez de saltarse: un test saltado es indistinguible de uno que
 pasa en un resumen de CI, así que esta suite nunca se salta en silencio.
 
+### Panel de administración del catálogo
+
+`/admin/catalogo` (por ejemplo `http://garum.localhost:3000/admin/catalogo`) deja
+gestionar categorías, productos (con imagen y alérgenos), extras y alérgenos propios
+del tenant. Lo protege `requireManager()` (`apps/web/lib/require-manager.ts`): solo
+los roles `owner`/`admin` pasan — un `staff` que intente entrar es redirigido a
+`/staff/login`, igual que alguien sin sesión.
+
+`pnpm seed:staff` (el mismo comando de arriba, parte del arranque estándar) siembra
+**también** una cuenta demo por tenant con rol `owner` — `owner@garum.local` y
+`owner@manuela.local` — con el mismo mecanismo de contraseña generada que la de
+`staff`: si no defines `OWNER_SEED_PASSWORD`, se genera una aleatoria y se guarda en
+`.env.test` (gitignorado). Para elegir tú la contraseña:
+
+```bash
+OWNER_SEED_PASSWORD='<elige-tu-contraseña-de-desarrollo>' pnpm seed:staff
+```
+
+`tests/e2e/admin-catalogo.spec.ts` prueba las dos caras del guard con sesiones reales
+(login por `/staff/login`, sin cookies fabricadas a mano): un `staff` que no ve el
+panel, y un `owner` que crea una categoría y un producto que aparecen después en la
+carta pública (`/m/{token}`). Igual que con `STAFF_SEED_PASSWORD`, si falta
+`OWNER_SEED_PASSWORD` el test **falla** con un mensaje explícito en vez de saltarse.
+
 ## Verificación
 
 ```bash
