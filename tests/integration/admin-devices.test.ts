@@ -120,6 +120,25 @@ describe("createDevice", () => {
       createDevice(tenant.tenantId, { venueId: venueIdB, name: "Intruso" }),
     ).rejects.toThrow(/cross-tenant/i);
   });
+
+  /**
+   * Fix round 2 (Finding 1, seguridad): defensa en profundidad en el propio repositorio --
+   * la validación "de verdad" (la que ve cualquier valor que controle el navegador) vive en
+   * `parsePairingTtlMinutes` (`apps/web/lib/device-action-input.ts`, cubierto en
+   * `device-action-input.test.ts`), pero `createDevice`/`regeneratePairingCode` aplican el
+   * mismo tope para cualquier otro caller que no pase por esa Server Action.
+   */
+  it("un ttlMinutes por encima de 24 horas se rechaza aunque no pase por la Server Action", async () => {
+    await expect(
+      createDevice(tenant.tenantId, { venueId, name: "F", ttlMinutes: 60 * 24 + 1 }),
+    ).rejects.toThrow(/24 horas/);
+  });
+
+  it("un ttlMinutes no finito (NaN) se rechaza con un error claro, no un RangeError de Date", async () => {
+    await expect(
+      createDevice(tenant.tenantId, { venueId, name: "G", ttlMinutes: Number("abc") }),
+    ).rejects.toThrow(/número finito/);
+  });
 });
 
 describe("listDevices", () => {

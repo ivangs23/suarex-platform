@@ -9,6 +9,37 @@ import { tenantScoped } from "./client.js";
  * que quien instala el agente lo teclee, sin dejarlo expuesto más de lo necesario. */
 const DEFAULT_TTL_MINUTES = 15;
 
+/**
+ * Fix round 2 (Finding 1, seguridad): tope superior de defensa en profundidad para
+ * `ttlMinutes` -- 24 horas. La validación "de verdad" (rechazar, no clampar, un valor no
+ * numérico o fuera de rango) vive en el borde de la Server Action
+ * (`parsePairingTtlMinutes`, `apps/web/lib/device-action-input.ts`), que es por donde entra
+ * cualquier `ttl_minutes` que controle un navegador. Este tope se repite aquí para que
+ * CUALQUIER otro caller futuro de este repositorio (un script, otra action que no pase por
+ * `parsePairingTtlMinutes`) quede protegido igual, sin depender de que se acuerde de
+ * revalidar. Deliberadamente NO se rechaza aquí un `ttlMinutes` negativo o cero: los tests
+ * de integración de este repositorio (`tests/integration/admin-devices.test.ts`) pasan
+ * `ttlMinutes: -1` a propósito para simular un código ya caducado en el momento de
+ * crearse -- un caso de uso interno legítimo que la Server Action nunca expone (ella sí
+ * exige un entero positivo). Solo el techo (`> MAX_TTL_MINUTES`) y los valores no finitos
+ * (`NaN`/`Infinity`, que antes llegaban tal cual hasta `new Date(NaN).toISOString()` y
+ * lanzaban un `RangeError` sin mensaje claro) se rechazan en esta capa.
+ */
+const MAX_TTL_MINUTES = 24 * 60;
+
+function resolveTtlMinutes(ttlMinutes: number | undefined): number {
+  if (ttlMinutes === undefined) return DEFAULT_TTL_MINUTES;
+  if (!Number.isFinite(ttlMinutes)) {
+    throw new Error(`ttlMinutes inválido (se esperaba un número finito): ${ttlMinutes}`);
+  }
+  if (ttlMinutes > MAX_TTL_MINUTES) {
+    throw new Error(
+      `ttlMinutes no puede superar ${MAX_TTL_MINUTES} minutos (24 horas): ${ttlMinutes}`,
+    );
+  }
+  return ttlMinutes;
+}
+
 export type CreateDeviceInput = {
   venueId: string;
   name: string;
@@ -41,13 +72,15 @@ export type DeviceRow = {
 
 /**
  * Código de emparejamiento: 24 bytes de `crypto.randomBytes` -- no `Math.random()`, no un
- * contador ni un timestamp -- codificados en base64url, lo que da 32 caracteres (~144 bits
- * de entropía). Muy por encima del suelo de 20 caracteres que impone el CHECK
- * `devices_pairing_code_min_entropy` (`20260722000002_device_pairing_hardening.sql`), que
- * documenta exactamente esta fórmula como la exigida para el generador real. Es la única
- * defensa de este código frente a que alguien lo adivine o lo fuerce por fuerza bruta
- * antes de que caduque, así que nunca debe debilitarse a una longitud menor o a una fuente
- * no criptográfica.
+ * contador ni un timestamp -- codificados en base64url, lo que da 32 caracteres (~192 bits
+ * de entropía; 24 bytes * 8 bits/byte -- fix round 2, Finding 2: la cifra anterior, "~144
+ * bits", era incorrecta, ver el comentario de la migración
+ * `20260722000002_device_pairing_hardening.sql` para el porqué de que ese comentario NO se
+ * haya corregido igual). Muy por encima del suelo de 20 caracteres que impone el CHECK
+ * `devices_pairing_code_min_entropy` (esa misma migración), que documenta exactamente esta
+ * fórmula como la exigida para el generador real. Es la única defensa de este código frente
+ * a que alguien lo adivine o lo fuerce por fuerza bruta antes de que caduque, así que nunca
+ * debe debilitarse a una longitud menor o a una fuente no criptográfica.
  */
 function generatePairingCode(): string {
   return randomBytes(24).toString("base64url");
@@ -72,7 +105,7 @@ export async function createDevice(
   input: CreateDeviceInput,
 ): Promise<CreateDeviceResult> {
   const pairingCode = generatePairingCode();
-  const ttlMinutes = input.ttlMinutes ?? DEFAULT_TTL_MINUTES;
+  const ttlMinutes = resolveTtlMinutes(input.ttlMinutes);
   const expiresAt = new Date(Date.now() + ttlMinutes * 60_000).toISOString();
 
   const { data, error } = await tenantScoped("devices", tenantId)
@@ -111,9 +144,7 @@ export async function regeneratePairingCode(
   ttlMinutes?: number,
 ): Promise<RegeneratePairingCodeResult> {
   const pairingCode = generatePairingCode();
-  const expiresAt = new Date(
-    Date.now() + (ttlMinutes ?? DEFAULT_TTL_MINUTES) * 60_000,
-  ).toISOString();
+  const expiresAt = new Date(Date.now() + resolveTtlMinutes(ttlMinutes) * 60_000).toISOString();
 
   const { data, error } = await tenantScoped("devices", tenantId)
     .update({ pairing_code: pairingCode, pairing_expires_at: expiresAt })

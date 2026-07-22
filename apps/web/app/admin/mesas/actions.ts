@@ -2,6 +2,12 @@
 
 import { createTable, deleteTable, updateTable } from "@suarex/db";
 import { revalidatePath } from "next/cache";
+import {
+  optionalString,
+  parseOptionalBoolean,
+  parseOptionalInt,
+  requiredString,
+} from "@/lib/form-parse";
 import { managerAction } from "@/lib/require-manager";
 
 /**
@@ -24,30 +30,14 @@ import { managerAction } from "@/lib/require-manager";
  * mesas (Task 5), que lee el Host con `headers()` de Next -- nunca de un campo de
  * `formData` -- exactamente igual que `requireTenant`/`resolveStaffSession` ya hacen para
  * resolver el tenant de la petición (ver `apps/web/lib/tenant-context.ts`).
+ *
+ * Fix round 2 (Finding 3): `requiredString`/`optionalString`/`parseOptionalInt`/
+ * `parseOptionalBoolean` ya no se redeclaran aquí -- se importan de
+ * `apps/web/lib/form-parse.ts`, compartido con `catalogo/actions.ts` y
+ * `dispositivos/actions.ts`. `parseOptionalInt` ahora rechaza un `sort_order` no numérico
+ * (antes producía `NaN` en silencio, ver el docstring de ese módulo) en vez de dejarlo
+ * llegar a la columna `integer` del repositorio.
  */
-
-function requiredString(formData: FormData, field: string): string {
-  const value = String(formData.get(field) ?? "").trim();
-  if (!value) throw new Error(`Falta el campo obligatorio: ${field}`);
-  return value;
-}
-
-function optionalString(formData: FormData, field: string): string | undefined {
-  const raw = formData.get(field);
-  if (raw === null) return undefined;
-  const value = String(raw).trim();
-  return value === "" ? undefined : value;
-}
-
-function parseOptionalInt(formData: FormData, field: string): number | undefined {
-  const raw = optionalString(formData, field);
-  return raw === undefined ? undefined : Number(raw);
-}
-
-function parseOptionalBoolean(formData: FormData, field: string): boolean | undefined {
-  const raw = optionalString(formData, field);
-  return raw === undefined ? undefined : raw === "true";
-}
 
 export const createTableAction = managerAction(async (session, formData: FormData) => {
   const venueId = requiredString(formData, "venue_id");

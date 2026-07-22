@@ -16,6 +16,7 @@ import {
 } from "@suarex/db";
 import { revalidatePath } from "next/cache";
 import { parseAllergenId, parseAvailability } from "@/lib/catalog-action-input";
+import { optionalString, requiredString } from "@/lib/form-parse";
 import { managerAction } from "@/lib/require-manager";
 
 /**
@@ -45,20 +46,13 @@ import { managerAction } from "@/lib/require-manager";
  * independiente de un camino distinto: un JWT `authenticated` válido hablando
  * directo contra PostgREST sin pasar por esta app. Ver el docstring de
  * `requireManager` (`lib/require-manager.ts`) para el razonamiento completo.
+ *
+ * Fix round 2 (Finding 3): `requiredString`/`optionalString` ya no se redeclaran aquí -- se
+ * importan de `apps/web/lib/form-parse.ts`, compartido con `mesas/actions.ts` y
+ * `dispositivos/actions.ts`. `parseDestination`/`parseEuroPrice`/`parseOptionalEuroPrice`/
+ * `parseAllergenIds` siguen locales a este fichero: son reglas de negocio del dominio de
+ * catálogo, no parsers genéricos de `FormData`.
  */
-
-function requiredString(formData: FormData, field: string): string {
-  const value = String(formData.get(field) ?? "").trim();
-  if (!value) throw new Error(`Falta el campo obligatorio: ${field}`);
-  return value;
-}
-
-function optionalString(formData: FormData, field: string): string | undefined {
-  const raw = formData.get(field);
-  if (raw === null) return undefined;
-  const value = String(raw).trim();
-  return value === "" ? undefined : value;
-}
 
 function parseDestination(formData: FormData): "cocina" | "barra" | undefined {
   const raw = formData.get("destination");

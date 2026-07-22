@@ -7,6 +7,8 @@ import {
   regeneratePairingCode,
 } from "@suarex/db";
 import { revalidatePath } from "next/cache";
+import { parsePairingTtlMinutes } from "@/lib/device-action-input";
+import { requiredString } from "@/lib/form-parse";
 import { managerAction } from "@/lib/require-manager";
 
 /**
@@ -32,26 +34,23 @@ import { managerAction } from "@/lib/require-manager";
  * a leerse de la base una vez creado (`listDevices` no lo expone, ver su docstring). Es
  * responsabilidad exclusiva de quien invoque esta action mostrarlo una única vez a la
  * persona que está instalando el dispositivo.
+ *
+ * Fix round 2 (Finding 1, seguridad): `ttl_minutes` ya no llega a `createDevice`/
+ * `regeneratePairingCode` como un `Number(raw)` sin cota -- `parsePairingTtlMinutes`
+ * (`apps/web/lib/device-action-input.ts`) lo valida aquí, en el borde de la Server Action,
+ * como entero positivo acotado a 24 horas, ANTES de que el repositorio lo vea. Ver el
+ * docstring de ese módulo para el porqué completo; el repositorio aplica el mismo tope
+ * como defensa en profundidad para cualquier otro caller futuro que no pase por esta action.
+ *
+ * Fix round 2 (Finding 3): `requiredString` ya no se redeclara aquí -- se importa de
+ * `apps/web/lib/form-parse.ts`, compartido con `catalogo/actions.ts` y `mesas/actions.ts`.
  */
-
-function requiredString(formData: FormData, field: string): string {
-  const value = String(formData.get(field) ?? "").trim();
-  if (!value) throw new Error(`Falta el campo obligatorio: ${field}`);
-  return value;
-}
-
-function parseOptionalTtlMinutes(formData: FormData): number | undefined {
-  const raw = formData.get("ttl_minutes");
-  if (raw === null) return undefined;
-  const value = String(raw).trim();
-  return value === "" ? undefined : Number(value);
-}
 
 export const createDeviceAction = managerAction(
   async (session, formData: FormData): Promise<{ pairingCode: string; expiresAt: string }> => {
     const venueId = requiredString(formData, "venue_id");
     const name = requiredString(formData, "name");
-    const ttlMinutes = parseOptionalTtlMinutes(formData);
+    const ttlMinutes = parsePairingTtlMinutes(formData);
 
     const { pairingCode, expiresAt } = await createDevice(session.tenantId, {
       venueId,
@@ -66,7 +65,7 @@ export const createDeviceAction = managerAction(
 export const regeneratePairingCodeAction = managerAction(
   async (session, formData: FormData): Promise<RegeneratePairingCodeResult> => {
     const deviceId = requiredString(formData, "device_id");
-    const ttlMinutes = parseOptionalTtlMinutes(formData);
+    const ttlMinutes = parsePairingTtlMinutes(formData);
 
     const result = await regeneratePairingCode(session.tenantId, deviceId, ttlMinutes);
     revalidatePath("/admin/dispositivos");
