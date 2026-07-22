@@ -1,10 +1,48 @@
 import { randomUUID } from "node:crypto";
 import { pairDevice } from "@suarex/db";
-import { beforeAll, describe, expect, it } from "vitest";
-import { admin, createTenantFixture, nonce, type TenantFixture } from "./helpers/tenants.js";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import {
+  admin,
+  createTenantFixture,
+  deleteTenantFixture,
+  nonce,
+  type TenantFixture,
+} from "./helpers/tenants.js";
 
 let tenant: TenantFixture;
 let venueId: string;
+
+/** Ids de los dispositivos que este fichero crea (`newDeviceWithCode`), para poder
+ * borrar SOLO las cuentas de Auth de servicio que este fichero mismo dio de alta --
+ * nunca un `listUsers`/wipe amplio. La fila `devices.auth_user_id` (enlazada por
+ * `pairDevice` tras un canje con éxito) es la fuente de verdad de qué cuenta de Auth
+ * corresponde a cada uno de estos ids; los que nunca llegaron a emparejarse (código
+ * caducado, ningún canje) simplemente no tienen `auth_user_id` que borrar. Cubre
+ * también la cuenta huérfana del test de "reintento": `pairDevice` la reutiliza y la
+ * enlaza a este mismo `deviceId`, así que queda igualmente recogida aquí. */
+const deviceIds: string[] = [];
+
+afterAll(async () => {
+  if (deviceIds.length > 0) {
+    const { data: rows, error } = await admin
+      .from("devices")
+      .select("auth_user_id")
+      .in("id", deviceIds);
+    if (error) throw error;
+    const authUserIds = (rows ?? [])
+      .map((row) => row.auth_user_id as string | null)
+      .filter((id): id is string => id !== null);
+    for (const authUserId of authUserIds) {
+      const { error: deleteUserError } = await admin.auth.admin.deleteUser(authUserId);
+      if (deleteUserError) throw deleteUserError;
+    }
+  }
+  // Borra la fila de `tenants`, lo que en cascada se lleva las filas de `devices`
+  // (`on delete cascade` sobre `tenant_id`, ver `20260722000001_devices_printers.sql`)
+  // -- las cuentas de Auth de servicio ya se borraron explícitamente arriba porque esa
+  // FK es `on delete set null`, no cascade.
+  if (tenant) await deleteTenantFixture(tenant);
+});
 
 beforeAll(async () => {
   tenant = await createTenantFixture(`dev-${nonce()}`);
@@ -28,7 +66,9 @@ async function newDeviceWithCode(code: string, expiresInMs: number): Promise<str
     })
     .select("id")
     .single();
-  return data?.id as string;
+  const deviceId = data?.id as string;
+  deviceIds.push(deviceId);
+  return deviceId;
 }
 
 describe("pairDevice", () => {

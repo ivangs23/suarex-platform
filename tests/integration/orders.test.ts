@@ -1,12 +1,36 @@
 import { createPendingOrder, findTableByToken, markOrderPaid } from "@suarex/db";
-import { beforeAll, describe, expect, it } from "vitest";
-import { admin, createTenantFixture, nonce, type TenantFixture } from "./helpers/tenants.js";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import {
+  admin,
+  createTenantFixture,
+  deleteTenantFixture,
+  nonce,
+  type TenantFixture,
+} from "./helpers/tenants.js";
 
 let tenant: TenantFixture;
 let venueId: string;
 let tableToken: string;
 let tableId: string;
 let productId: string;
+
+/** Fixtures de tenant "ajeno" creadas ad hoc dentro de tests concretos (control de
+ * aislamiento cross-tenant), acumuladas aquí para que un único `afterAll` las borre
+ * todas -- acotado a exactamente las fixtures que este fichero crea, nunca un wipe. */
+const extraFixtures: TenantFixture[] = [];
+
+async function createExtraTenantFixture(slug: string): Promise<TenantFixture> {
+  const fixture = await createTenantFixture(slug);
+  extraFixtures.push(fixture);
+  return fixture;
+}
+
+afterAll(async () => {
+  if (tenant) await deleteTenantFixture(tenant);
+  for (const fixture of extraFixtures) {
+    await deleteTenantFixture(fixture);
+  }
+});
 
 beforeAll(async () => {
   tenant = await createTenantFixture(`ord-${nonce()}`);
@@ -91,7 +115,7 @@ describe("createPendingOrder", () => {
   });
 
   it("rechaza un producto de otro tenant", async () => {
-    const otro = await createTenantFixture(`ord-otro-${nonce()}`);
+    const otro = await createExtraTenantFixture(`ord-otro-${nonce()}`);
     const { data: cat } = await admin
       .from("categories")
       .insert({ tenant_id: otro.tenantId, slug: `c-${nonce()}`, name_i18n: { es: "X" } })
@@ -240,7 +264,7 @@ describe("createPendingOrder — extras", () => {
   });
 
   it("rechaza un extra de otro tenant, ignorando su id aunque exista de verdad", async () => {
-    const otro = await createTenantFixture(`ord-extra-otro-${nonce()}`);
+    const otro = await createExtraTenantFixture(`ord-extra-otro-${nonce()}`);
     const { data: cat } = await admin
       .from("categories")
       .insert({ tenant_id: otro.tenantId, slug: `c-${nonce()}`, name_i18n: { es: "X" } })

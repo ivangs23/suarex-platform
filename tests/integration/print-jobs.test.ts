@@ -1,6 +1,12 @@
 import { createPendingOrder, reservePrinted, unprintedPaidOrders } from "@suarex/db";
-import { beforeAll, describe, expect, it } from "vitest";
-import { admin, createTenantFixture, nonce, type TenantFixture } from "./helpers/tenants.js";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import {
+  admin,
+  createTenantFixture,
+  deleteTenantFixture,
+  nonce,
+  type TenantFixture,
+} from "./helpers/tenants.js";
 
 /**
  * Local con dos impresoras habilitadas, una por estación (cocina/barra), y los
@@ -289,6 +295,25 @@ async function createPaidDrinksOnlyOrder(
 let tenant: TenantFixture;
 let venue: Venue;
 
+/** Fixtures de tenant "ajeno"/"propio" creadas ad hoc dentro de tests concretos
+ * (aislamiento cross-tenant, o un tenant propio para no interferir con el
+ * compartido), acumuladas aquí para que un único `afterAll` las borre todas --
+ * acotado a exactamente las fixtures que este fichero crea, nunca un wipe. */
+const extraFixtures: TenantFixture[] = [];
+
+async function createExtraTenantFixture(slug: string): Promise<TenantFixture> {
+  const fixture = await createTenantFixture(slug);
+  extraFixtures.push(fixture);
+  return fixture;
+}
+
+afterAll(async () => {
+  if (tenant) await deleteTenantFixture(tenant);
+  for (const fixture of extraFixtures) {
+    await deleteTenantFixture(fixture);
+  }
+});
+
 beforeAll(async () => {
   tenant = await createTenantFixture(`prn-${nonce()}`);
   venue = await seedVenueWithPrinters(tenant, nonce());
@@ -368,7 +393,7 @@ describe("unprintedPaidOrders", () => {
   it("aísla por tenant: un pedido de otro tenant nunca aparece en unprintedPaidOrders del primero", async () => {
     const orderId = await createPaidMixedOrder(tenant, venue);
 
-    const otherTenant = await createTenantFixture(`prn-otro-${nonce()}`);
+    const otherTenant = await createExtraTenantFixture(`prn-otro-${nonce()}`);
     const otherVenue = await seedVenueWithPrinters(otherTenant, nonce());
     const otherOrderId = await createPaidMixedOrder(otherTenant, otherVenue);
 
@@ -458,7 +483,7 @@ describe("unprintedPaidOrders / reservePrinted — estación necesaria sin impre
     // lado `venues_single_default_per_tenant` impide un segundo local `is_default` en el
     // tenant compartido, y por otro deshabilitar la impresora de barra del `venue`
     // compartido rompería los demás tests de este fichero que siguen necesitándola.
-    const ownTenant = await createTenantFixture(`prn-disable-${nonce()}`);
+    const ownTenant = await createExtraTenantFixture(`prn-disable-${nonce()}`);
     const ownVenue = await seedVenueWithPrinters(ownTenant, nonce());
     const orderId = await createPaidMixedOrder(ownTenant, ownVenue);
 

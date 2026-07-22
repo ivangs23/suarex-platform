@@ -1,8 +1,12 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { TenantFixture } from "./helpers/tenants.js";
-import { admin, createTenantFixture, nonce } from "./helpers/tenants.js";
+import { admin, createTenantFixture, deleteTenantFixture, nonce } from "./helpers/tenants.js";
 
 let fixture: TenantFixture;
+
+afterAll(async () => {
+  if (fixture) await deleteTenantFixture(fixture);
+});
 
 beforeAll(async () => {
   fixture = await createTenantFixture(`mem-${nonce()}`);

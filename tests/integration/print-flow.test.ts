@@ -3,7 +3,13 @@ import { type PrinterConfig, printToPrinter } from "@suarex/printing";
 import { buildTicketLines, type TicketBranding, type TicketOrder } from "@suarex/ticket";
 import { afterEach, describe, expect, it } from "vitest";
 import { type FakedPrinter, startFakePrinter } from "../helpers/fake-escpos-server.js";
-import { admin, createTenantFixture, nonce, type TenantFixture } from "./helpers/tenants.js";
+import {
+  admin,
+  createTenantFixture,
+  deleteTenantFixture,
+  nonce,
+  type TenantFixture,
+} from "./helpers/tenants.js";
 
 /**
  * Prueba de extremo a extremo de la fase C1: un pedido pagado se convierte en
@@ -220,13 +226,22 @@ async function runPrintFlowOnce(
 }
 
 const openPrinters: FakedPrinter[] = [];
+/** Fixtures de tenant creadas por cada `it` (cada uno la suya, vía `createTenantFixture`
+ * directamente, no un módulo `beforeAll` compartido) -- acumuladas aquí para que este
+ * mismo `afterEach` las borre junto a las impresoras falsas, acotado a exactamente la
+ * fixture que ese test creó, nunca un wipe. */
+const createdFixtures: TenantFixture[] = [];
 afterEach(async () => {
   await Promise.all(openPrinters.splice(0).map((p) => p.close()));
+  for (const fixture of createdFixtures.splice(0)) {
+    await deleteTenantFixture(fixture);
+  }
 });
 
 describe("flujo de impresión de extremo a extremo — enrutado + idempotencia", () => {
   it("cada impresora recibe SOLO su destino, y una segunda pasada no reconecta con ninguna", async () => {
     const tenant = await createTenantFixture(`flow-${nonce()}`);
+    createdFixtures.push(tenant);
     const cocina = await startFakePrinter();
     const barra = await startFakePrinter();
     openPrinters.push(cocina, barra);
@@ -293,6 +308,7 @@ describe("flujo de impresión de extremo a extremo — enrutado + idempotencia",
 describe("flujo de impresión de extremo a extremo — recuperación tras impresora caída", () => {
   it("cocina caída en la primera pasada no se marca impresa; la segunda pasada (reconciler) la completa sin reimprimir barra", async () => {
     const tenant = await createTenantFixture(`flow-rec-${nonce()}`);
+    createdFixtures.push(tenant);
     const cocina = await startFakePrinter();
     const barra = await startFakePrinter();
     openPrinters.push(cocina, barra);

@@ -26,6 +26,11 @@ import {
 
 const PASSWORD = "fixture-password-1234";
 
+/** Ids de los usuarios "sin membership" que `createUserWithoutMembership` da de alta,
+ * para que el `afterAll` de este describe los borre uno a uno -- acotado a exactamente
+ * las cuentas que este fichero crea, nunca un `listUsers`/wipe amplio. */
+const usersWithoutMembership: string[] = [];
+
 /** Usuario de Auth real, con sesión real, pero SIN ninguna fila en `memberships`:
  * `custom_access_token_hook` no encuentra membership y no añade `tenant_id` al
  * token, así que su JWT tiene firma válida pero ningún claim de tenant. */
@@ -37,6 +42,7 @@ async function createUserWithoutMembership() {
     email_confirm: true,
   });
   if (userError) throw userError;
+  usersWithoutMembership.push(user.user.id);
 
   const { data: signIn, error: signInError } = await anonClient().auth.signInWithPassword({
     email,
@@ -87,6 +93,10 @@ describe("resolveStaffSession — fail-closed", () => {
   });
 
   afterAll(async () => {
+    for (const userId of usersWithoutMembership.splice(0)) {
+      const { error } = await admin.auth.admin.deleteUser(userId);
+      if (error) throw error;
+    }
     for (const fixture of [tenantA, tenantB]) {
       if (fixture) await deleteTenantFixture(fixture);
     }
