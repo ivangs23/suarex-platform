@@ -5,6 +5,7 @@ export type FakedPrinter = {
   received: () => Buffer;
   connectionCount: () => number;
   failNextConnection: () => void;
+  failAllConnections: () => void;
   close: () => Promise<void>;
 };
 
@@ -18,10 +19,11 @@ export function startFakePrinter(): Promise<FakedPrinter> {
   const chunks: Buffer[] = [];
   let connections = 0;
   let failOnce = false;
+  let failAlways = false;
 
   const server = net.createServer((socket) => {
     connections += 1;
-    if (failOnce) {
+    if (failAlways || failOnce) {
       failOnce = false;
       socket.destroy();
       return;
@@ -43,6 +45,9 @@ export function startFakePrinter(): Promise<FakedPrinter> {
         connectionCount: () => connections,
         failNextConnection: () => {
           failOnce = true;
+        },
+        failAllConnections: () => {
+          failAlways = true;
         },
         close: () => new Promise((res) => server.close(() => res())),
       });
