@@ -302,55 +302,33 @@ describe("un device no ve ni toca nada de OTRO tenant", () => {
 });
 
 describe("regresión: staff conserva el acceso que ya tenía", () => {
-  it("staff puede seguir gestionando el catálogo de su tenant de punta a punta", async () => {
-    // Crea su PROPIA categoría en vez de reutilizar seedA.categoryId: uno de los tests
-    // de arriba (deliberadamente) intenta borrar seedA.categoryId como device, y tras el
-    // fix ese intento queda en 0 filas (la categoría sigue viva) -- pero antes del fix
-    // ese mismo intento SÍ la borra de verdad (es justo la vulnerabilidad que esta suite
-    // demuestra), lo que dejaría este test acoplado al orden/resultado de aquel en vez de
-    // probar, de forma independiente, que staff puede seguir gestionando el catálogo.
-    const { data: category, error: categoryError } = await staffA.client
-      .from("categories")
-      .insert({
-        tenant_id: tenantA.tenantId,
-        slug: `staff-cat-${nonce()}`,
-        name_i18n: { es: "Categoría de staff" },
-      })
-      .select("id")
-      .single();
-    expect(categoryError).toBeNull();
-
-    const { data: inserted, error: insertError } = await staffA.client
-      .from("products")
-      .insert({
-        tenant_id: tenantA.tenantId,
-        category_id: category?.id as string,
-        name_i18n: { es: "Producto de staff" },
-        price: 4.5,
-      })
-      .select("id")
-      .single();
-    expect(insertError).toBeNull();
-    const productId = inserted?.id as string;
+  it("staff YA NO puede gestionar el catálogo de su tenant (D1 tarea 1: escritura de config solo owner/admin)", async () => {
+    // Hasta 20260722000006_role_write_policies.sql, staff podía crear/modificar/borrar
+    // catálogo de punta a punta (era el comportamiento que este mismo test comprobaba
+    // como "regresión que no debía romperse" tras el hardening de device de 000005). La
+    // tarea 1 de la fase D1 introduce la dimensión de rol para las tablas de
+    // CONFIGURACIÓN: staff pasa a solo-lectura ahí, owner/admin son los únicos que
+    // escriben. Cobertura exhaustiva de ese cambio en role-write-policies.test.ts; aquí
+    // solo se confirma que ESTE test concreto -- que antes documentaba lo contrario --
+    // ya no reintroduce en silencio el acceso que acabamos de retirar.
+    const { error: categoryError } = await staffA.client.from("categories").insert({
+      tenant_id: tenantA.tenantId,
+      slug: `staff-cat-${nonce()}`,
+      name_i18n: { es: "Categoría de staff" },
+    });
+    expect(categoryError?.code).toBe("42501");
 
     const { error: updateError } = await staffA.client
       .from("products")
       .update({ price: 5.5 })
-      .eq("id", productId);
+      .eq("id", seedA.productId);
     expect(updateError).toBeNull();
-
-    const { error: deleteError } = await staffA.client
+    const { data: intact } = await admin
       .from("products")
-      .delete()
-      .eq("id", productId);
-    expect(deleteError).toBeNull();
-
-    const { data: gone } = await admin
-      .from("products")
-      .select("id")
-      .eq("id", productId)
-      .maybeSingle();
-    expect(gone).toBeNull();
+      .select("price")
+      .eq("id", seedA.productId)
+      .single();
+    expect(intact?.price).not.toBe(5.5);
   });
 
   it("staff puede seguir insertando y borrando pedidos de su tenant", async () => {

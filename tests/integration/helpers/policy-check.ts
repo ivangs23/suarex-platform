@@ -99,6 +99,26 @@ const ALLERGENS_READ_DEVICE_EXCLUDED_FORM =
 const DEVICE_SELF_ROW_FORM =
   "((tenant_id = current_tenant_id()) AND (current_tenant_role() = 'device'::text) AND (auth_user_id = auth.uid()))";
 
+/**
+ * Segunda ronda de RLS por rol, esta vez para los roles humanos (D1 tarea 1, ver
+ * `20260722000006_role_write_policies.sql`): forma de la policy de ESCRITURA de las
+ * tablas de configuración (`categories`, `products`, `product_extras`, `allergens`,
+ * `tables`, `venues`, `tenant_settings`), que pasa de `for all` sin dimensión de rol a
+ * exigir `owner` o `admin`. `staff` (y también `device`, que tampoco es owner/admin)
+ * quedan fuera. Confirmada empíricamente contra la base local: idéntica byte a byte en
+ * las siete tablas (una sola entrada de allowlist, no una por tabla, tal como predecía
+ * el brief) -- consultado con
+ *   select tablename, policyname, qual, with_check from pg_policies
+ *   where tablename in ('categories','products','product_extras','allergens','tables','venues','tenant_settings');
+ * El SELECT de estas mismas tablas NO usa esta forma: se recreó reutilizando
+ * exactamente `ROLE_EXCLUDED_FORM` (categories/products/product_extras/tables/venues)
+ * o `ALLERGENS_READ_DEVICE_EXCLUDED_FORM` (allergens) ya existentes en este allowlist --
+ * preserva la exclusión de `device` de 000005 en vez de reabrirla, así que no hace
+ * falta ninguna entrada nueva para esos SELECT.
+ */
+const OWNER_ADMIN_WRITE_FORM =
+  "((tenant_id = current_tenant_id()) AND (current_tenant_role() = ANY (ARRAY['owner'::text, 'admin'::text])))";
+
 type PermittedForm = {
   expr: string;
   clause: PolicyClause;
@@ -178,6 +198,16 @@ const PERMITTED_FORMS: readonly PermittedForm[] = [
     clause: "qual",
     commands: ["SELECT"],
     tables: new Set(["devices"]),
+  },
+  {
+    expr: OWNER_ADMIN_WRITE_FORM,
+    clause: "qual",
+    commands: ["ALL"],
+  },
+  {
+    expr: OWNER_ADMIN_WRITE_FORM,
+    clause: "with_check",
+    commands: ["ALL"],
   },
 ];
 

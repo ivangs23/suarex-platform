@@ -146,6 +146,56 @@ export async function deleteMembershipFixtureUser(userId: string): Promise<void>
 }
 
 /**
+ * Cliente de Supabase ya autenticado, devuelto por `signInAs`, con el `userId` de la
+ * cuenta de Auth adjunto -- necesario para que el fichero que llama a `signInAs` pueda
+ * borrar esa cuenta en su propio `afterAll` (acotado a los usuarios que ESE fichero
+ * creó, nunca un wipe general de `auth.users`). Se usa una intersección de tipos en vez
+ * de envolver el cliente en `{ client, userId }` para que los tests puedan seguir
+ * llamando `.from(...)`/`.rpc(...)` directamente sobre el valor devuelto, igual que sobre
+ * cualquier otro `SupabaseClient`.
+ */
+export type SignedInClient = SupabaseClient & { readonly userId: string };
+
+/**
+ * Da de alta un usuario de Auth y una membership con el ROL indicado en un tenant YA
+ * EXISTENTE, y devuelve un cliente YA AUTENTICADO como ese usuario (a diferencia de
+ * `createMembershipFixture`, que devuelve `{ userId, email, client }` por separado).
+ * Sigue el mismo patrón que `createMembershipFixture` (mismo flujo: crear usuario de
+ * Auth vía service role, insertar membership, iniciar sesión con el cliente anon) --
+ * pensado para tests que solo necesitan "un cliente de tal rol en tal tenant" sin
+ * desestructurar un objeto intermedio. Limpieza: `deleteMembershipFixtureUser(client.userId)`
+ * en el `afterAll` del fichero que llama a `signInAs`.
+ */
+export async function signInAs(
+  tenantId: string,
+  role: "owner" | "admin" | "staff" | "device",
+): Promise<SignedInClient> {
+  const email = `signin-${role}-${nonce()}@fixture.local`;
+  const { data: user, error: userError } = await admin.auth.admin.createUser({
+    email,
+    password: PASSWORD,
+    email_confirm: true,
+  });
+  if (userError) throw userError;
+
+  const { error: membershipError } = await admin
+    .from("memberships")
+    .insert({ user_id: user.user.id, tenant_id: tenantId, role });
+  if (membershipError) throw membershipError;
+
+  const client = createClient(url, anonKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+  const { error: signInError } = await client.auth.signInWithPassword({
+    email,
+    password: PASSWORD,
+  });
+  if (signInError) throw signInError;
+
+  return Object.assign(client, { userId: user.user.id });
+}
+
+/**
  * Borra la fila de `tenants` y el usuario de auth creados por createTenantFixture.
  * Acotado por diseño: solo recibe el tenantId/userId concretos de la fixture (nunca un
  * patrón/wildcard), para que no pueda derivar en un borrado masivo de `tenants` o
