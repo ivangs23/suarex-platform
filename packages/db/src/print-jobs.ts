@@ -18,7 +18,7 @@ export type PrintableOrder = {
 
 type StationStatus = "pending" | "done" | "na";
 
-type PaidOrderRow = {
+export type PaidOrderRow = {
   id: string;
   order_number: number;
   created_at: string;
@@ -35,7 +35,7 @@ type PaidOrderRow = {
   }[];
 };
 
-type EnabledPrinterRow = {
+export type EnabledPrinterRow = {
   id: string;
   venue_id: string;
   destination: "cocina" | "barra" | "all";
@@ -97,6 +97,43 @@ function targetPrinterIds(
     .filter((p) => p.venue_id === order.venue_id)
     .filter((p) => p.destination === "all" || needed.has(p.destination))
     .map((p) => p.id);
+}
+
+/**
+ * Núcleo PURO (sin I/O) de `unprintedPaidOrders`: dado el conjunto crudo de filas de
+ * `orders` (pagadas y sin `printed_at`) y de `printers` habilitadas, decide qué pedidos
+ * siguen pendientes de imprimir y los mapea a `PrintableOrder`. Extraído para que la ruta
+ * del dispositivo (`@suarex/agent`, que lee con el JWT del device en vez del service role)
+ * reutilice EXACTAMENTE esta lógica sin una tercera copia -- ver el razonamiento en
+ * `docs/superpowers/specs/2026-07-22-agente-impresion-c2a-design.md`. El aislamiento por
+ * tenant NO vive aquí: lo aplica quien hace los `select` (tenantScoped en la ruta
+ * service-role, la RLS en la del dispositivo), así que esta función solo ve filas del
+ * tenant correcto y no necesita conocer el `tenant_id`.
+ */
+export function selectUnprintedOrders(
+  orderRows: PaidOrderRow[],
+  printerRows: EnabledPrinterRow[],
+): PrintableOrder[] {
+  return orderRows
+    .filter((row) => {
+      const targets = targetPrinterIds(row, printerRows);
+      if (targets.length === 0) return false; // nada que imprimir: no queda pendiente
+      const covered = row.printed_targets ?? {};
+      return !targets.every((id) => Object.hasOwn(covered, id));
+    })
+    .map((row) => ({
+      id: row.id,
+      orderNumber: row.order_number,
+      tableLabel: row.tables?.label ?? null,
+      createdAt: row.created_at,
+      printedTargets: row.printed_targets ?? {},
+      items: row.order_items.map((item) => ({
+        name: resolveItemName(item.name_snapshot),
+        quantity: item.quantity,
+        destination: item.destination,
+        notes: item.notes,
+      })),
+    }));
 }
 
 /**
@@ -165,32 +202,7 @@ export async function unprintedPaidOrders(tenantId: string): Promise<PrintableOr
   if (ordersError) throw ordersError;
 
   const printers = printerRows as unknown as EnabledPrinterRow[];
-
-  return (orderRows as unknown as PaidOrderRow[])
-    .filter((row) => {
-      const targets = targetPrinterIds(row, printers);
-      // Decisión (ver el comentario de trade-off en targetPrinterIds): targets vacío
-      // puede significar "nada que imprimir" O "estación necesaria sin ninguna
-      // impresora habilitada" -- ambos se excluyen de pendientes aquí. El segundo caso
-      // es un drop silencioso de esa estación; queda documentado como deferred item,
-      // no resuelto en este cambio.
-      if (targets.length === 0) return false; // nada que imprimir: no queda pendiente
-      const covered = row.printed_targets ?? {};
-      return !targets.every((id) => Object.hasOwn(covered, id));
-    })
-    .map((row) => ({
-      id: row.id,
-      orderNumber: row.order_number,
-      tableLabel: row.tables?.label ?? null,
-      createdAt: row.created_at,
-      printedTargets: row.printed_targets ?? {},
-      items: row.order_items.map((item) => ({
-        name: resolveItemName(item.name_snapshot),
-        quantity: item.quantity,
-        destination: item.destination,
-        notes: item.notes,
-      })),
-    }));
+  return selectUnprintedOrders(orderRows as unknown as PaidOrderRow[], printers);
 }
 
 /**
