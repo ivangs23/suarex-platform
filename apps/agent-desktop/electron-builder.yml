@@ -1,0 +1,21 @@
+appId: app.suarex.agent
+productName: SuarEx Agente
+directories:
+  output: release
+  buildResources: build
+files:
+  - out/**
+# koffi trae un binario nativo (.node): debe salir del asar para poder cargarse en runtime.
+asarUnpack:
+  - "**/node_modules/koffi/**"
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
