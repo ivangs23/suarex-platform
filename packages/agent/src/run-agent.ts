@@ -76,12 +76,11 @@ export async function runAgentTick(client: SupabaseClient): Promise<AgentTickRes
       if (!applies) continue;
       if (Object.hasOwn(order.printedTargets, printer.id)) continue;
 
-      // Para una impresora 'all', imprime cada destino que el pedido use. `?? "cocina"` es
-      // un fallback defensivo para el caso patológico de un pedido sin items (nunca debería
-      // ocurrir: `neededDestinations` sale de `order.items`, que siempre trae al menos una
-      // línea) -- solo para satisfacer `noUncheckedIndexedAccess` sin lanzar.
-      const renderDest = dest === "all" ? ([...neededDestinations][0] ?? "cocina") : dest;
-      const lines = buildTicketLines(ticketOrder, branding, renderDest);
+      // `buildTicketLines` ya sabe qué hacer con "all": incluye TODOS los items del pedido
+      // en un único ticket (en vez de filtrar por estación). Pasarle `dest` tal cual --sin
+      // reducirlo a una sola estación-- es lo que evita que una impresora 'all' combinada
+      // pierda en silencio los items de otra estación.
+      const lines = buildTicketLines(ticketOrder, branding, dest);
       const config: PrinterConfig = {
         id: printer.id,
         label: printer.id,
@@ -97,7 +96,15 @@ export async function runAgentTick(client: SupabaseClient): Promise<AgentTickRes
           p_printer_id: printer.id,
           p_at: new Date().toISOString(),
         });
-        if (error) throw error;
+        if (error) {
+          // La entrega YA tuvo éxito; solo falló registrarlo. No hay pérdida de datos --
+          // un pedido impreso-pero-no-marcado simplemente se reimprime en el siguiente tick
+          // (el trade-off aceptado de at-least-once) -- pero un fallo puntual de esta RPC no
+          // debe abortar el tick entero y dejar sin intentar el resto de impresoras/pedidos.
+          console.error("[agent] fallo al marcar impreso:", error);
+          failed += 1;
+          continue;
+        }
         printed += 1;
       } else {
         failed += 1;
