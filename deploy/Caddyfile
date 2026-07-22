@@ -1,0 +1,51 @@
+# Entrada única del VPS. Termina TLS y reparte por Host:
+#   api.<dominio>       -> Kong (la API de Supabase)
+#   *.<dominio> y raíz  -> la web (Next), que resuelve el tenant por Host
+#
+# El certificado es COMODÍN (`*.<dominio>`) porque cada cliente vive en su propio
+# subdominio y darlos de alta uno a uno en el certificado obligaría a reemitirlo con cada
+# alta. Let's Encrypt solo firma comodines por challenge DNS-01: de ahí el token de
+# Cloudflare (ver Dockerfile.caddy).
+
+{
+	email {$ACME_EMAIL}
+}
+
+# El comodín NO cubre el dominio desnudo (`*.suarex.app` no incluye `suarex.app`), así que
+# se declaran los dos. Caddy pide un certificado que cubra ambos.
+*.{$PLATFORM_DOMAIN}, {$PLATFORM_DOMAIN} {
+	tls {
+		dns cloudflare {$CLOUDFLARE_API_TOKEN}
+	}
+
+	# Cabeceras de seguridad para toda la plataforma. HSTS incluye subdominios porque cada
+	# cliente vive en uno: sin `includeSubDomains` un `garum.suarex.app` en claro seguiría
+	# siendo un objetivo de downgrade.
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	# La API de Supabase (auth, PostgREST, storage, realtime) cuelga de su propio
+	# subdominio. Va ANTES del handle genérico: el primer matcher que case gana.
+	@api host api.{$PLATFORM_DOMAIN}
+	handle @api {
+		reverse_proxy kong:8000
+	}
+
+	# Studio, si lo levantas. Está detrás de la autenticación básica de Kong, pero aun así
+	# conviene no dejarlo colgando de un subdominio adivinable sin más: considera cerrarlo
+	# por IP o no exponerlo y llegar por túnel SSH.
+	@studio host studio.{$PLATFORM_DOMAIN}
+	handle @studio {
+		reverse_proxy kong:8000
+	}
+
+	# Todo lo demás es la plataforma. `reverse_proxy` conserva el Host original, que es
+	# justo de lo que depende `proxy.ts` para resolver el tenant -- no lo reescribas.
+	handle {
+		reverse_proxy web:3000
+	}
+}
