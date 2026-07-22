@@ -88,8 +88,9 @@ function buildConnection(input: PrinterConnectionInput): PrinterConnection {
 }
 
 /**
- * Crea una impresora de red. `venueId` que pertenezca a otro tenant, o un `deviceId` (si
- * se indica) que pertenezca a otro tenant, los rechaza el trigger `assert_same_tenant`
+ * Crea una impresora (de red o USB, según `input.connection.type`; `buildConnection` valida
+ * y compone el descriptor `jsonb`). `venueId` que pertenezca a otro tenant, o un `deviceId`
+ * (si se indica) que pertenezca a otro tenant, los rechaza el trigger `assert_same_tenant`
  * (`20260722000001_devices_printers.sql`), no una comprobación en esta capa -- mismo
  * patrón que `createDevice`/`createTable`: este repositorio confía en que la base rechace
  * la referencia cruzada y se limita a propagar el error de Postgres tal cual
@@ -118,14 +119,12 @@ export async function createPrinter(
 }
 
 /**
- * `host`/`port` viajan sueltos en `UpdatePrinterInput` (no como un `connection` ya
- * compuesto) para que quien llame no tenga que conocer la forma interna de la columna
- * `jsonb` -- misma idea que `CreatePrinterInput`. Como la columna guarda el objeto
- * `connection` completo (no columnas `host`/`port` separadas), cambiar solo uno de los
- * dos sin el otro dejaría la reconstrucción del objeto ambigua (¿de dónde sale el valor
- * que no se manda: se conserva el actual, con una lectura previa, o se rechaza?). Se opta
- * por rechazar: si se quiere tocar la conexión, `host` y `port` se mandan juntos, sin
- * necesidad de leer la fila actual primero.
+ * La conexión llega como un descriptor ATÓMICO (`patch.connection`), no como campos
+ * `host`/`port` sueltos: la columna `jsonb` guarda el objeto `connection` completo, así que
+ * un descriptor entero (red o USB) evita por construcción el problema de "cambiar solo host
+ * o solo port" -- ese estado ni siquiera es expresable en el tipo. `connection` solo se
+ * reescribe si `patch.connection !== undefined`; si se omite, la conexión actual no se toca.
+ * La validación de la forma (host/port o printerName) vive en `buildConnection`.
  */
 export async function updatePrinter(
   tenantId: string,
