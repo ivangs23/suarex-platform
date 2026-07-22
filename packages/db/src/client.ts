@@ -45,7 +45,16 @@ export type TenantScopedTable =
   | "orders"
   | "order_items"
   | "order_item_extras"
-  | "printers";
+  | "printers"
+  // Task 3 (D2, generación del código de emparejamiento, `src/admin-devices.ts`):
+  // `devices` tiene `tenant_id` igual que el resto de esta unión y encaja sin más.
+  // NO sustituye a `devicesTableForPairing` (quinta exención más abajo): esa sigue
+  // siendo la única vía para el canje por `pairing_code` -- una búsqueda que, por
+  // definición, ocurre ANTES de que el llamante conozca el tenant, así que no puede
+  // pasar por `tenantScoped`. `tenantScoped("devices", tenantId)` es para el lado
+  // contrario: crear/listar/borrar dispositivos cuando el tenant YA se conoce
+  // (sesión de owner/admin en el panel).
+  | "devices";
 
 /**
  * ÚNICO punto de entrada a una tabla tenant-scoped desde este paquete. `tenantId` es un

@@ -8,7 +8,7 @@ import type { TableRow } from "./types.js";
  */
 export async function findTableByToken(token: string): Promise<TableRow | null> {
   const { data, error } = await tablesTableForTokenResolution()
-    .select("id, tenant_id, venue_id, label, is_active")
+    .select("id, tenant_id, venue_id, label, is_active, token")
     .eq("token", token)
     .maybeSingle();
 
@@ -21,5 +21,6 @@ export async function findTableByToken(token: string): Promise<TableRow | null> 
     venueId: data.venue_id as string,
     label: data.label as string,
     isActive: data.is_active as boolean,
+    token: data.token as string,
   };
 }
