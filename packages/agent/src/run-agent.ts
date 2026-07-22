@@ -10,11 +10,19 @@ const DEFAULT_POLL_MS = 4000;
 
 export type AgentTickResult = { printed: number; failed: number };
 
-type PrinterRow = {
+type PrinterRowDb = {
   id: string;
   venue_id: string;
+  device_id: string | null;
   destination: "cocina" | "barra" | "all";
-  connection: { type?: string; host?: string; port?: number };
+  connection: { type?: string; host?: string; port?: number; printerName?: string };
+};
+
+type ResolvedPrinter = {
+  id: string;
+  venueId: string;
+  destination: "cocina" | "barra" | "all";
+  config: PrinterConfig;
 };
 
 /** Cabecera del ticket a partir de la marca del tenant (nombre comercial), leída con el
@@ -26,14 +34,64 @@ async function ticketBranding(client: SupabaseClient): Promise<TicketBranding> {
   return { header: name ?? "" };
 }
 
-/** Impresoras de RED habilitadas del tenant (las USB son C2b; se ignoran aquí). */
-async function networkPrinters(client: SupabaseClient): Promise<PrinterRow[]> {
+/** Impresora id del PROPIO dispositivo del agente, leída con su JWT (`devices_select_own`
+ * devuelve solo la fila cuyo `auth_user_id = auth.uid()`). `null` si no hay fila (p. ej. un
+ * device sembrado sin fila en `devices`): entonces no se reclama ninguna USB. */
+async function ownDeviceId(client: SupabaseClient): Promise<string | null> {
+  const { data } = await client.from("devices").select("id").maybeSingle();
+  return (data?.id as string | undefined) ?? null;
+}
+
+/**
+ * Impresoras habilitadas que este agente puede imprimir, con su `PrinterConfig` ya
+ * construida por tipo:
+ *   - RED (`connection.type === "network"`): cualquier agente del tenant la alcanza; el
+ *     acotado por local (`venue_id`) lo aplica el bucle de impresión (igual que antes).
+ *   - USB (`connection.type === "usb"`): SOLO si `device_id` es el propio dispositivo -- una
+ *     impresora USB está físicamente en ESTE PC, así que ningún otro agente debe reclamarla.
+ * Un tipo desconocido, o una USB de otro device, se ignora.
+ */
+async function resolvePrinters(client: SupabaseClient): Promise<ResolvedPrinter[]> {
+  const deviceId = await ownDeviceId(client);
   const { data, error } = await client
     .from("printers")
-    .select("id, venue_id, destination, connection")
+    .select("id, venue_id, device_id, destination, connection")
     .eq("enabled", true);
   if (error) throw error;
-  return (data as unknown as PrinterRow[]).filter((p) => p.connection?.type === "network");
+
+  const resolved: ResolvedPrinter[] = [];
+  for (const p of data as unknown as PrinterRowDb[]) {
+    const conn = p.connection ?? {};
+    if (conn.type === "network") {
+      resolved.push({
+        id: p.id,
+        venueId: p.venue_id,
+        destination: p.destination,
+        config: {
+          adapter: "escpos-tcp",
+          id: p.id,
+          label: p.id,
+          destination: p.destination,
+          host: conn.host as string,
+          port: conn.port as number,
+        },
+      });
+    } else if (conn.type === "usb" && deviceId !== null && p.device_id === deviceId) {
+      resolved.push({
+        id: p.id,
+        venueId: p.venue_id,
+        destination: p.destination,
+        config: {
+          adapter: "escpos-usb",
+          id: p.id,
+          label: p.id,
+          destination: p.destination,
+          printerName: conn.printerName as string,
+        },
+      });
+    }
+  }
+  return resolved;
 }
 
 function toTicketOrder(order: PrintableOrder): TicketOrder {
@@ -61,7 +119,7 @@ function toTicketOrder(order: PrintableOrder): TicketOrder {
 export async function runAgentTick(client: SupabaseClient): Promise<AgentTickResult> {
   const [orders, printers, branding] = await Promise.all([
     unprintedPaidOrdersForDevice(client),
-    networkPrinters(client),
+    resolvePrinters(client),
     ticketBranding(client),
   ]);
 
@@ -72,34 +130,18 @@ export async function runAgentTick(client: SupabaseClient): Promise<AgentTickRes
     const ticketOrder = toTicketOrder(order);
     const neededDestinations = new Set(order.items.map((i) => i.destination));
     for (const printer of printers) {
-      // Ceguera de venue (revisión final whole-branch, Finding 1): en un tenant con
-      // varios locales, dos impresoras del MISMO `destination` en locales distintos son
-      // "el mismo destino" a ojos del filtro de arriba, pero solo una de ellas es la del
-      // local real del pedido. Sin esta comprobación, la impresora de OTRO local
-      // imprimiría el ticket en silencio -- físicamente en el restaurante equivocado. El
-      // camino de LECTURA (`targetPrinterIds`, `packages/db/src/print-jobs.ts`) ya filtra
-      // por venue al decidir qué está cubierto; esta es la misma comprobación aplicada
-      // aquí, en el camino de ENTREGA, que antes no la tenía.
-      if (printer.venue_id !== order.venueId) continue;
+      // Acotado por local (venue) para TODAS las impresoras (red y USB): un pedido solo se
+      // imprime en las impresoras de su propio local (ver Finding 1 de C2a).
+      if (printer.venueId !== order.venueId) continue;
       const dest = printer.destination;
       const applies = dest === "all" || neededDestinations.has(dest);
       if (!applies) continue;
       if (Object.hasOwn(order.printedTargets, printer.id)) continue;
 
-      // `buildTicketLines` ya sabe qué hacer con "all": incluye TODOS los items del pedido
-      // en un único ticket (en vez de filtrar por estación). Pasarle `dest` tal cual --sin
-      // reducirlo a una sola estación-- es lo que evita que una impresora 'all' combinada
-      // pierda en silencio los items de otra estación.
       const lines = buildTicketLines(ticketOrder, branding, dest);
-      const config: PrinterConfig = {
-        id: printer.id,
-        label: printer.id,
-        destination: dest,
-        adapter: "escpos-tcp",
-        host: printer.connection.host as string,
-        port: printer.connection.port as number,
-      };
-      const result = await enqueueByDevice(deviceKey(config), () => printToPrinter(lines, config));
+      const result = await enqueueByDevice(deviceKey(printer.config), () =>
+        printToPrinter(lines, printer.config),
+      );
       if (result.ok) {
         const { error } = await client.rpc("reserve_printed_self", {
           p_order_id: order.id,
