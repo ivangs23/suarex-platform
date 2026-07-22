@@ -26,7 +26,7 @@ describe("destinationsMissingPrinter", () => {
   it("avisa de un destino que la carta usa pero sin impresora habilitada", async () => {
     const tenant = await createTenantFixture(`cov-${nonce()}`);
     fixtures.push(tenant);
-    await seedVenue(tenant);
+    const venueId = await seedVenue(tenant);
     // La carta usa cocina...
     await admin.from("categories").insert({
       tenant_id: tenant.tenantId,
@@ -35,7 +35,8 @@ describe("destinationsMissingPrinter", () => {
       destination: "cocina",
     });
     // ...pero no hay ninguna impresora.
-    expect(await destinationsMissingPrinter(tenant.tenantId)).toEqual(["cocina"]);
+    const gaps = await destinationsMissingPrinter(tenant.tenantId);
+    expect(gaps).toEqual([{ venueId, venueName: "V", destinations: ["cocina"] }]);
   });
 
   it("no avisa cuando el destino tiene una impresora habilitada", async () => {
@@ -98,6 +99,55 @@ describe("destinationsMissingPrinter", () => {
       destination: "cocina",
       enabled: false,
     });
-    expect(await destinationsMissingPrinter(tenant.tenantId)).toEqual(["cocina"]);
+    const gaps = await destinationsMissingPrinter(tenant.tenantId);
+    expect(gaps).toEqual([{ venueId, venueName: "V", destinations: ["cocina"] }]);
+  });
+
+  /**
+   * Finding 2 de la revisión final whole-branch (spec línea ~112, "por local"): dos
+   * locales del MISMO tenant, la carta usa cocina, solo V1 tiene impresora de cocina
+   * habilitada. Contra el código ANTERIOR (cobertura calculada a nivel de tenant), la
+   * impresora de V1 habría "cubierto" el destino para el tenant entero y V2 -- que en
+   * realidad no tiene ninguna impresora de cocina -- no habría aparecido en el aviso. El
+   * fix reporta V2, y solo V2 (V1 sigue cubierto y no aparece).
+   */
+  it("dos locales, solo uno tiene la impresora -> el OTRO local se reporta con el hueco", async () => {
+    const tenant = await createTenantFixture(`cov5-${nonce()}`);
+    fixtures.push(tenant);
+    const { data: v1 } = await admin
+      .from("venues")
+      .insert({ tenant_id: tenant.tenantId, slug: `v1-${nonce()}`, name: "V1", is_default: true })
+      .select("id")
+      .single();
+    const venue1Id = v1?.id as string;
+    const { data: v2 } = await admin
+      .from("venues")
+      .insert({ tenant_id: tenant.tenantId, slug: `v2-${nonce()}`, name: "V2", is_default: false })
+      .select("id")
+      .single();
+    const venue2Id = v2?.id as string;
+
+    // La carta (tenant-level) usa cocina.
+    await admin.from("categories").insert({
+      tenant_id: tenant.tenantId,
+      slug: `k-${nonce()}`,
+      name_i18n: { es: "Cocina" },
+      destination: "cocina",
+    });
+
+    // Solo V1 tiene impresora de cocina habilitada; V2 no tiene ninguna.
+    await admin.from("printers").insert({
+      tenant_id: tenant.tenantId,
+      venue_id: venue1Id,
+      name: "Cocina V1",
+      connection: { type: "network", host: "127.0.0.1", port: 9100 },
+      destination: "cocina",
+      enabled: true,
+    });
+
+    const gaps = await destinationsMissingPrinter(tenant.tenantId);
+    expect(gaps).toEqual([{ venueId: venue2Id, venueName: "V2", destinations: ["cocina"] }]);
+    // V1 (cubierto) NO aparece en el resultado.
+    expect(gaps.some((g) => g.venueId === venue1Id)).toBe(false);
   });
 });
