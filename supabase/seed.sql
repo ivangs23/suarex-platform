@@ -42,36 +42,39 @@ select id, 'principal', 'Principal', true from public.tenants where slug in ('ga
 -- Catálogo de muestra con volumen suficiente para que los temas de la carta se vean con
 -- contenido real (varias categorías y productos por cliente). Los datos definitivos de
 -- producción se importarán en su propio sub-proyecto.
-insert into public.categories (tenant_id, slug, name_i18n, destination, sort_order)
-select t.id, c.slug, c.name_i18n, c.destination, c.sort_order
+-- `icon`: emoji de la categoría, como en la carta real de garum (sus 59 categorías lo
+-- tienen). `entrantes` va sin icono a propósito, para que el seed ejerza también el caso
+-- de categoría SIN icono: los temas no deben pintar un hueco ni romperse por eso.
+insert into public.categories (tenant_id, slug, name_i18n, icon, destination, sort_order)
+select t.id, c.slug, c.name_i18n, c.icon, c.destination, c.sort_order
   from public.tenants t
   cross join (values
-    ('vinos',     '{"es":"Vinos","en":"Wines"}'::jsonb,          'barra',  0),
-    ('entrantes', '{"es":"Entrantes","en":"Starters"}'::jsonb,   'cocina', 1),
-    ('postres',   '{"es":"Postres","en":"Desserts"}'::jsonb,     'cocina', 2)
-  ) as c(slug, name_i18n, destination, sort_order)
+    ('vinos',     '{"es":"Vinos","en":"Wines"}'::jsonb,          '🍷',  'barra',  0),
+    ('entrantes', '{"es":"Entrantes","en":"Starters"}'::jsonb,   null,  'cocina', 1),
+    ('postres',   '{"es":"Postres","en":"Desserts"}'::jsonb,     '🍮',  'cocina', 2)
+  ) as c(slug, name_i18n, icon, destination, sort_order)
  where t.slug = 'garum'
 union all
-select t.id, c.slug, c.name_i18n, c.destination, c.sort_order
+select t.id, c.slug, c.name_i18n, c.icon, c.destination, c.sort_order
   from public.tenants t
   cross join (values
-    ('tostas', '{"es":"Tostas","en":"Toasts"}'::jsonb,     'cocina', 0),
-    ('cafes',  '{"es":"Cafés","en":"Coffee"}'::jsonb,      'barra',  1),
-    ('dulces', '{"es":"Dulces","en":"Pastries"}'::jsonb,   'cocina', 2)
-  ) as c(slug, name_i18n, destination, sort_order)
+    ('tostas', '{"es":"Tostas","en":"Toasts"}'::jsonb,     '🥪',  'cocina', 0),
+    ('cafes',  '{"es":"Cafés","en":"Coffee"}'::jsonb,      '☕',  'barra',  1),
+    ('dulces', '{"es":"Dulces","en":"Pastries"}'::jsonb,   '🥐',  'cocina', 2)
+  ) as c(slug, name_i18n, icon, destination, sort_order)
  where t.slug = 'manuela';
 
 -- Segundo nivel de garum: su carta real es un ÁRBOL (Vinos → Tintos → botellas), no una
 -- lista plana, así que el seed tiene que tener al menos un nivel anidado para que la
 -- navegación por niveles de la carta sea demostrable en local. Va en un insert aparte
 -- porque `parent_id` referencia filas creadas justo arriba.
-insert into public.categories (tenant_id, slug, name_i18n, destination, sort_order, parent_id)
-select t.id, c.slug, c.name_i18n, c.destination, c.sort_order, padre.id
+insert into public.categories (tenant_id, slug, name_i18n, icon, destination, sort_order, parent_id)
+select t.id, c.slug, c.name_i18n, c.icon, c.destination, c.sort_order, padre.id
   from public.tenants t
   cross join (values
-    ('tintos',  '{"es":"Tintos","en":"Reds"}'::jsonb,     'barra', 0, 'vinos'),
-    ('blancos', '{"es":"Blancos","en":"Whites"}'::jsonb,  'barra', 1, 'vinos')
-  ) as c(slug, name_i18n, destination, sort_order, parent_slug)
+    ('tintos',  '{"es":"Tintos","en":"Reds"}'::jsonb,     '🍷', 'barra', 0, 'vinos'),
+    ('blancos', '{"es":"Blancos","en":"Whites"}'::jsonb,  '🥂', 'barra', 1, 'vinos')
+  ) as c(slug, name_i18n, icon, destination, sort_order, parent_slug)
   join public.categories padre
     on padre.tenant_id = t.id and padre.slug = c.parent_slug
  where t.slug = 'garum';

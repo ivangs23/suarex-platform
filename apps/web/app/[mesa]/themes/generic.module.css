@@ -109,6 +109,11 @@
   border-radius: 0.75rem;
 }
 
+.cardIcon {
+  font-size: 1.75rem;
+  line-height: 1;
+}
+
 .cardName {
   font-family: var(--font-playfair), Georgia, serif;
   font-weight: 700;

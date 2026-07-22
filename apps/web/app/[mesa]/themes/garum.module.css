@@ -159,6 +159,11 @@
   box-shadow: var(--garum-shadow);
 }
 
+.cardIcon {
+  font-size: 2rem;
+  line-height: 1;
+}
+
 .cardName {
   font-family: var(--font-playfair), Georgia, serif;
   font-weight: 700;
