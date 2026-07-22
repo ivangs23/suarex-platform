@@ -3,7 +3,7 @@
 import type { DeviceRow as DeviceRecord } from "@suarex/db";
 import { useActionState } from "react";
 import { ConfirmDeleteForm } from "../catalogo/ConfirmDeleteForm";
-import { deleteDeviceAction, regeneratePairingCodeAction } from "./actions";
+import { deleteDeviceAction, regeneratePairingCodeAction, resetDeviceAction } from "./actions";
 import { PairingCodeView } from "./PairingCodeView";
 
 type PairingState = { pairingCode: string; expiresAt: string } | null;
@@ -41,6 +41,11 @@ function formatStatus(device: DeviceRecord): string {
  */
 export function DeviceRow({ device, venueName }: { device: DeviceRecord; venueName: string }) {
   const [pairing, regenerateAction, isPending] = useActionState(submitRegenerate, null);
+  const [resetPairing, resetAction, isResetting] = useActionState(
+    async (_prev: PairingState, formData: FormData): Promise<PairingState> =>
+      resetDeviceAction(formData),
+    null,
+  );
 
   return (
     <article data-testid="admin-device" data-device-id={device.id}>
@@ -60,6 +65,35 @@ export function DeviceRow({ device, venueName }: { device: DeviceRecord; venueNa
           </button>
         </form>
       )}
+
+      {device.pairedAt ? (
+        <>
+          {resetPairing ? (
+            <PairingCodeView
+              pairingCode={resetPairing.pairingCode}
+              expiresAt={resetPairing.expiresAt}
+            />
+          ) : null}
+          <form action={resetAction}>
+            <input type="hidden" name="device_id" value={device.id} />
+            <button
+              type="submit"
+              disabled={isResetting}
+              onClick={(e) => {
+                if (
+                  !window.confirm(
+                    `Resetear "${device.name}" revoca el acceso del PC actual (deja de poder renovar su sesión) y genera un código nuevo para emparejar otro PC. Úsalo si el equipo se ha perdido o se sustituye. ¿Continuar?`,
+                  )
+                ) {
+                  e.preventDefault();
+                }
+              }}
+            >
+              Resetear dispositivo
+            </button>
+          </form>
+        </>
+      ) : null}
 
       <ConfirmDeleteForm
         action={deleteDeviceAction}

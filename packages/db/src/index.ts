@@ -33,7 +33,13 @@ export type {
   DeviceRow,
   RegeneratePairingCodeResult,
 } from "./admin-devices.js";
-export { createDevice, deleteDevice, listDevices, regeneratePairingCode } from "./admin-devices.js";
+export {
+  createDevice,
+  deleteDevice,
+  listDevices,
+  regeneratePairingCode,
+  resetDevice,
+} from "./admin-devices.js";
 export type {
   CreatePrinterInput,
   PrinterConnection,

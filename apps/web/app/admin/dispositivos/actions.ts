@@ -5,6 +5,7 @@ import {
   deleteDevice,
   type RegeneratePairingCodeResult,
   regeneratePairingCode,
+  resetDevice,
 } from "@suarex/db";
 import { revalidatePath } from "next/cache";
 import { parsePairingTtlMinutes } from "@/lib/device-action-input";
@@ -79,3 +80,12 @@ export const deleteDeviceAction = managerAction(async (session, formData: FormDa
   await deleteDevice(session.tenantId, deviceId);
   revalidatePath("/admin/dispositivos");
 });
+
+export const resetDeviceAction = managerAction(
+  async (session, formData: FormData): Promise<{ pairingCode: string; expiresAt: string }> => {
+    const deviceId = requiredString(formData, "device_id");
+    const result = await resetDevice(session.tenantId, deviceId);
+    revalidatePath("/admin/dispositivos");
+    return result;
+  },
+);

@@ -300,3 +300,14 @@ export function pairRateLimitRpc(ip: string, windowSeconds: number, max: number)
     p_max: max,
   });
 }
+
+/**
+ * DUODÉCIMA EXENCIÓN DELIBERADA, mismo razonamiento que `authAdminForDevicePairing` pero
+ * para el reset: `resetDevice` (`src/admin-devices.ts`) borra la cuenta de Auth del
+ * dispositivo (`deleteUser`) para revocar sus refresh tokens y su membership al dar de baja
+ * o sustituir el PC. Acotado por firma a ese único uso; no se reutiliza el de pairing para
+ * que cada punto que borra cuentas de Auth sea rastreable a un caller.
+ */
+export function authAdminForDeviceReset() {
+  return serviceClient().auth.admin;
+}
