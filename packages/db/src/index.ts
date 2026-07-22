@@ -27,6 +27,13 @@ export {
   updateCategory,
   updateProduct,
 } from "./admin-catalog.js";
+export type {
+  CreateDeviceInput,
+  CreateDeviceResult,
+  DeviceRow,
+  RegeneratePairingCodeResult,
+} from "./admin-devices.js";
+export { createDevice, deleteDevice, listDevices, regeneratePairingCode } from "./admin-devices.js";
 export type { CreateTableInput, UpdateTableInput } from "./admin-tables.js";
 export { createTable, deleteTable, listTables, updateTable } from "./admin-tables.js";
 export { getCategories, getProducts } from "./catalog.js";
