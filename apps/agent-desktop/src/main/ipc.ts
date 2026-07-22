@@ -1,6 +1,7 @@
 import { type BrowserWindow, ipcMain } from "electron";
+import { type OpenAdminResult, openAdminWindow } from "./admin-window.js";
 import { isAgentRunning, startAgent, stopAgent } from "./agent-runner.js";
-import { PAIR_ENDPOINT_ORIGIN } from "./baked-config.js";
+import { PLATFORM_WEB_ORIGIN } from "./baked-config.js";
 import { loadCredentials, saveCredentials } from "./config-store.js";
 import { type PairError, pairDevice } from "./pairing.js";
 import { listLocalPrinters, printTestTicket } from "./printers.js";
@@ -17,6 +18,11 @@ function isPairError(e: unknown): e is PairError {
 /** Registra los canales IPC. El renderer nunca toca Node/Electron directo: todo pasa por
  * estos handlers vía el puente contextBridge del preload. */
 export function registerIpc(getWindow: () => BrowserWindow | null): void {
+  // Abre el panel de gestión de la plataforma en su propia ventana. No recibe ningún
+  // parámetro a propósito: la URL sale del origen horneado en el build, nunca de algo que
+  // pueda teclear o inyectar el renderer.
+  ipcMain.handle("open-admin", (): OpenAdminResult => openAdminWindow());
+
   ipcMain.handle("list-printers", async () => {
     const win = getWindow();
     return win ? listLocalPrinters(win) : [];
@@ -33,7 +39,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     // rechazando la promesa tal cual, para no camuflarlo como "fallo de red".
     let creds: Awaited<ReturnType<typeof pairDevice>>;
     try {
-      creds = await pairDevice(PAIR_ENDPOINT_ORIGIN, pairingCode);
+      creds = await pairDevice(PLATFORM_WEB_ORIGIN, pairingCode);
     } catch (e) {
       if (isPairError(e)) return { ok: false, kind: e.kind };
       throw e;

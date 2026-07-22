@@ -1,3 +1,4 @@
+import type { OpenAdminResult } from "../main/admin-window.js";
 import type { PairIpcResult } from "../main/ipc.js";
 
 type AgentApi = {
@@ -6,6 +7,7 @@ type AgentApi = {
   testPrint(printerName: string): Promise<{ ok: boolean }>;
   getStatus(): Promise<{ paired: boolean; running: boolean; deviceId: string | null }>;
   unpair(): Promise<{ ok: boolean }>;
+  openAdmin(): Promise<OpenAdminResult>;
 };
 const agent = (window as unknown as { agent: AgentApi }).agent;
 
@@ -84,3 +86,18 @@ $("test").addEventListener("click", async () => {
 
 void refreshStatus();
 void refreshPrinters();
+
+// La gestión de la carta se abre en su propia ventana con el panel web de la plataforma
+// (ver `admin-window.ts`): mismas validaciones y mismos permisos que en el navegador, y la
+// sesión es de la PERSONA que entra, no del dispositivo -- que solo puede imprimir.
+$("admin").addEventListener("click", async () => {
+  const r = await agent.openAdmin();
+  if (r.ok) {
+    log("Gestión de catálogo abierta. Inicia sesión con tu cuenta de owner o admin.");
+    return;
+  }
+  log(
+    "No se puede abrir la gestión: este instalador se generó sin PLATFORM_WEB_ORIGIN, " +
+      "así que no sabe a qué plataforma conectarse. Hay que reconstruirlo con esa variable.",
+  );
+});

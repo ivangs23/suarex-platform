@@ -113,8 +113,12 @@ test("un owner crea una categoría y un producto (con imagen), y aparecen en la 
   // forma de conocerlo sin tocar la base a mano. Guardarlo en la variable de módulo que
   // lee `test.afterEach` (arriba) es lo que permite que la limpieza sobreviva a un fallo
   // de aserción en cualquiera de los pasos siguientes.
+  // `.first()`: el bloque de la categoría tiene AHORA dos campos ocultos `category_id`
+  // -- el de borrar (`ConfirmDeleteForm`) y el de editar (`CategoryEditForm`) -- con el
+  // MISMO valor, así que cualquiera de los dos sirve para capturar el id.
   createdCategoryId = await categoryRow
     .locator('input[type="hidden"][name="category_id"]')
+    .first()
     .inputValue();
 
   // 2. Crea el producto "Ribera" a 18,00 € en esa categoría, con una imagen adjunta --

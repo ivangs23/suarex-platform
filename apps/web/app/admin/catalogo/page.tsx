@@ -9,9 +9,11 @@ import {
   deleteTenantAllergenAction,
   setProductAvailabilityAction,
 } from "./actions";
+import { CategoryEditForm } from "./CategoryEditForm";
 import { CategoryForm } from "./CategoryForm";
 import { ConfirmDeleteForm } from "./ConfirmDeleteForm";
 import { ExtraForm } from "./ExtraForm";
+import { ProductEditForm } from "./ProductEditForm";
 import { ProductForm } from "./ProductForm";
 
 /**
@@ -81,9 +83,20 @@ export default async function AdminCatalogoPage() {
         {catalog.categories.length === 0 ? <p>Todavía no hay categorías.</p> : null}
         {catalog.categories.map((category) => (
           <article key={category.id} data-testid="admin-category">
-            <h3>
+            <h3 data-testid="admin-category-name">
               {category.nameI18n.es ?? category.slug} <small>({category.destination})</small>
             </h3>
+            {/* Plegado: con 59 categorías, desplegar todos los formularios a la vez
+                dispararía el tamaño de un DOM que ya es muy grande. */}
+            <details>
+              <summary>Editar categoría</summary>
+              <CategoryEditForm
+                categoryId={category.id}
+                name={category.nameI18n.es ?? category.slug}
+                slug={category.slug}
+                destination={category.destination}
+              />
+            </details>
             <ConfirmDeleteForm
               action={deleteCategoryAction}
               hiddenName="category_id"
@@ -123,6 +136,17 @@ export default async function AdminCatalogoPage() {
                       {productAllergenNames.length > 0 ? (
                         <p>Alérgenos: {productAllergenNames.join(", ")}</p>
                       ) : null}
+                      <details>
+                        <summary>Editar producto</summary>
+                        <ProductEditForm
+                          productId={product.id}
+                          name={product.nameI18n.es ?? ""}
+                          description={product.descriptionI18n?.es ?? ""}
+                          price={product.price}
+                          allergenIds={product.allergenIds}
+                          allergens={allergenOptions}
+                        />
+                      </details>
                       {product.extras.length > 0 ? (
                         <ul>
                           {product.extras.map((extra) => (
