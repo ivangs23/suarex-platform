@@ -134,6 +134,17 @@ export async function proxy(request: NextRequest) {
   return response;
 }
 
+// `api/tls-check` queda FUERA del proxy a propósito. Lo llama Caddy, no un navegador, y lo
+// hace con `Host: web:3000` (el nombre del servicio en la red de Docker), que no es ningún
+// tenant: pasando por aquí, `findTenantByHost` no lo encuentra y reescribe a /not-found con
+// 404 ANTES de que la ruta llegue a ejecutarse. Con eso, el `ask` de Caddy recibe siempre
+// 404, jamás autoriza un certificado, y NINGÚN cliente con dominio propio puede servirse
+// por HTTPS. Verificado en el VPS: dentro de la red de Docker daba 404 aunque los tests
+// locales pasaran, porque estos lo llamaban con el Host de un tenant real.
+//
+// No necesita tenant ni lo usa: solo responde sí/no sobre `tenants.custom_domain`, y está
+// diseñado para ser alcanzable desde internet (falla cerrado y sus negativas son
+// indistinguibles entre sí).
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/tls-check).*)"],
 };
