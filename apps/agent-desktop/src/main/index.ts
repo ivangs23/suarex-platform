@@ -1,30 +1,92 @@
 import { join } from "node:path";
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, Menu, nativeImage, Tray } from "electron";
+import { startAgent, stopAgent } from "./agent-runner.js";
+import { loadCredentials } from "./config-store.js";
+import { registerIpc } from "./ipc.js";
+import { realConfigBackend } from "./real-config-backend.js";
+
+let mainWindow: BrowserWindow | null = null;
+let tray: Tray | null = null;
+let quitting = false;
+
+/** Single-instance: una segunda ejecución enfoca la existente en vez de abrir otra. */
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) {
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    if (mainWindow) {
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+
+  app.whenReady().then(async () => {
+    // Auto-arranque en el login de Windows (desatendido).
+    app.setLoginItemSettings({ openAtLogin: true });
+
+    createWindow();
+    createTray();
+    registerIpc(() => mainWindow);
+
+    // Si ya está emparejado, arranca el agente al iniciar (imprime sin abrir la ventana).
+    const creds = loadCredentials(realConfigBackend());
+    if (creds) {
+      await startAgent(creds).catch((e) =>
+        console.error("[agent-desktop] no se pudo arrancar el agente:", e),
+      );
+    }
+  });
+
+  app.on("before-quit", () => {
+    quitting = true;
+    stopAgent();
+  });
+}
 
 function createWindow(): void {
-  const win = new BrowserWindow({
-    width: 720,
-    height: 560,
+  mainWindow = new BrowserWindow({
+    width: 760,
+    height: 620,
+    show: true,
     webPreferences: {
       preload: join(import.meta.dirname, "../preload/index.js"),
       contextIsolation: true,
       nodeIntegration: false,
     },
   });
+
+  // Cerrar la ventana la oculta a la bandeja (no cierra la app) salvo que estemos saliendo.
+  mainWindow.on("close", (e) => {
+    if (!quitting) {
+      e.preventDefault();
+      mainWindow?.hide();
+    }
+  });
+
   if (import.meta.env.DEV) {
-    win.loadURL(process.env.ELECTRON_RENDERER_URL as string);
+    mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL as string);
   } else {
-    win.loadFile(join(import.meta.dirname, "../renderer/index.html"));
+    mainWindow.loadFile(join(import.meta.dirname, "../renderer/index.html"));
   }
 }
 
-app.whenReady().then(() => {
-  createWindow();
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
-  });
-});
-
-app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") app.quit();
-});
+function createTray(): void {
+  // Un icono vacío de 16x16 basta para el scaffold; se reemplaza por el real en el empaquetado.
+  tray = new Tray(nativeImage.createEmpty());
+  tray.setToolTip("SuarEx — Agente de impresión");
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: "Abrir", click: () => mainWindow?.show() },
+      { type: "separator" },
+      {
+        label: "Salir",
+        click: () => {
+          quitting = true;
+          app.quit();
+        },
+      },
+    ]),
+  );
+  tray.on("click", () => mainWindow?.show());
+}
