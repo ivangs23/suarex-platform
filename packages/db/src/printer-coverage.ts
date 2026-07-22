@@ -65,3 +65,30 @@ export async function destinationsMissingPrinter(tenantId: string): Promise<Venu
   }
   return gaps;
 }
+
+type UsbPrinterRow = {
+  id: string;
+  name: string;
+  device_id: string | null;
+  connection: { type?: string };
+};
+
+/**
+ * Impresoras USB HABILITADAS sin `device_id` asignado: como el agente solo reclama una USB
+ * atada a su propio dispositivo (`packages/agent/src/run-agent.ts`), una USB sin `device_id`
+ * no la imprime NINGÚN agente -- sus tickets se pierden en silencio. El panel de impresoras
+ * lo señala, mismo espíritu que `destinationsMissingPrinter`: hacer visible una configuración
+ * que dejaría pedidos sin imprimir.
+ */
+export async function usbPrintersWithoutDevice(
+  tenantId: string,
+): Promise<{ id: string; name: string }[]> {
+  const { data, error } = await tenantScoped("printers", tenantId)
+    .select("id, name, device_id, connection")
+    .eq("enabled", true);
+  if (error) throw error;
+
+  return (data as unknown as UsbPrinterRow[])
+    .filter((p) => p.connection?.type === "usb" && p.device_id === null)
+    .map((p) => ({ id: p.id, name: p.name }));
+}

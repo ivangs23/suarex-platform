@@ -1,4 +1,4 @@
-import { destinationsMissingPrinter } from "@suarex/db";
+import { destinationsMissingPrinter, usbPrintersWithoutDevice } from "@suarex/db";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   admin,
@@ -149,5 +149,52 @@ describe("destinationsMissingPrinter", () => {
     expect(gaps).toEqual([{ venueId: venue2Id, venueName: "V2", destinations: ["cocina"] }]);
     // V1 (cubierto) NO aparece en el resultado.
     expect(gaps.some((g) => g.venueId === venue1Id)).toBe(false);
+  });
+});
+
+describe("usbPrintersWithoutDevice", () => {
+  it("señala una USB habilitada sin device_id", async () => {
+    const tenant = await createTenantFixture(`uwd-${nonce()}`);
+    fixtures.push(tenant);
+    const venueId = await seedVenue(tenant);
+    await admin.from("printers").insert({
+      tenant_id: tenant.tenantId,
+      venue_id: venueId,
+      name: "USB huérfana",
+      connection: { type: "usb", printerName: "P" },
+      destination: "cocina",
+      enabled: true, // sin device_id
+    });
+    const orphans = await usbPrintersWithoutDevice(tenant.tenantId);
+    expect(orphans.map((p) => p.name)).toContain("USB huérfana");
+  });
+
+  it("no señala una USB con device_id, ni una de red sin device_id", async () => {
+    const tenant = await createTenantFixture(`uwd2-${nonce()}`);
+    fixtures.push(tenant);
+    const venueId = await seedVenue(tenant);
+    const { data: device } = await admin
+      .from("devices")
+      .insert({ tenant_id: tenant.tenantId, venue_id: venueId, name: "PC" })
+      .select("id")
+      .single();
+    await admin.from("printers").insert({
+      tenant_id: tenant.tenantId,
+      venue_id: venueId,
+      name: "USB atada",
+      device_id: device?.id,
+      connection: { type: "usb", printerName: "P" },
+      destination: "cocina",
+      enabled: true,
+    });
+    await admin.from("printers").insert({
+      tenant_id: tenant.tenantId,
+      venue_id: venueId,
+      name: "Red sin device",
+      connection: { type: "network", host: "127.0.0.1", port: 9100 },
+      destination: "cocina",
+      enabled: true,
+    });
+    expect(await usbPrintersWithoutDevice(tenant.tenantId)).toEqual([]);
   });
 });

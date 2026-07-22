@@ -81,7 +81,7 @@ export type {
   PrintableOrder,
 } from "./print-jobs.js";
 export { reservePrinted, selectUnprintedOrders, unprintedPaidOrders } from "./print-jobs.js";
-export { destinationsMissingPrinter } from "./printer-coverage.js";
+export { destinationsMissingPrinter, usbPrintersWithoutDevice } from "./printer-coverage.js";
 export type { StaffOrder, StaffOrderItem, StationStatus } from "./staff-orders.js";
 export { listActiveOrders, markStationDone } from "./staff-orders.js";
 export { uploadBrandingLogo, uploadProductImage } from "./storage.js";
