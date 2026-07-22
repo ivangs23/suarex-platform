@@ -2,6 +2,7 @@ import net from "node:net";
 import type { TicketLine } from "@suarex/ticket";
 import type { PrinterConfig, PrintResult } from "./adapters/types.js";
 import { renderEscPos } from "./render.js";
+import { usbRawSink } from "./usb-sink.js";
 
 const MAX_TRIES = 3;
 const RETRY_MS = 2000;
@@ -26,7 +27,9 @@ const SOCKET_TIMEOUT_MS = 5000;
 const SETTLE_MS = 30;
 
 export function deviceKey(config: PrinterConfig): string {
-  return `tcp::${config.host}:${config.port}`;
+  return config.adapter === "escpos-usb"
+    ? `usb::${config.printerName}`
+    : `tcp::${config.host}:${config.port}`;
 }
 
 /**
@@ -136,6 +139,16 @@ function deliverOnce(buffer: Buffer, host: string, port: number): Promise<void> 
 }
 
 /**
+ * Entrega el buffer ya renderizado a una impresora USB, a través del sink registrado
+ * (winspool RAW en producción, un falso en los tests). Igual que `deliverOnce`, resuelve si
+ * la entrega tuvo éxito y lanza si falló -- `printToPrinter` mapea ambos a `PrintResult`.
+ * Aquí NO hay socket: los mismos bytes ESC/POS que iría por TCP se entregan al spooler.
+ */
+function deliverUsb(buffer: Buffer, printerName: string): Promise<void> {
+  return usbRawSink(buffer, printerName);
+}
+
+/**
  * Entrega las líneas a una impresora de red. Un socket FRESCO por intento
  * (un socket contaminado tras un fallo reimprime basura), hasta MAX_TRIES con
  * back-off. No pre-sondea el socket: el puerto 9100 acepta una conexión a la
@@ -150,7 +163,11 @@ export async function printToPrinter(
 
   for (let attempt = 1; attempt <= MAX_TRIES; attempt++) {
     try {
-      await deliverOnce(buffer, config.host, config.port);
+      if (config.adapter === "escpos-usb") {
+        await deliverUsb(buffer, config.printerName);
+      } else {
+        await deliverOnce(buffer, config.host, config.port);
+      }
       return { id: config.id, label: config.label, ok: true };
     } catch (error) {
       lastReason = error instanceof Error ? error.message : String(error);
