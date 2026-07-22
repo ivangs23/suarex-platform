@@ -22,8 +22,8 @@ if (!gotLock) {
   });
 
   app.whenReady().then(async () => {
-    // Auto-arranque en el login de Windows (desatendido).
-    app.setLoginItemSettings({ openAtLogin: true });
+    // Auto-arranque en el login de Windows (desatendido, oculto en bandeja).
+    app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true });
 
     createWindow();
     createTray();
@@ -48,12 +48,20 @@ function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 760,
     height: 620,
-    show: true,
+    show: false,
     webPreferences: {
       preload: join(import.meta.dirname, "../preload/index.js"),
       contextIsolation: true,
       nodeIntegration: false,
     },
+  });
+
+  // Solo se muestra si el usuario lanzó la app a mano; si fue el auto-arranque de Windows
+  // en el login, se queda oculta en la bandeja (paso 8 de la checklist de validación).
+  mainWindow.once("ready-to-show", () => {
+    if (!app.getLoginItemSettings().wasOpenedAtLogin) {
+      mainWindow?.show();
+    }
   });
 
   // Cerrar la ventana la oculta a la bandeja (no cierra la app) salvo que estemos saliendo.

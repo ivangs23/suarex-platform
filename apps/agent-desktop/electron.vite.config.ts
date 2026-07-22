@@ -1,10 +1,15 @@
 import { defineConfig, externalizeDepsPlugin } from "electron-vite";
 
 /**
- * `SUPABASE_URL`/`SUPABASE_ANON_KEY` se hornean en tiempo de build vía `define`, leyéndolas
- * de las envs del proceso de build (públicas por diseño; el service role NUNCA se define
- * aquí). En dev se leen de `process.env`; en el build de producción se pasan por la línea
- * de comandos / CI.
+ * `SUPABASE_URL`/`SUPABASE_ANON_KEY`/`PLATFORM_WEB_ORIGIN` se hornean en tiempo de build vía
+ * `define`, leyéndolas de las envs del proceso de build (todas públicas por diseño; el
+ * service role NUNCA se define aquí). En dev se leen de `process.env`; en el build de
+ * producción se pasan por la línea de comandos / CI.
+ *
+ * `SUPABASE_URL` y `PLATFORM_WEB_ORIGIN` son orígenes DISTINTOS: el primero es el host de la
+ * API de Supabase (`https://<proj>.supabase.co`), usado por `runAgent`; el segundo es el
+ * origin de la web Next.js de la plataforma (p. ej. `https://garum.suarex.app`), de donde
+ * cuelga `/api/devices/pair`. Ver `baked-config.ts` para el detalle.
  *
  * `externalizeDepsPlugin` mantiene `electron` y `koffi` (nativo) FUERA del bundle -- se
  * cargan desde node_modules empaquetado. Los `@suarex/*` (TS del workspace) SÍ se bundlean:
@@ -13,6 +18,7 @@ import { defineConfig, externalizeDepsPlugin } from "electron-vite";
 const bakedEnv = {
   "import.meta.env.SUPABASE_URL": JSON.stringify(process.env.SUPABASE_URL ?? ""),
   "import.meta.env.SUPABASE_ANON_KEY": JSON.stringify(process.env.SUPABASE_ANON_KEY ?? ""),
+  "import.meta.env.PLATFORM_WEB_ORIGIN": JSON.stringify(process.env.PLATFORM_WEB_ORIGIN ?? ""),
 };
 
 export default defineConfig({

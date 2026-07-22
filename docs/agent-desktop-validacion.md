@@ -8,6 +8,11 @@ paso falla, captura lo que se indica y pégalo para diagnosticar.
 - Windows 11 x64, impresora ESC/POS USB con su driver instalado (aparece en "Impresoras y
   escáneres" con un nombre).
 - El build de la app apuntando al Supabase correcto (dev durante pruebas).
+- El build debe hornearse con AMBAS envs de build, o el emparejamiento (paso 6) fallará
+  siempre con "código inválido": `SUPABASE_URL` + `SUPABASE_ANON_KEY` (host de Supabase) Y
+  `PLATFORM_WEB_ORIGIN` (origin de la web de la plataforma donde vive `/api/devices/pair`,
+  p. ej. `https://<tenant>.suarex.app` en prod o `http://garum.localhost:3000` en dev). Son
+  orígenes distintos: falta cualquiera de los dos y el emparejamiento no funciona.
 
 ## Pasos
 

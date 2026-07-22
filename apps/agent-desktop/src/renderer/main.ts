@@ -1,6 +1,4 @@
-type PairIpcResult =
-  | { ok: true; deviceId: string; tenantId: string }
-  | { ok: false; kind: "invalid-code" | "rate-limited" | "network" };
+import type { PairIpcResult } from "../main/ipc.js";
 
 type AgentApi = {
   listPrinters(): Promise<string[]>;
