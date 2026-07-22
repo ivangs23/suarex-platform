@@ -15,8 +15,20 @@ export function isManagerRole(role: string): role is ManagerRole {
  * autenticado para el tenant resuelto por Host Y su rol es owner/admin. En
  * cualquier otro caso redirige a /staff/login -- mismo destino indistinguible
  * para "no autenticado", "otro tenant" y "staff sin permisos de gestión", para
- * no revelar cuál de los tres es. La comprobación de rol aquí es la primera
- * barrera; la RLS (ver 20260722000006_role_write_policies.sql) es la segunda.
+ * no revelar cuál de los tres es.
+ *
+ * Esta comprobación de rol NO tiene un "segundo barrera" de RLS detrás en el
+ * camino de la Server Action: los repositorios de `packages/db` escriben con el
+ * cliente de service role, que SALTA RLS por diseño (ver el docstring de
+ * `serviceClient` en `packages/db/src/client.ts`). En este camino, lo único que
+ * mantiene cerrada la escritura es estructural -- este guard (rol) más
+ * `tenantScoped` (`tenantId` obligatorio, sin `?` ni default) -- no RLS.
+ *
+ * RLS (`20260722000006_role_write_policies.sql`) protege un camino DISTINTO: un
+ * atacante con un JWT `authenticated` válido hablando directo contra PostgREST,
+ * sin pasar por esta app -- ahí sí es la única barrera, porque este guard nunca
+ * se ejecuta. Las dos barreras son independientes, cada una para su propia
+ * amenaza; ninguna es backstop de la otra.
  */
 export async function requireManager(): Promise<ManagerSession> {
   const tenant = await requireTenant();

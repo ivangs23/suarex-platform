@@ -36,8 +36,15 @@ import { managerAction } from "@/lib/require-manager";
  *      acepta ni lee un `tenant_id`/`tenantId` del formulario.
  *
  * Los repositorios de `packages/db/src/admin-catalog.ts` usan el service role (saltan
- * RLS) precisamente porque la comprobación de rol vive aquí, no en ellos -- ver el
- * docstring de esos repositorios y el de `requireManager` (`lib/require-manager.ts`).
+ * RLS) precisamente porque la comprobación de rol vive aquí, no en ellos. En este
+ * camino (Server Action de este fichero) las garantías son ESTRUCTURALES, no RLS:
+ * (1) `managerAction` -- comprobación de rol imposible de olvidar, ver arriba -- y
+ * (2) `tenantScoped` exigiendo `tenantId` obligatorio en cada repositorio. RLS
+ * (`20260722000006_role_write_policies.sql`) NO es un backstop de este camino --
+ * el service role la salta, así que aquí nunca llega a evaluarse -- sino la barrera
+ * independiente de un camino distinto: un JWT `authenticated` válido hablando
+ * directo contra PostgREST sin pasar por esta app. Ver el docstring de
+ * `requireManager` (`lib/require-manager.ts`) para el razonamiento completo.
  */
 
 function requiredString(formData: FormData, field: string): string {
