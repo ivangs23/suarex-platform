@@ -79,6 +79,26 @@ function parseOptionalEuroPrice(formData: FormData, field: string): number | und
   return raw === undefined ? undefined : Number(raw);
 }
 
+/**
+ * Descripción en una EDICIÓN, donde hay tres estados distintos y no dos:
+ *
+ *   campo ausente          -> `undefined`, no se toca
+ *   campo presente y vacío -> `{}`, se BORRA
+ *   campo con texto        -> `{ es: texto }`
+ *
+ * No se usa `optionalString` aquí a propósito: convierte `""` en `undefined`, o sea en "no
+ * cambiar", así que borrar una descripción sería imposible -- el dueño vacía el campo,
+ * guarda, y el texto reaparece sin ningún aviso. En un alta ese matiz da igual (ambos
+ * caminos dejan el producto sin descripción); en una edición es la diferencia entre poder
+ * corregirse y no poder.
+ */
+function parseDescriptionPatch(formData: FormData): Record<string, string> | undefined {
+  const raw = formData.get("description_es");
+  if (raw === null) return undefined;
+  const text = String(raw).trim();
+  return text === "" ? {} : { es: text };
+}
+
 function parseAllergenIds(formData: FormData): number[] | undefined {
   const raw = formData.get("allergen_ids");
   if (raw === null) return undefined;
@@ -161,13 +181,12 @@ export const createProductAction = managerAction(async (session, formData: FormD
 export const updateProductAction = managerAction(async (session, formData: FormData) => {
   const productId = requiredString(formData, "product_id");
   const nameEs = optionalString(formData, "name_es");
-  const descriptionEs = optionalString(formData, "description_es");
   const imagePath = await extractImagePath(session.tenantId, formData);
 
   await updateProduct(session.tenantId, productId, {
     categoryId: optionalString(formData, "category_id"),
     nameI18n: nameEs !== undefined ? { es: nameEs } : undefined,
-    descriptionI18n: descriptionEs !== undefined ? { es: descriptionEs } : undefined,
+    descriptionI18n: parseDescriptionPatch(formData),
     price: parseOptionalEuroPrice(formData, "price"),
     imagePath,
     allergenIds: parseAllergenIds(formData),
