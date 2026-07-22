@@ -24,7 +24,7 @@ beforeAll(async () => {
 });
 afterAll(async () => {
   for (const id of orphanUserIds) {
-    if (!id) continue; // marcador vacío, ver el comentario en el test que lo empuja
+    if (!id) continue; // guarda defensiva: nunca debería llegar un id vacío/falsy, pero si llegara, deleteUser("") lanzaría sin necesidad
     await admin.auth.admin.deleteUser(id).catch(() => {});
   }
   if (tenant) await deleteTenantFixture(tenant);
@@ -109,9 +109,19 @@ describe("resetDevice", () => {
     // El código nuevo empareja un "PC de repuesto" con credenciales frescas que resuelven el tenant.
     const fresh = await pairDevice(pairingCode);
     expect(fresh?.tenantId).toBe(tenant.tenantId);
-    // No se empuja ningún marcador: la cuenta fresca la limpia `deleteTenantFixture` por
-    // cascada (memberships -> tenant), así que no hace falta borrarla explícitamente aquí
-    // (empujar un id vacío haría que el afterAll llamara a deleteUser("") sin necesidad).
+    // Este emparejamiento crea una cuenta de auth.users NUEVA (distinta de dev.userId, ya
+    // borrada por resetDevice). `deleteTenantFixture` NO la limpia: solo borra la fila de
+    // `tenants` (que en cascada arrastra `memberships` vía `memberships.tenant_id ->
+    // tenants.id`) más el `fixture.userId` explícito. La FK relevante aquí va al revés
+    // (`auth.users -> memberships ON DELETE CASCADE`: borrar el USUARIO arrastra la
+    // membership, no al contrario), así que esta cuenta fresca quedaría huérfana en
+    // `auth.users` si no se registra aquí para el cleanup del `afterAll`.
+    const { data: freshDeviceRow } = await admin
+      .from("devices")
+      .select("auth_user_id")
+      .eq("id", dev.deviceId)
+      .single();
+    if (freshDeviceRow?.auth_user_id) orphanUserIds.push(freshDeviceRow.auth_user_id);
     const client = anonClient();
     const { error: freshErr } = await client.auth.signInWithPassword({
       email: fresh?.email as string,
