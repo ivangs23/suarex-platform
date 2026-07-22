@@ -12,6 +12,7 @@ export type AgentTickResult = { printed: number; failed: number };
 
 type PrinterRow = {
   id: string;
+  venue_id: string;
   destination: "cocina" | "barra" | "all";
   connection: { type?: string; host?: string; port?: number };
 };
@@ -29,7 +30,7 @@ async function ticketBranding(client: SupabaseClient): Promise<TicketBranding> {
 async function networkPrinters(client: SupabaseClient): Promise<PrinterRow[]> {
   const { data, error } = await client
     .from("printers")
-    .select("id, destination, connection")
+    .select("id, venue_id, destination, connection")
     .eq("enabled", true);
   if (error) throw error;
   return (data as unknown as PrinterRow[]).filter((p) => p.connection?.type === "network");
@@ -71,6 +72,15 @@ export async function runAgentTick(client: SupabaseClient): Promise<AgentTickRes
     const ticketOrder = toTicketOrder(order);
     const neededDestinations = new Set(order.items.map((i) => i.destination));
     for (const printer of printers) {
+      // Ceguera de venue (revisión final whole-branch, Finding 1): en un tenant con
+      // varios locales, dos impresoras del MISMO `destination` en locales distintos son
+      // "el mismo destino" a ojos del filtro de arriba, pero solo una de ellas es la del
+      // local real del pedido. Sin esta comprobación, la impresora de OTRO local
+      // imprimiría el ticket en silencio -- físicamente en el restaurante equivocado. El
+      // camino de LECTURA (`targetPrinterIds`, `packages/db/src/print-jobs.ts`) ya filtra
+      // por venue al decidir qué está cubierto; esta es la misma comprobación aplicada
+      // aquí, en el camino de ENTREGA, que antes no la tenía.
+      if (printer.venue_id !== order.venueId) continue;
       const dest = printer.destination;
       const applies = dest === "all" || neededDestinations.has(dest);
       if (!applies) continue;

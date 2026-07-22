@@ -13,6 +13,18 @@ export type PrintableOrder = {
   tableLabel: string | null;
   createdAt: string;
   printedTargets: Record<string, string>;
+  /**
+   * Local (venue) al que pertenece el pedido. Añadido en la revisión final whole-branch de
+   * C2a (Finding 1: ceguera de venue en el bucle de entrega): sin esto, `runAgentTick`
+   * (`packages/agent/src/run-agent.ts`) no tenía forma de comprobar que solo una impresora
+   * DEL MISMO local del pedido lo imprime, y en un tenant multi-local una impresora de
+   * OTRO local con el mismo `destination` (p. ej. "cocina") lo imprimía también --
+   * silenciosamente, en el local equivocado. El camino de lectura ya filtraba por venue
+   * (`targetPrinterIds` abajo), pero ese filtrado decide SOLO si el pedido está cubierto,
+   * no expone el `venue_id` al llamante para que el bucle de entrega pueda repetir la
+   * misma comprobación impresora a impresora.
+   */
+  venueId: string;
   items: PrintableItem[];
 };
 
@@ -127,6 +139,7 @@ export function selectUnprintedOrders(
       tableLabel: row.tables?.label ?? null,
       createdAt: row.created_at,
       printedTargets: row.printed_targets ?? {},
+      venueId: row.venue_id,
       items: row.order_items.map((item) => ({
         name: resolveItemName(item.name_snapshot),
         quantity: item.quantity,
