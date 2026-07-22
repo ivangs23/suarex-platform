@@ -84,8 +84,8 @@ Dos registros en Cloudflare, ambos apuntando a la IP del VPS:
 
 | Tipo | Nombre | Contenido | Proxy |
 |---|---|---|---|
-| A | `@` | `72.61.106.185` | **DNS only** |
-| A | `*` | `72.61.106.185` | **DNS only** |
+| A | `@` | `<IP-DEL-VPS>` | **DNS only** |
+| A | `*` | `<IP-DEL-VPS>` | **DNS only** |
 
 **El proxy naranja de Cloudflare tiene que estar apagado.** Con él activado, Cloudflare
 termina el TLS y Caddy nunca ve el challenge; además la nube gratuita no cubre subdominios
