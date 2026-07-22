@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import { app, BrowserWindow, Menu, nativeImage, Tray } from "electron";
+import { closeAdminWindow, openAdminWindow } from "./admin-window.js";
 import { startAgent, stopAgent } from "./agent-runner.js";
 import { loadCredentials } from "./config-store.js";
 import { registerIpc } from "./ipc.js";
@@ -41,6 +42,7 @@ if (!gotLock) {
   app.on("before-quit", () => {
     quitting = true;
     stopAgent();
+    closeAdminWindow();
   });
 }
 
@@ -86,6 +88,7 @@ function createTray(): void {
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: "Abrir", click: () => mainWindow?.show() },
+      { label: "Gestionar catálogo", click: () => openAdminWindow() },
       { type: "separator" },
       {
         label: "Salir",
