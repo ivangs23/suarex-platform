@@ -1,0 +1,56 @@
+-- C1 task 3, fix round 1 -- endurece el emparejamiento de dispositivos frente a dos
+-- fallos encontrados en `pairDevice` (packages/db/src/devices.ts):
+--
+--   Bug 1 (crítico, TOCTOU): el SELECT que buscaba el `pairing_code` y el UPDATE que lo
+--   borraba estaban separados por dos operaciones async (`auth.admin.createUser` + el
+--   INSERT de `memberships`). Dos llamadas concurrentes a `pairDevice(mismoCodigo)`
+--   pasaban ambas el SELECT antes de que ninguna borrara el código, así que las dos
+--   acababan emitiendo credenciales válidas para el mismo dispositivo. Se corrige del
+--   lado de TypeScript, no aquí: el canje pasa a ser un único UPDATE ... WHERE
+--   pairing_code = $1 AND pairing_expires_at > now() ... RETURNING, a través del
+--   accesor de service role que YA existe (`devicesTableForPairing` en
+--   `packages/db/src/client.ts`, quinta exención documentada). No hace falta una
+--   función SQL SECURITY DEFINER nueva: PostgREST traduce ese
+--   `.update().eq().gt().select()` en una única sentencia UPDATE...RETURNING dentro de
+--   una única transacción implícita, así que ya es atómica -- añadir una función solo
+--   duplicaría lo que Postgres hace gratis con una sentencia. Ver el comentario en
+--   `pairDevice` para el razonamiento completo bajo READ COMMITTED.
+--
+--   Bug 2 (importante, cuenta huérfana): como el código ahora se borra ANTES de que
+--   exista la cuenta (consecuencia necesaria del fix de arriba), un fallo a mitad de
+--   camino (tras crear la cuenta de Auth pero antes de insertar la membership, por
+--   ejemplo) deja una cuenta de Auth con email determinista
+--   (`device-{id}@devices.local`) sin membership, y el código ya no sirve para volver
+--   a buscar el dispositivo. Un reintento (con un código nuevo asignado a la misma fila
+--   de `devices` -- el mecanismo real es el futuro panel de administración
+--   reasignando `pairing_code`/`pairing_expires_at`) volvía a fallar con
+--   "already registered" y el dispositivo quedaba imposible de emparejar para siempre.
+--   Se corrige también en TypeScript: `pairDevice` ahora reutiliza/resetea la cuenta de
+--   Auth existente en vez de fallar, y el INSERT de `memberships` pasa a ser un UPSERT
+--   sobre su clave primaria (`user_id, tenant_id`, ver `20260721000001_core_tenancy.sql`).
+--   No requiere cambio de esquema.
+--
+-- Esta migración en sí solo añade la guarda de entropía mínima pedida para el código de
+-- emparejamiento, que todavía no tiene generador real (lo construye un panel de
+-- administración que es una tarea futura; en los tests de hoy se pone el código a mano).
+
+-- Guarda de entropía mínima sobre `pairing_code`. Es la única prueba de posesión de un
+-- instalador sin secretos (sin URL, sin anon key, sin token) -- su longitud/aleatoriedad
+-- es toda su defensa contra que alguien lo adivine o lo fuerce por fuerza bruta antes de
+-- que caduque. El futuro generador del panel de administración DEBE producir un código
+-- criptográficamente aleatorio de AL MENOS 32 caracteres (p. ej.
+-- `crypto.randomBytes(24).toString('base64url')`, ~144 bits de entropía) -- este CHECK
+-- solo impone un suelo de 20 caracteres para no romper los fixtures de test existentes
+-- (`PAIR-${nonce()}`, `EXP-${nonce()}`, etc., que ya rondan los 24-25 caracteres por el
+-- propio formato de `nonce()`), pero 20 sigue siendo muchísimo más que cualquier código
+-- "corto y memorizable" al que un futuro implementador pudiera verse tentado.
+--
+-- Rate limiting del endpoint público `POST /api/devices/pair` queda DELIBERADAMENTE
+-- diferido a la tarea C2: hoy no existe ningún generador real de códigos (el panel de
+-- administración es trabajo futuro) y en los tests el código se inserta a mano, así que
+-- no hay todavía una superficie de ataque real que limitar -- esto NO es un olvido, es
+-- una decisión explícita de alcance que C2 debe recoger antes de que el generador real
+-- exista en producción.
+alter table public.devices
+  add constraint devices_pairing_code_min_entropy
+  check (pairing_code is null or length(pairing_code) >= 20);

@@ -86,6 +86,21 @@ export function tenantScoped(table: TenantScopedTable, tenantId: string) {
       const { tenant_id: _ignored, ...rest } = values;
       return serviceClient().from(table).update(rest).eq("tenant_id", tenantId);
     },
+
+    /**
+     * Igual que `insert`, pero como UPSERT sobre `onConflict` (columnas separadas por
+     * coma, tal como las espera postgrest-js): si ya existe una fila con esa clave,
+     * la actualiza en vez de fallar contra la restricción única/PK. Añadido para
+     * `pairDevice` (`src/devices.ts`, fix de la cuenta huérfana): un reintento tras un
+     * fallo parcial de emparejamiento debe poder volver a intentar la membership del
+     * dispositivo sin reventar contra la PK (`user_id, tenant_id`) de una fila que ya
+     * dejó un intento anterior a medio camino.
+     */
+    upsert<Row extends Record<string, unknown>>(row: Row, onConflict: string) {
+      const { tenant_id: _ignored, ...rest } = row as Record<string, unknown>;
+      const scoped = { ...rest, tenant_id: tenantId };
+      return serviceClient().from(table).upsert(scoped, { onConflict });
+    },
   };
 }
 
@@ -151,9 +166,13 @@ export function nextOrderNumberRpc(tenantId: string, venueId: string) {
  * `devices_pairing_code_idx`, ver la migración), y en ese momento el llamante todavía no
  * conoce el tenant -- es precisamente esa búsqueda la que lo revela. Acotado por firma a
  * `devices`; no es un escape hatch de propósito general. Se reutiliza también para el
- * UPDATE que enlaza `auth_user_id`/`paired_at`/`pairing_code` tras el canje: en ese punto
- * la fila ya se identifica por su `id` (primary key), así que sigue siendo una operación
- * de una sola fila conocida, nunca un barrido.
+ * canje atómico en sí (un único `UPDATE ... WHERE pairing_code = $1 AND
+ * pairing_expires_at > now() ... RETURNING` que borra el código y fija `paired_at` en la
+ * MISMA sentencia, sin SELECT previo -- ver `pairDevice` en `src/devices.ts` para el
+ * razonamiento de atomicidad bajo concurrencia) y para el UPDATE posterior que enlaza
+ * `auth_user_id` tras crear/recuperar la cuenta: en ese punto la fila ya se identifica
+ * por su `id` (primary key), así que sigue siendo una operación de una sola fila
+ * conocida, nunca un barrido.
  */
 export function devicesTableForPairing() {
   return serviceClient().from("devices");
