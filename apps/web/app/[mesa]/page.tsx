@@ -2,7 +2,7 @@ import { parseBranding } from "@suarex/config";
 import { getCategories, getProducts, getTenantSettings } from "@suarex/db";
 import { notFound } from "next/navigation";
 import { requireTenant } from "@/lib/tenant-context";
-import type { ThemeCategory } from "./themes";
+import { buildMenuView } from "./menu-view";
 import { resolveTheme } from "./themes";
 
 // Los identificadores de mesa son siempre numéricos (ver el diseño: canal
@@ -24,9 +24,20 @@ const MESA_PATTERN = /^\d+$/;
  * `generic` se pinta con el branding, y los temas a medida (garum, manuela) son componentes
  * codificados. Añadir un tema no toca este fichero -- todos consumen el mismo contrato
  * `MenuThemeProps`.
+ *
+ * La carta se navega por NIVELES: `?cat=<slug>` elige el nodo del árbol de categorías y
+ * `buildMenuView` resuelve qué pintar (hijos, productos y rastro de vuelta). Sin `cat` se
+ * está en la raíz. Es un enlace normal, no estado de cliente: la carta sigue siendo
+ * server-only y compartible/atrás-adelante sin JS.
  */
-export default async function MenuPage({ params }: { params: Promise<{ mesa: string }> }) {
-  const { mesa } = await params;
+export default async function MenuPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ mesa: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const [{ mesa }, query] = await Promise.all([params, searchParams]);
 
   if (!MESA_PATTERN.test(mesa)) {
     notFound();
@@ -52,19 +63,19 @@ export default async function MenuPage({ params }: { params: Promise<{ mesa: str
   const branding = parseBranding(settings?.branding);
   const businessName = branding.name ?? tenant.slug;
 
-  // El catálogo se aplana al contrato del tema: categorías con sus productos ya anidados,
-  // resueltos al idioma por defecto. Un tema nunca vuelve a consultar la base.
-  const themeCategories: ThemeCategory[] = categories.map((category) => ({
-    id: category.id,
-    name: category.nameI18n.es ?? category.slug,
-    products: products
-      .filter((product) => product.categoryId === category.id)
-      .map((product) => ({
-        id: product.id,
-        name: product.nameI18n.es ?? "",
-        price: product.price,
-      })),
-  }));
+  // `?cat=a&cat=b` (repetido) llega como array; nos quedamos con el primero. Un slug
+  // desconocido no es un error: `buildMenuView` degrada a la raíz.
+  const rawCat = query.cat;
+  const currentSlug = (Array.isArray(rawCat) ? rawCat[0] : rawCat) ?? null;
+
+  const view = buildMenuView({
+    categories,
+    products,
+    currentSlug,
+    basePath: `/${mesa}`,
+    locale: settings?.locale,
+    currency: settings?.currency,
+  });
 
   const Theme = resolveTheme(settings?.theme);
 
@@ -74,11 +85,7 @@ export default async function MenuPage({ params }: { params: Promise<{ mesa: str
       businessName={businessName}
       mesa={mesa}
       branding={branding}
-      categories={themeCategories}
-      // Cuenta cruda de getProducts(tenant.id), sin filtrar por categoría: si el filtro
-      // tenant_id de getProducts se perdiera, este número cambiaría aunque ningún producto
-      // huérfano se renderizase (el filtrado por category_id ya oculta huérfanos de la vista).
-      productCount={products.length}
+      view={view}
     />
   );
 }

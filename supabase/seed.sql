@@ -56,14 +56,31 @@ select t.id, c.slug, c.name_i18n, c.destination, c.sort_order
   ) as c(slug, name_i18n, destination, sort_order)
  where t.slug = 'manuela';
 
+-- Segundo nivel de garum: su carta real es un ÁRBOL (Vinos → Tintos → botellas), no una
+-- lista plana, así que el seed tiene que tener al menos un nivel anidado para que la
+-- navegación por niveles de la carta sea demostrable en local. Va en un insert aparte
+-- porque `parent_id` referencia filas creadas justo arriba.
+insert into public.categories (tenant_id, slug, name_i18n, destination, sort_order, parent_id)
+select t.id, c.slug, c.name_i18n, c.destination, c.sort_order, padre.id
+  from public.tenants t
+  cross join (values
+    ('tintos',  '{"es":"Tintos","en":"Reds"}'::jsonb,     'barra', 0, 'vinos'),
+    ('blancos', '{"es":"Blancos","en":"Whites"}'::jsonb,  'barra', 1, 'vinos')
+  ) as c(slug, name_i18n, destination, sort_order, parent_slug)
+  join public.categories padre
+    on padre.tenant_id = t.id and padre.slug = c.parent_slug
+ where t.slug = 'garum';
+
 insert into public.products (tenant_id, category_id, name_i18n, price, sort_order)
 select c.tenant_id, c.id, p.name_i18n, p.price, p.sort_order
   from public.categories c
   join public.tenants t on t.id = c.tenant_id
   join (values
-    ('vinos',     '{"es":"Ribera del Duero","en":"Ribera del Duero"}'::jsonb, 18.00, 0),
-    ('vinos',     '{"es":"Albariño","en":"Albariño"}'::jsonb,                 15.50, 1),
-    ('vinos',     '{"es":"Rioja Crianza","en":"Rioja Crianza"}'::jsonb,       16.00, 2),
+    -- Los vinos cuelgan del segundo nivel (tintos/blancos), no de 'vinos': así la carta
+    -- de garum en local tiene la misma forma de árbol que su carta real.
+    ('tintos',    '{"es":"Ribera del Duero","en":"Ribera del Duero"}'::jsonb, 18.00, 0),
+    ('tintos',    '{"es":"Rioja Crianza","en":"Rioja Crianza"}'::jsonb,       16.00, 1),
+    ('blancos',   '{"es":"Albariño","en":"Albariño"}'::jsonb,                 15.50, 0),
     ('entrantes', '{"es":"Jamón ibérico","en":"Iberian ham"}'::jsonb,         22.00, 0),
     ('entrantes', '{"es":"Croquetas caseras","en":"Homemade croquettes"}'::jsonb, 9.50, 1),
     ('entrantes', '{"es":"Tabla de quesos","en":"Cheese board"}'::jsonb,      14.00, 2),

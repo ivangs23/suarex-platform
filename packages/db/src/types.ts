@@ -22,6 +22,9 @@ export type TenantSettingsRow = {
 export type Category = {
   id: string;
   slug: string;
+  /** Categoría padre (`categories.parent_id`), o `null` si es raíz. Permite cartas en
+   * árbol navegables por niveles, imprescindible en cartas grandes. */
+  parentId: string | null;
   nameI18n: Record<string, string>;
   sortOrder: number;
 };

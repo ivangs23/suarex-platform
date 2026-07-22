@@ -31,4 +31,11 @@ export function resolveTheme(slug: string | null | undefined): MenuTheme {
   return pickFromRegistry(THEMES, slug, DEFAULT_THEME);
 }
 
-export type { MenuTheme, MenuThemeProps, ThemeCategory, ThemeProduct } from "./types";
+export type {
+  MenuCrumb,
+  MenuNode,
+  MenuProduct,
+  MenuTheme,
+  MenuThemeProps,
+  MenuView,
+} from "./types";

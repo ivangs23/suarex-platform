@@ -3,16 +3,11 @@ import type { MenuTheme } from "./types";
 
 /**
  * Tema A MEDIDA de Manuela Desayuna: crema/dorado, tiles redondeados en rejilla -- el
- * lenguaje de su kiosko táctil original. Fija sus colores en su CSS; recibe el MISMO
- * contrato de props que el resto y conserva los `data-testid` compartidos.
+ * lenguaje de su kiosko táctil original, ahora navegando por niveles. Fija sus colores en su
+ * CSS; recibe el MISMO contrato de props que el resto y conserva los `data-testid`
+ * compartidos.
  */
-export const ManuelaTheme: MenuTheme = ({
-  businessName,
-  mesa,
-  branding,
-  categories,
-  productCount,
-}) => (
+export const ManuelaTheme: MenuTheme = ({ businessName, mesa, branding, view }) => (
   <main className={styles.page} data-theme="manuela">
     <div className={styles.inner}>
       <header className={styles.header}>
@@ -30,26 +25,56 @@ export const ManuelaTheme: MenuTheme = ({
       </header>
 
       <p data-testid="product-count" hidden>
-        {productCount}
+        {view.totalProducts}
       </p>
 
-      {categories.length === 0 ? (
-        <p className={styles.empty}>La carta todavía no tiene productos.</p>
+      {view.currentName ? (
+        <nav className={styles.nav}>
+          <a className={styles.back} href={view.rootHref}>
+            ← Explorar otras categorías
+          </a>
+          <p className={styles.crumbs}>
+            {view.breadcrumb.map((crumb) => (
+              <span key={crumb.href}>
+                <a href={crumb.href}>{crumb.name}</a> ›{" "}
+              </span>
+            ))}
+            <strong>{view.currentName}</strong>
+          </p>
+        </nav>
+      ) : (
+        <p className={styles.lead}>¿Qué te apetece hoy?</p>
+      )}
+
+      {view.children.length > 0 ? (
+        <ul className={styles.grid}>
+          {view.children.map((node) => (
+            <li key={node.id} data-testid="category">
+              <a className={styles.card} href={node.href}>
+                <span className={styles.cardName}>{node.name}</span>
+                <span className={styles.cardCount}>
+                  {node.productCount} {node.productCount === 1 ? "plato" : "platos"}
+                </span>
+              </a>
+            </li>
+          ))}
+        </ul>
       ) : null}
 
-      {categories.map((category) => (
-        <section key={category.id} className={styles.category} data-testid="category">
-          <h2 className={styles.categoryName}>{category.name}</h2>
-          <ul className={styles.items}>
-            {category.products.map((product) => (
-              <li key={product.id} className={styles.item} data-testid="product">
-                <span className={styles.itemName}>{product.name}</span>
-                <span className={styles.price}>{product.price.toFixed(2)} €</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ))}
+      {view.products.length > 0 ? (
+        <ul className={styles.items}>
+          {view.products.map((product) => (
+            <li key={product.id} className={styles.item} data-testid="product">
+              <span className={styles.itemName}>{product.name}</span>
+              <span className={styles.price}>{product.priceLabel}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {view.children.length === 0 && view.products.length === 0 ? (
+        <p className={styles.empty}>La carta todavía no tiene productos.</p>
+      ) : null}
     </div>
   </main>
 );

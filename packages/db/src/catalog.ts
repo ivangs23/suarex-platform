@@ -9,7 +9,7 @@ type ProductExtraRow = {
 
 export async function getCategories(tenantId: string): Promise<Category[]> {
   const { data, error } = await tenantScoped("categories", tenantId)
-    .select("id, slug, name_i18n, sort_order")
+    .select("id, slug, name_i18n, sort_order, parent_id")
     .order("sort_order", { ascending: true });
 
   if (error) throw error;
@@ -19,6 +19,10 @@ export async function getCategories(tenantId: string): Promise<Category[]> {
     slug: row.slug as string,
     nameI18n: row.name_i18n as Record<string, string>,
     sortOrder: row.sort_order as number,
+    // `categories.parent_id` (FK auto-referenciada, ver 20260721000002_catalog.sql)
+    // permite cartas en ÁRBOL: una carta grande se navega por niveles en vez de volcar
+    // cientos de productos en una lista. `null` = categoría raíz.
+    parentId: (row.parent_id as string | null) ?? null,
   }));
 }
 
