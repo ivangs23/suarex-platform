@@ -1,0 +1,134 @@
+import { parseBranding } from "@suarex/config";
+import type { PrintableOrder } from "@suarex/db";
+import { deviceKey, enqueueByDevice, type PrinterConfig, printToPrinter } from "@suarex/printing";
+import { buildTicketLines, type TicketBranding, type TicketOrder } from "@suarex/ticket";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { type AgentCredentials, createDeviceClient } from "./agent-client.js";
+import { unprintedPaidOrdersForDevice } from "./device-orders.js";
+
+const DEFAULT_POLL_MS = 4000;
+
+export type AgentTickResult = { printed: number; failed: number };
+
+type PrinterRow = {
+  id: string;
+  destination: "cocina" | "barra" | "all";
+  connection: { type?: string; host?: string; port?: number };
+};
+
+/** Cabecera del ticket a partir de la marca del tenant (nombre comercial), leída con el
+ * JWT del device (la RLS le permite leer `tenant_settings`). Nunca lanza: si no hay marca,
+ * la cabecera queda vacía. */
+async function ticketBranding(client: SupabaseClient): Promise<TicketBranding> {
+  const { data } = await client.from("tenant_settings").select("branding").maybeSingle();
+  const name = parseBranding(data?.branding).name;
+  return { header: name ?? "" };
+}
+
+/** Impresoras de RED habilitadas del tenant (las USB son C2b; se ignoran aquí). */
+async function networkPrinters(client: SupabaseClient): Promise<PrinterRow[]> {
+  const { data, error } = await client
+    .from("printers")
+    .select("id, destination, connection")
+    .eq("enabled", true);
+  if (error) throw error;
+  return (data as unknown as PrinterRow[]).filter((p) => p.connection?.type === "network");
+}
+
+function toTicketOrder(order: PrintableOrder): TicketOrder {
+  return {
+    orderNumber: order.orderNumber,
+    tableLabel: order.tableLabel,
+    createdAt: order.createdAt,
+    items: order.items.map((item) => ({
+      name: item.name,
+      quantity: item.quantity,
+      destination: item.destination,
+      extras: [],
+    })),
+  };
+}
+
+/**
+ * UNA pasada del agente: lee los pedidos pendientes con el JWT del device, y por cada
+ * pedido y cada impresora de RED de destino que aún no conste en `printedTargets`, entrega
+ * el ticket y, SOLO si la entrega tuvo éxito, marca esa impresora vía `reserve_printed_self`
+ * (RPC, JWT del device -- nunca el service role). Orden entregar→marcar (at-least-once): un
+ * fallo entre ambos reimprime en el siguiente tick, nunca pierde el ticket. La marca es por
+ * impresora, así que un pedido con una impresora ok y otra caída solo reintenta la caída.
+ */
+export async function runAgentTick(client: SupabaseClient): Promise<AgentTickResult> {
+  const [orders, printers, branding] = await Promise.all([
+    unprintedPaidOrdersForDevice(client),
+    networkPrinters(client),
+    ticketBranding(client),
+  ]);
+
+  let printed = 0;
+  let failed = 0;
+
+  for (const order of orders) {
+    const ticketOrder = toTicketOrder(order);
+    const neededDestinations = new Set(order.items.map((i) => i.destination));
+    for (const printer of printers) {
+      const dest = printer.destination;
+      const applies = dest === "all" || neededDestinations.has(dest);
+      if (!applies) continue;
+      if (Object.hasOwn(order.printedTargets, printer.id)) continue;
+
+      // Para una impresora 'all', imprime cada destino que el pedido use. `?? "cocina"` es
+      // un fallback defensivo para el caso patológico de un pedido sin items (nunca debería
+      // ocurrir: `neededDestinations` sale de `order.items`, que siempre trae al menos una
+      // línea) -- solo para satisfacer `noUncheckedIndexedAccess` sin lanzar.
+      const renderDest = dest === "all" ? ([...neededDestinations][0] ?? "cocina") : dest;
+      const lines = buildTicketLines(ticketOrder, branding, renderDest);
+      const config: PrinterConfig = {
+        id: printer.id,
+        label: printer.id,
+        destination: dest,
+        adapter: "escpos-tcp",
+        host: printer.connection.host as string,
+        port: printer.connection.port as number,
+      };
+      const result = await enqueueByDevice(deviceKey(config), () => printToPrinter(lines, config));
+      if (result.ok) {
+        const { error } = await client.rpc("reserve_printed_self", {
+          p_order_id: order.id,
+          p_printer_id: printer.id,
+          p_at: new Date().toISOString(),
+        });
+        if (error) throw error;
+        printed += 1;
+      } else {
+        failed += 1;
+      }
+    }
+  }
+  return { printed, failed };
+}
+
+/**
+ * Arranca el agente: crea el cliente del dispositivo y sondea cada `pollMs`. Devuelve una
+ * función para detenerlo (la usará la cáscara Electron de C2b al cerrarse). Un error en un
+ * tick se registra pero no derriba el bucle -- el siguiente tick reintenta.
+ */
+export async function runAgent(
+  creds: AgentCredentials,
+  opts?: { pollMs?: number },
+): Promise<() => void> {
+  const client = await createDeviceClient(creds);
+  const pollMs = opts?.pollMs ?? DEFAULT_POLL_MS;
+  let running = false;
+  const timer = setInterval(async () => {
+    if (running) return; // no solapar ticks
+    running = true;
+    try {
+      await runAgentTick(client);
+    } catch (error) {
+      console.error("[agent] tick falló:", error);
+    } finally {
+      running = false;
+    }
+  }, pollMs);
+  return () => clearInterval(timer);
+}
