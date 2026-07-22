@@ -13,11 +13,18 @@ export type TenantSettingsRow = {
   currency: string;
   channels: string[];
   features: Record<string, unknown>;
+  /** Slug del tema de la carta pública (`tenant_settings.theme`). Ver
+   * `apps/web/app/[mesa]/themes`: `generic` se pinta con el branding, los temas a medida
+   * son componentes codificados. */
+  theme: string;
 };
 
 export type Category = {
   id: string;
   slug: string;
+  /** Categoría padre (`categories.parent_id`), o `null` si es raíz. Permite cartas en
+   * árbol navegables por niveles, imprescindible en cartas grandes. */
+  parentId: string | null;
   nameI18n: Record<string, string>;
   sortOrder: number;
 };

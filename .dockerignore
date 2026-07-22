@@ -1,0 +1,28 @@
+# El contexto de build de deploy/Dockerfile es la raíz del repo. Todo lo que se cuele aquí
+# viaja al demonio de Docker y acaba en una capa: node_modules solo (varios cientos de MB)
+# multiplica por diez el tiempo de build, y los .env meterían secretos en la imagen.
+node_modules
+**/node_modules
+.git
+.github
+.turbo
+**/.turbo
+**/.next
+**/dist
+**/out
+
+# Secretos: NUNCA en el contexto. Las claves llegan como ARG (solo las públicas) o como
+# variables de entorno en runtime.
+.env
+.env.*
+!.env.example
+deploy/.env.app
+
+# Artefactos locales que no hacen falta para construir la web.
+supabase/.temp
+supabase/.branches
+test-results
+playwright-report
+.superpowers
+.claude
+*.log

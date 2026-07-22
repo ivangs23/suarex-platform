@@ -6,6 +6,10 @@ release
 .env
 .env.*
 !.env.example
+# Las plantillas de entorno SÍ van al repo (deploy/.env.app.example): son documentación,
+# no secretos. Sin esta excepción, `.env.*` de arriba se las traga en silencio y el
+# runbook de despliegue queda cojo.
+!**/*.example
 .env.test
 .turbo
 .superpowers/
@@ -13,3 +17,4 @@ test-results/
 playwright-report/
 blob-report/
 playwright/.cache/
+.claude/

@@ -1,0 +1,85 @@
+# Stack de la plataforma: la web y el proxy de entrada.
+#
+# Va SEPARADA de la de Supabase a propósito. La de Supabase es el `docker-compose.yml`
+# oficial de supabase/docker sin tocar ni un carácter, así que actualizarla es un `git pull`
+# y no un merge a mano de nuestros cambios. Las dos stacks se ven porque comparten la red
+# externa `supabase_default` (ver README: la de Supabase se levanta con `-p supabase`).
+#
+#   docker compose -f docker-compose.app.yml --env-file .env.app up -d
+
+name: suarex
+
+services:
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        # Horneadas en el bundle del navegador (ver Dockerfile). Si cambias el dominio o
+        # rotas la anon key hay que RECONSTRUIR la imagen, no basta con reiniciar.
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+    image: suarex-web:latest
+    restart: unless-stopped
+    environment:
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      # Solo aquí, en el servidor. NUNCA en el instalador del agente, nunca con prefijo
+      # NEXT_PUBLIC_, nunca en un ARG de build (acabaría en una capa de la imagen).
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      TENANT_ROOT_DOMAINS: ${TENANT_ROOT_DOMAINS}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+    # Sin `ports`: la web NO se publica al exterior. Solo Caddy la alcanza, por la red
+    # interna. Publicar el 3000 permitiría saltarse TLS y las cabeceras de seguridad
+    # llamando a la IP del VPS directamente.
+    expose:
+      - "3000"
+    networks:
+      - internal
+      - supabase
+    # 2 vCPU compartidos: se acota la web para que un pico de SSR no deje sin CPU a
+    # Postgres, que es lo único que no puede degradar sin romperlo todo.
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1g
+
+  caddy:
+    build:
+      context: .
+      dockerfile: Dockerfile.caddy
+    image: suarex-caddy:latest
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      PLATFORM_DOMAIN: ${PLATFORM_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL}
+      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Persistir los certificados es obligatorio: sin esto, cada `up` vuelve a pedirlos y
+      # Let's Encrypt limita a 5 certificados por dominio y semana. Se agota en un día de
+      # pruebas y te quedas sin HTTPS hasta que caduque la ventana.
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - internal
+      - supabase
+
+volumes:
+  caddy_data:
+  caddy_config:
+
+networks:
+  internal:
+  # La crea la stack de Supabase. `external: true` hace que esta falle rápido y claro si
+  # Supabase no está levantada, en vez de arrancar una web que no puede hablar con nada.
+  supabase:
+    external: true
+    name: supabase_default

@@ -1,0 +1,14 @@
+# Caddy con el módulo DNS de Cloudflare. La imagen oficial no lo trae y sin él NO se puede
+# emitir el certificado comodín de `*.suarex.app`: Let's Encrypt solo firma comodines por
+# challenge DNS-01, que exige crear un registro TXT vía API en el proveedor de DNS.
+#
+# Si tu DNS no es Cloudflare, cambia el módulo por el de tu proveedor
+# (https://github.com/caddy-dns) y ajusta el bloque `tls` del Caddyfile.
+
+FROM caddy:2-builder AS builder
+
+RUN xcaddy build --with github.com/caddy-dns/cloudflare
+
+FROM caddy:2
+
+COPY --from=builder /usr/bin/caddy /usr/bin/caddy

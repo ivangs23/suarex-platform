@@ -1,0 +1,45 @@
+# Se copia a la carpeta de la stack de Supabase como `docker-compose.override.yml`.
+#
+# Es el ÚNICO cambio sobre el compose oficial. Todo lo demás queda intacto para que
+# actualizar Supabase siga siendo un `git pull`.
+#
+# IMPORTANTE: el `.env` de Supabase trae `COMPOSE_FILE=docker-compose.yml`, que fija la
+# lista de ficheros e IGNORA este override en silencio. Hay que cambiarlo a:
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.override.yml
+# Sin eso, todo lo de aquí se aplica a nada y no avisa de nada.
+
+services:
+  # El compose oficial publica el pooler en 0.0.0.0:5432 y 0.0.0.0:6543, es decir, Postgres
+  # abierto a internet. Docker publica saltándose ufw, así que el cortafuegos NO lo tapa:
+  # atarlo a loopback es el único control que funciona aquí. Se llega por túnel SSH:
+  #   ssh -L 5432:127.0.0.1:5432 <servidor>
+  #
+  # `!override` REEMPLAZA la lista del compose oficial. Sin la etiqueta, Compose fusiona las
+  # dos listas y quedan publicados los dos mapeos: el bueno y el abierto. Requiere
+  # Compose >= 2.20.
+  #
+  # No intentes hacer esto poniendo `POSTGRES_PORT=127.0.0.1:5432` en el .env: esa variable
+  # la consume TAMBIÉN el propio Postgres como su parámetro `port`, y arranca con
+  # `FATAL: invalid value for parameter "port"`.
+  db:
+    ports: !override
+      - "127.0.0.1:5432:5432"
+
+  supavisor:
+    ports: !override
+      - "127.0.0.1:6543:6543"
+
+  auth:
+    environment:
+      # EL HOOK. Todo el modelo multi-cliente depende de que el JWT lleve tenant_id y
+      # tenant_role; los inyecta public.custom_access_token_hook
+      # (supabase/migrations/20260721000001_core_tenancy.sql). Sin esto current_tenant_id()
+      # lee null y las políticas de RLS dejan de acotar: cualquier usuario autenticado
+      # vería los datos de TODOS los clientes.
+      #
+      # No basta con ponerlas en el .env de Supabase: el compose oficial solo propaga al
+      # contenedor de auth la lista de GOTRUE_* que él conoce, y estas dos no están en ella.
+      # Comprobado en la instalación real -- se ponen en el .env y el contenedor arranca sin
+      # ellas, sin ningún aviso.
+      GOTRUE_HOOK_CUSTOM_ACCESS_TOKEN_ENABLED: "true"
+      GOTRUE_HOOK_CUSTOM_ACCESS_TOKEN_URI: "pg-functions://postgres/public/custom_access_token_hook"

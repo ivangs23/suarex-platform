@@ -1,0 +1,160 @@
+/* Tema GENÉRICO: todo se pinta con las variables de marca que inyecta el layout raíz
+   (`--color-*`, ver brandingToCssVars en @suarex/config). Un cliente nuevo solo configura su
+   branding y obtiene esta carta -- cero código. Las fuentes caen a las que carga el layout
+   (`--font-playfair` para títulos, `--font-inter` para texto) si el branding no aporta una
+   familia utilizable. */
+
+.page {
+  min-height: 100vh;
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-family: var(--font-inter), system-ui, sans-serif;
+  padding: 2rem 1.25rem 4rem;
+}
+
+.inner {
+  max-width: 52rem;
+  margin: 0 auto;
+}
+
+.header {
+  text-align: center;
+  padding: 1.5rem 0 2.5rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-primary) 20%, transparent);
+  margin-bottom: 2.5rem;
+}
+
+.logo {
+  max-height: 4.5rem;
+  width: auto;
+  margin: 0 auto 1rem;
+  display: block;
+}
+
+.name {
+  font-family: var(--font-playfair), Georgia, serif;
+  font-size: clamp(2rem, 6vw, 3rem);
+  font-weight: 700;
+  line-height: 1.1;
+  margin: 0;
+  color: var(--color-primary);
+  letter-spacing: -0.01em;
+}
+
+.mesa {
+  margin: 0.6rem 0 0;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: color-mix(in srgb, var(--color-fg) 60%, transparent);
+}
+
+.lead {
+  text-align: center;
+  color: color-mix(in srgb, var(--color-fg) 65%, transparent);
+  margin: 0 0 2rem;
+}
+
+.nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  margin-bottom: 1.75rem;
+}
+
+.back {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  background: var(--color-primary);
+  color: var(--color-bg);
+  text-decoration: none;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.crumbs {
+  margin: 0;
+  font-size: 0.85rem;
+  color: color-mix(in srgb, var(--color-fg) 60%, transparent);
+}
+
+.crumbs a {
+  color: inherit;
+}
+
+.grid {
+  list-style: none;
+  margin: 0 0 2rem;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+  gap: 0.9rem;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 7rem;
+  padding: 1.25rem 1rem;
+  text-align: center;
+  text-decoration: none;
+  color: inherit;
+  background: color-mix(in srgb, var(--color-muted) 45%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-primary) 14%, transparent);
+  border-radius: 0.75rem;
+}
+
+.cardName {
+  font-family: var(--font-playfair), Georgia, serif;
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--color-accent);
+}
+
+.cardCount {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: color-mix(in srgb, var(--color-fg) 55%, transparent);
+}
+
+.items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 1rem;
+  background: color-mix(in srgb, var(--color-muted) 35%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-primary) 12%, transparent);
+  border-radius: 0.6rem;
+}
+
+.itemName {
+  font-weight: 500;
+}
+
+.price {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--color-primary);
+  white-space: nowrap;
+}
+
+.empty {
+  text-align: center;
+  color: color-mix(in srgb, var(--color-fg) 55%, transparent);
+  padding: 3rem 0;
+}

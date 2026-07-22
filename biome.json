@@ -8,6 +8,7 @@
       "!**/dist",
       "!**/out",
       "!**/.turbo",
+      "!**/.claude",
       "!**/test-results",
       "!**/playwright-report",
       "!packages/db/src/__compile_fixtures__"
