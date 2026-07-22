@@ -102,6 +102,19 @@ export function tenantScoped(table: TenantScopedTable, tenantId: string) {
       const scoped = { ...rest, tenant_id: tenantId };
       return serviceClient().from(table).upsert(scoped, { onConflict });
     },
+
+    /**
+     * El filtro de tenant se aplica ANTES de devolver el builder, igual que en
+     * `select`/`update`: quien llama solo puede acotar el DELETE más (`.eq("id", ...)`,
+     * ...) sobre un conjunto que ya está limitado a `tenant_id = tenantId` -- no hay
+     * forma de borrar una fila de otro tenant pasando su id, porque el WHERE de tenant ya
+     * está fijado antes de que el llamante añada nada. Añadido para el CRUD de catálogo
+     * de administración (`src/admin-catalog.ts`): ningún repositorio anterior a este
+     * necesitaba borrar filas.
+     */
+    delete() {
+      return serviceClient().from(table).delete().eq("tenant_id", tenantId);
+    },
   };
 }
 
