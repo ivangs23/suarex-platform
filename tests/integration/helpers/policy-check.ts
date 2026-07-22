@@ -53,6 +53,52 @@ const ALLERGENS_READ_EXCEPTION_FORM = "((tenant_id IS NULL) OR (tenant_id = curr
  */
 const SELF_SCOPED_FORM = "(id = current_tenant_id())";
 
+/**
+ * Hardening de dispositivos (device RLS, ver
+ * `20260722000005_device_rls_hardening.sql`): forma que EXCLUYE al rol `device` de una
+ * cláusula, dejando intacto el resto de roles (`current_tenant_role() IS DISTINCT FROM
+ * 'device'` es `true` para cualquier valor que no sea exactamente 'device', incluido
+ * NULL -- una sesión sin ese claim todavía). Usada tanto para tablas donde device pierde
+ * TODO acceso (se añade a qual y with_check de la policy `for all` existente) como para
+ * el lado de ESCRITURA de tablas donde device conserva lectura (INSERT/UPDATE/DELETE
+ * separados del SELECT sin cambios). Forma confirmada empíricamente contra la base local
+ * (`pg_get_expr` sobre una policy de prueba con exactamente esta expresión) -- no
+ * adivinada.
+ */
+const ROLE_EXCLUDED_FORM =
+  "((tenant_id = current_tenant_id()) AND (current_tenant_role() IS DISTINCT FROM 'device'::text))";
+
+/**
+ * Análoga a `ROLE_EXCLUDED_FORM` pero para `tenants`, que se aísla por su propia `id` en
+ * vez de por `tenant_id` (mismo motivo que `SELF_SCOPED_FORM`). Restringida
+ * ESTRUCTURALMENTE a `tablename = 'tenants'` vía `tables`, igual que `SELF_SCOPED_FORM`.
+ */
+const SELF_SCOPED_ROLE_EXCLUDED_FORM =
+  "((id = current_tenant_id()) AND (current_tenant_role() IS DISTINCT FROM 'device'::text))";
+
+/**
+ * Excepción declarada de `allergens_read`, ahora con la exclusión de rol añadida: un
+ * device no tiene ningún motivo para leer alérgenos (ni los propios de su tenant ni los
+ * 14 globales de la UE con `tenant_id IS NULL`) -- construye el ticket a partir de los
+ * snapshots ya desnormalizados en `order_items`/`order_item_extras`, nunca del catálogo.
+ * Restringida a `tablename = 'allergens'` (a diferencia de `ALLERGENS_READ_EXCEPTION_FORM`,
+ * que no lleva esa restricción): esta variante es nueva y solo la usa esa tabla, así que
+ * se ata explícitamente en vez de dejarla disponible en general.
+ */
+const ALLERGENS_READ_DEVICE_EXCLUDED_FORM =
+  "(((tenant_id IS NULL) OR (tenant_id = current_tenant_id())) AND (current_tenant_role() IS DISTINCT FROM 'device'::text))";
+
+/**
+ * Forma exclusiva de `devices_select_own`: un device solo ve SU PROPIA fila en
+ * `devices` (identificada por `auth_user_id = auth.uid()`), nunca las de otros
+ * dispositivos del mismo tenant -- el resto de roles siguen viendo todas las filas del
+ * tenant vía la policy `devices_select_tenant` (que usa `ROLE_EXCLUDED_FORM` sin más).
+ * Restringida ESTRUCTURALMENTE a `tablename = 'devices'` y `commands: ['SELECT']`: esta
+ * forma nunca debe poder colarse como policy de escritura ni en ninguna otra tabla.
+ */
+const DEVICE_SELF_ROW_FORM =
+  "((tenant_id = current_tenant_id()) AND (current_tenant_role() = 'device'::text) AND (auth_user_id = auth.uid()))";
+
 type PermittedForm = {
   expr: string;
   clause: PolicyClause;
@@ -98,6 +144,40 @@ const PERMITTED_FORMS: readonly PermittedForm[] = [
     clause: "with_check",
     commands: ["SELECT", "INSERT", "UPDATE", "DELETE", "ALL"],
     tables: new Set(["tenants"]),
+  },
+  {
+    expr: ROLE_EXCLUDED_FORM,
+    clause: "qual",
+    commands: ["SELECT", "INSERT", "UPDATE", "DELETE", "ALL"],
+  },
+  {
+    expr: ROLE_EXCLUDED_FORM,
+    clause: "with_check",
+    commands: ["SELECT", "INSERT", "UPDATE", "DELETE", "ALL"],
+  },
+  {
+    expr: SELF_SCOPED_ROLE_EXCLUDED_FORM,
+    clause: "qual",
+    commands: ["SELECT", "INSERT", "UPDATE", "DELETE", "ALL"],
+    tables: new Set(["tenants"]),
+  },
+  {
+    expr: SELF_SCOPED_ROLE_EXCLUDED_FORM,
+    clause: "with_check",
+    commands: ["SELECT", "INSERT", "UPDATE", "DELETE", "ALL"],
+    tables: new Set(["tenants"]),
+  },
+  {
+    expr: ALLERGENS_READ_DEVICE_EXCLUDED_FORM,
+    clause: "qual",
+    commands: ["SELECT"],
+    tables: new Set(["allergens"]),
+  },
+  {
+    expr: DEVICE_SELF_ROW_FORM,
+    clause: "qual",
+    commands: ["SELECT"],
+    tables: new Set(["devices"]),
   },
 ];
 

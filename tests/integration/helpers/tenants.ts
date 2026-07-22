@@ -92,6 +92,59 @@ export async function createTenantFixture(slug: string): Promise<TenantFixture> 
   return { tenantId: tenant.id, userId: user.user.id, slug, email, client };
 }
 
+export type RoleFixture = {
+  userId: string;
+  email: string;
+  client: SupabaseClient;
+};
+
+/**
+ * Da de alta un usuario de Auth y una membership con el ROL indicado en un tenant YA
+ * EXISTENTE (a diferencia de `createTenantFixture`, que siempre crea un tenant nuevo con
+ * una membership `owner`). Pensado para probar otros roles (`staff`, `device`) DENTRO del
+ * mismo tenant que una fixture ya creada, sin tener que levantar un tenant por rol --
+ * usado por `device-rls.test.ts` para comparar, en el MISMO tenant, lo que puede hacer un
+ * `device` frente a lo que sigue pudiendo hacer un `staff`.
+ */
+export async function createMembershipFixture(
+  tenantId: string,
+  role: "owner" | "admin" | "staff" | "device",
+  label: string,
+): Promise<RoleFixture> {
+  const email = `${label}-${nonce()}@fixture.local`;
+  const { data: user, error: userError } = await admin.auth.admin.createUser({
+    email,
+    password: PASSWORD,
+    email_confirm: true,
+  });
+  if (userError) throw userError;
+
+  const { error: membershipError } = await admin
+    .from("memberships")
+    .insert({ user_id: user.user.id, tenant_id: tenantId, role });
+  if (membershipError) throw membershipError;
+
+  const client = createClient(url, anonKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+  const { error: signInError } = await client.auth.signInWithPassword({
+    email,
+    password: PASSWORD,
+  });
+  if (signInError) throw signInError;
+
+  return { userId: user.user.id, email, client };
+}
+
+/** Borra SOLO la cuenta de Auth creada por `createMembershipFixture` (la membership
+ * desaparece sola en cascada cuando se borra el tenant, `on delete cascade` sobre
+ * `tenants.id`; la cuenta de Auth no, hay que borrarla explícitamente, igual que en
+ * `deleteTenantFixture`). */
+export async function deleteMembershipFixtureUser(userId: string): Promise<void> {
+  const { error } = await admin.auth.admin.deleteUser(userId);
+  if (error) throw error;
+}
+
 /**
  * Borra la fila de `tenants` y el usuario de auth creados por createTenantFixture.
  * Acotado por diseño: solo recibe el tenantId/userId concretos de la fixture (nunca un
