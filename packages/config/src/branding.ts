@@ -4,12 +4,14 @@ const HEX = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 const FONT = /^[a-zA-Z0-9 ,'-]+$/;
 
 export type Branding = {
+  name: string | null;
   colors: { bg: string; fg: string; primary: string; accent: string; muted: string };
   logoUrl: string | null;
   fonts: { display: string; body: string };
 };
 
 export const DEFAULT_BRANDING: Branding = {
+  name: null,
   colors: {
     bg: "#f5f1e8",
     fg: "#0f0f0f",
@@ -23,6 +25,27 @@ export const DEFAULT_BRANDING: Branding = {
 
 const colorSchema = z.string().regex(HEX);
 const fontSchema = z.string().regex(FONT).max(64);
+
+/** Nombre comercial visible en la carta. Máx 80 caracteres; se recorta. No impone
+ * un charset (a diferencia de fuentes/colores) porque nunca se interpola en CSS ni
+ * en HTML sin escapar: React lo renderiza como texto. Solo se acota la longitud. */
+const nameSchema = z
+  .string()
+  .transform((value) => value.trim())
+  .pipe(z.string().min(1).max(80));
+
+/** Validadores públicos de las hojas de marca, para el camino de ESCRITURA (el
+ * formulario de ajustes, `apps/web/lib/settings-action-input.ts`). En LECTURA,
+ * `parseBranding` ya degrada campo a campo; estos exports permiten rechazar en el
+ * borde de la Server Action (mejor UX: un color mal escrito da error, no un silencioso
+ * degradar a default) reusando exactamente los mismos regex, sin duplicarlos. */
+export function isHexColor(value: unknown): boolean {
+  return typeof value === "string" && HEX.test(value);
+}
+
+export function isFontName(value: unknown): boolean {
+  return typeof value === "string" && value.length <= 64 && FONT.test(value);
+}
 
 /**
  * Lee `obj[key]` sin lanzar nunca: ni si `obj` no es un objeto, ni si el
@@ -87,8 +110,10 @@ export function parseBranding(raw: unknown): Branding {
   const colorsRaw = safeProp(raw, "colors");
   const fontsRaw = safeProp(raw, "fonts");
   const logoUrlRaw = safeProp(raw, "logoUrl");
+  const nameRaw = safeProp(raw, "name");
 
   return {
+    name: withDefault(safeParseLeaf(nameSchema, nameRaw), DEFAULT_BRANDING.name),
     colors: {
       bg: withDefault(
         safeParseLeaf(colorSchema, safeProp(colorsRaw, "bg")),

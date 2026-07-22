@@ -1,9 +1,35 @@
 import { describe, expect, it } from "vitest";
-import { brandingToCssVars, DEFAULT_BRANDING, parseBranding } from "./branding.js";
+import {
+  brandingToCssVars,
+  DEFAULT_BRANDING,
+  isFontName,
+  isHexColor,
+  parseBranding,
+} from "./branding.js";
 
 describe("parseBranding", () => {
   it("devuelve los defaults con una entrada vacía", () => {
     expect(parseBranding({})).toEqual(DEFAULT_BRANDING);
+  });
+
+  it("acepta un name válido", () => {
+    expect(parseBranding({ name: "Bar Manuela" }).name).toBe("Bar Manuela");
+  });
+
+  it("degrada un name ausente a null", () => {
+    expect(parseBranding({}).name).toBeNull();
+  });
+
+  it("degrada un name no-string a null", () => {
+    expect(parseBranding({ name: 123 }).name).toBeNull();
+  });
+
+  it("degrada un name demasiado largo a null", () => {
+    expect(parseBranding({ name: "x".repeat(81) }).name).toBeNull();
+  });
+
+  it("recorta los espacios de un name válido", () => {
+    expect(parseBranding({ name: "  Garum  " }).name).toBe("Garum");
   });
 
   it("mezcla colores parciales sin perder el resto", () => {
@@ -165,5 +191,28 @@ describe("brandingToCssVars — límite de seguridad ante payloads hostiles", ()
     for (const char of FORBIDDEN_CHARS) {
       expect(css.includes(char)).toBe(false);
     }
+  });
+});
+
+describe("isHexColor", () => {
+  it("acepta #abc y #aabbcc", () => {
+    expect(isHexColor("#abc")).toBe(true);
+    expect(isHexColor("#AABBCC")).toBe(true);
+  });
+  it("rechaza no-hex", () => {
+    expect(isHexColor("rojo")).toBe(false);
+    expect(isHexColor("#12")).toBe(false);
+    expect(isHexColor(123)).toBe(false);
+  });
+});
+
+describe("isFontName", () => {
+  it("acepta una fuente simple", () => {
+    expect(isFontName("Inter, sans-serif")).toBe(true);
+  });
+  it("rechaza caracteres peligrosos", () => {
+    expect(isFontName("a<b")).toBe(false);
+    expect(isFontName("x".repeat(65))).toBe(false);
+    expect(isFontName(123)).toBe(false);
   });
 });
