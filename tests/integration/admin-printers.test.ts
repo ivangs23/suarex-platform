@@ -43,8 +43,7 @@ describe("createPrinter + listPrinters", () => {
     const { id } = await createPrinter(tenantA.tenantId, {
       venueId: venueA,
       name: `Impresora-${nonce()}`,
-      host: "192.168.1.50",
-      port: 9100,
+      connection: { type: "network", host: "192.168.1.50", port: 9100 },
       destination: "barra",
     });
 
@@ -64,8 +63,7 @@ describe("createPrinter + listPrinters", () => {
     const { id } = await createPrinter(tenantA.tenantId, {
       venueId: venueA,
       name: `Impresora-def-${nonce()}`,
-      host: "192.168.1.51",
-      port: 9100,
+      connection: { type: "network", host: "192.168.1.51", port: 9100 },
     });
 
     const printers = await listPrinters(tenantA.tenantId);
@@ -76,8 +74,7 @@ describe("createPrinter + listPrinters", () => {
     const { id } = await createPrinter(tenantA.tenantId, {
       venueId: venueA,
       name: `Impresora-dev-${nonce()}`,
-      host: "192.168.1.52",
-      port: 9100,
+      connection: { type: "network", host: "192.168.1.52", port: 9100 },
       deviceId: deviceA,
     });
 
@@ -92,8 +89,7 @@ describe("validación de host/port en el repositorio", () => {
       createPrinter(tenantA.tenantId, {
         venueId: venueA,
         name: "Sin host",
-        host: "   ",
-        port: 9100,
+        connection: { type: "network", host: "   ", port: 9100 },
       }),
     ).rejects.toThrow(/host inválido/);
   });
@@ -103,8 +99,7 @@ describe("validación de host/port en el repositorio", () => {
       createPrinter(tenantA.tenantId, {
         venueId: venueA,
         name: "Port NaN",
-        host: "192.168.1.60",
-        port: Number("abc"),
+        connection: { type: "network", host: "192.168.1.60", port: Number("abc") },
       }),
     ).rejects.toThrow(/port inválido/);
   });
@@ -114,8 +109,7 @@ describe("validación de host/port en el repositorio", () => {
       createPrinter(tenantA.tenantId, {
         venueId: venueA,
         name: "Port 0",
-        host: "192.168.1.61",
-        port: 0,
+        connection: { type: "network", host: "192.168.1.61", port: 0 },
       }),
     ).rejects.toThrow(/port inválido/);
   });
@@ -125,8 +119,7 @@ describe("validación de host/port en el repositorio", () => {
       createPrinter(tenantA.tenantId, {
         venueId: venueA,
         name: "Port negativo",
-        host: "192.168.1.62",
-        port: -1,
+        connection: { type: "network", host: "192.168.1.62", port: -1 },
       }),
     ).rejects.toThrow(/port inválido/);
   });
@@ -136,8 +129,7 @@ describe("validación de host/port en el repositorio", () => {
       createPrinter(tenantA.tenantId, {
         venueId: venueA,
         name: "Port fuera de rango",
-        host: "192.168.1.63",
-        port: 70000,
+        connection: { type: "network", host: "192.168.1.63", port: 70000 },
       }),
     ).rejects.toThrow(/port inválido/);
   });
@@ -147,8 +139,7 @@ describe("validación de host/port en el repositorio", () => {
       createPrinter(tenantA.tenantId, {
         venueId: venueA,
         name: "Port decimal",
-        host: "192.168.1.64",
-        port: 9100.5,
+        connection: { type: "network", host: "192.168.1.64", port: 9100.5 },
       }),
     ).rejects.toThrow(/port inválido/);
   });
@@ -157,18 +148,18 @@ describe("validación de host/port en el repositorio", () => {
     const low = await createPrinter(tenantA.tenantId, {
       venueId: venueA,
       name: `Port-min-${nonce()}`,
-      host: "192.168.1.65",
-      port: 1,
+      connection: { type: "network", host: "192.168.1.65", port: 1 },
     });
     const high = await createPrinter(tenantA.tenantId, {
       venueId: venueA,
       name: `Port-max-${nonce()}`,
-      host: "192.168.1.66",
-      port: 65535,
+      connection: { type: "network", host: "192.168.1.66", port: 65535 },
     });
     const printers = await listPrinters(tenantA.tenantId);
-    expect(printers.find((p) => p.id === low.id)?.connection.port).toBe(1);
-    expect(printers.find((p) => p.id === high.id)?.connection.port).toBe(65535);
+    const lowConnection = printers.find((p) => p.id === low.id)?.connection;
+    const highConnection = printers.find((p) => p.id === high.id)?.connection;
+    expect(lowConnection?.type === "network" ? lowConnection.port : undefined).toBe(1);
+    expect(highConnection?.type === "network" ? highConnection.port : undefined).toBe(65535);
   });
 });
 
@@ -178,8 +169,7 @@ describe("aislamiento entre tenants", () => {
       createPrinter(tenantA.tenantId, {
         venueId: venueB,
         name: `Intruso-${nonce()}`,
-        host: "192.168.1.70",
-        port: 9100,
+        connection: { type: "network", host: "192.168.1.70", port: 9100 },
       }),
     ).rejects.toThrow(/cross-tenant/i);
   });
@@ -189,8 +179,7 @@ describe("aislamiento entre tenants", () => {
       createPrinter(tenantA.tenantId, {
         venueId: venueA,
         name: `Intruso-device-${nonce()}`,
-        host: "192.168.1.71",
-        port: 9100,
+        connection: { type: "network", host: "192.168.1.71", port: 9100 },
         deviceId: deviceB,
       }),
     ).rejects.toThrow(/cross-tenant/i);
@@ -201,8 +190,7 @@ describe("aislamiento entre tenants", () => {
     const { id } = await createPrinter(tenantB.tenantId, {
       venueId: venueB,
       name,
-      host: "192.168.1.80",
-      port: 9100,
+      connection: { type: "network", host: "192.168.1.80", port: 9100 },
     });
 
     await updatePrinter(tenantA.tenantId, id, { name: "Hackeada por A" });
@@ -216,8 +204,7 @@ describe("aislamiento entre tenants", () => {
     const { id } = await createPrinter(tenantB.tenantId, {
       venueId: venueB,
       name,
-      host: "192.168.1.81",
-      port: 9100,
+      connection: { type: "network", host: "192.168.1.81", port: 9100 },
     });
 
     await deletePrinter(tenantA.tenantId, id);
@@ -236,13 +223,11 @@ describe("update/delete de impresoras", () => {
     const { id } = await createPrinter(tenantA.tenantId, {
       venueId: venueA,
       name: `upd-${nonce()}`,
-      host: "192.168.1.90",
-      port: 9100,
+      connection: { type: "network", host: "192.168.1.90", port: 9100 },
     });
 
     await updatePrinter(tenantA.tenantId, id, {
-      host: "192.168.1.99",
-      port: 9101,
+      connection: { type: "network", host: "192.168.1.99", port: 9101 },
       destination: "all",
       enabled: false,
       isDefault: true,
@@ -259,35 +244,22 @@ describe("update/delete de impresoras", () => {
     expect(printers.some((p) => p.id === id)).toBe(false);
   });
 
-  it("updatePrinter rechaza cambiar solo host o solo port sin el otro", async () => {
-    const { id } = await createPrinter(tenantA.tenantId, {
-      venueId: venueA,
-      name: `upd-partial-${nonce()}`,
-      host: "192.168.1.91",
-      port: 9100,
-    });
-
-    await expect(updatePrinter(tenantA.tenantId, id, { host: "192.168.1.92" })).rejects.toThrow(
-      /host y port/,
-    );
-    await expect(updatePrinter(tenantA.tenantId, id, { port: 9200 })).rejects.toThrow(
-      /host y port/,
-    );
-  });
-
   it("updatePrinter valida host/port igual que createPrinter", async () => {
     const { id } = await createPrinter(tenantA.tenantId, {
       venueId: venueA,
       name: `upd-invalid-${nonce()}`,
-      host: "192.168.1.93",
-      port: 9100,
+      connection: { type: "network", host: "192.168.1.93", port: 9100 },
     });
 
     await expect(
-      updatePrinter(tenantA.tenantId, id, { host: "192.168.1.94", port: 70000 }),
+      updatePrinter(tenantA.tenantId, id, {
+        connection: { type: "network", host: "192.168.1.94", port: 70000 },
+      }),
     ).rejects.toThrow(/port inválido/);
-    await expect(updatePrinter(tenantA.tenantId, id, { host: "  ", port: 9100 })).rejects.toThrow(
-      /host inválido/,
-    );
+    await expect(
+      updatePrinter(tenantA.tenantId, id, {
+        connection: { type: "network", host: "  ", port: 9100 },
+      }),
+    ).rejects.toThrow(/host inválido/);
   });
 });

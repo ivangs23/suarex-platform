@@ -60,14 +60,21 @@ function parseDestination(formData: FormData): "cocina" | "barra" | "all" | unde
 export const createPrinterAction = managerAction(async (session, formData: FormData) => {
   const venueId = requiredString(formData, "venue_id");
   const name = requiredString(formData, "name");
-  const host = requiredString(formData, "host");
-  const port = Number(requiredString(formData, "port"));
+
+  const connectionType = optionalString(formData, "connection_type") ?? "network";
+  const connection =
+    connectionType === "usb"
+      ? { type: "usb" as const, printerName: requiredString(formData, "printer_name") }
+      : {
+          type: "network" as const,
+          host: requiredString(formData, "host"),
+          port: Number(requiredString(formData, "port")),
+        };
 
   await createPrinter(session.tenantId, {
     venueId,
     name,
-    host,
-    port,
+    connection,
     destination: parseDestination(formData),
     deviceId: optionalString(formData, "device_id"),
     isDefault: parseOptionalBoolean(formData, "is_default"),
@@ -78,12 +85,14 @@ export const createPrinterAction = managerAction(async (session, formData: FormD
 
 export const updatePrinterAction = managerAction(async (session, formData: FormData) => {
   const printerId = requiredString(formData, "printer_id");
+  const host = optionalString(formData, "host");
+  const port = parseOptionalInt(formData, "port");
 
   await updatePrinter(session.tenantId, printerId, {
     venueId: optionalString(formData, "venue_id"),
     name: optionalString(formData, "name"),
-    host: optionalString(formData, "host"),
-    port: parseOptionalInt(formData, "port"),
+    connection:
+      host !== undefined && port !== undefined ? { type: "network", host, port } : undefined,
     destination: parseDestination(formData),
     // `optionalString` nunca devuelve "" (ver su docstring): un `device_id` ausente o en
     // blanco produce `undefined` -- "no tocar este campo" para `updatePrinter`, no "poner

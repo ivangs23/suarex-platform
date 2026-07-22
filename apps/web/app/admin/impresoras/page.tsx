@@ -1,4 +1,10 @@
-import { destinationsMissingPrinter, listDevices, listPrinters, listVenues } from "@suarex/db";
+import {
+  destinationsMissingPrinter,
+  listDevices,
+  listPrinters,
+  listVenues,
+  usbPrintersWithoutDevice,
+} from "@suarex/db";
 import { requireManager } from "@/lib/require-manager";
 import { ConfirmDeleteForm } from "../catalogo/ConfirmDeleteForm";
 import { deletePrinterAction } from "./actions";
@@ -11,9 +17,14 @@ import { PrinterForm } from "./PrinterForm";
  * guarda.
  *
  * `listDevices` alimenta el `<select>` opcional de dispositivo del formulario de alta --
- * D2 solo admite impresoras de red (`connection.type === "network"`, ver
- * `packages/db/src/admin-printers.ts`), así que `printer.connection.host`/`.port` son
- * siempre esos dos campos.
+ * el formulario (`PrinterForm`) ya soporta Red y USB (selector `connection_type`, fase
+ * C2b-a Task 4). `connection` es una unión (`packages/db/src/admin-printers.ts`), así que
+ * la fila distingue por `connection.type` para poder mostrar filas USB creadas desde el
+ * formulario o fuera de él (agente, tests) sin romper el tipo.
+ *
+ * `usbPrintersWithoutDevice` (fase C2b-a Task 5) señala las USB habilitadas sin
+ * `device_id`: ningún agente las reclama, así que sus tickets se pierden en silencio --
+ * mismo espíritu que el aviso de `destinationsMissingPrinter`.
  */
 export default async function AdminImpresorasPage() {
   const session = await requireManager();
@@ -24,6 +35,7 @@ export default async function AdminImpresorasPage() {
     listVenues(session.tenantId),
   ]);
   const venueGaps = await destinationsMissingPrinter(session.tenantId);
+  const usbSinDispositivo = await usbPrintersWithoutDevice(session.tenantId);
 
   const defaultVenueId = venues.find((venue) => venue.isDefault)?.id ?? venues[0]?.id;
   const deviceOptions = devices.map((device) => ({ id: device.id, name: device.name }));
@@ -44,13 +56,24 @@ export default async function AdminImpresorasPage() {
         </div>
       ) : null}
 
+      {usbSinDispositivo.length > 0 ? (
+        <p role="alert" data-testid="usb-no-device-warning">
+          ⚠ Impresora(s) USB sin dispositivo asignado:{" "}
+          {usbSinDispositivo.map((p) => p.name).join(", ")}. No imprimen hasta que las ates a un
+          dispositivo.
+        </p>
+      ) : null}
+
       {printers.length === 0 ? <p>Todavía no hay impresoras.</p> : null}
 
       {printers.map((printer) => (
         <article key={printer.id} data-testid="admin-printer" data-printer-id={printer.id}>
           <h3>{printer.name}</h3>
           <p>
-            {printer.connection.host}:{printer.connection.port} -- destino: {printer.destination}
+            {printer.connection.type === "network"
+              ? `${printer.connection.host}:${printer.connection.port}`
+              : `USB: ${printer.connection.printerName}`}{" "}
+            -- destino: {printer.destination}
             {printer.enabled ? null : " (deshabilitada)"}
           </p>
           <ConfirmDeleteForm
