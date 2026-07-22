@@ -12,6 +12,7 @@ import {
 
 let tenantA: TenantFixture;
 let tenantB: TenantFixture;
+let tenantFresh: TenantFixture;
 const staffUserIds: string[] = [];
 
 beforeAll(async () => {
@@ -19,12 +20,17 @@ beforeAll(async () => {
   tenantB = await createTenantFixture(`set-b-${nonce()}`);
   await seedCatalog(tenantA.tenantId, "sa");
   await seedCatalog(tenantB.tenantId, "sb");
+  // Sin seedCatalog: este tenant NO tiene fila en tenant_settings, a diferencia
+  // de tenantA/tenantB. Cubre la rama INSERT del upsert de updateTenantSettings
+  // (ver test "crea la fila de settings si el tenant aún no tiene una").
+  tenantFresh = await createTenantFixture(`set-fresh-${nonce()}`);
 });
 
 afterAll(async () => {
   for (const id of staffUserIds) await deleteMembershipFixtureUser(id);
   if (tenantA) await deleteTenantFixture(tenantA);
   if (tenantB) await deleteTenantFixture(tenantB);
+  if (tenantFresh) await deleteTenantFixture(tenantFresh);
 });
 
 describe("updateTenantSettings", () => {
@@ -40,6 +46,19 @@ describe("updateTenantSettings", () => {
     expect(settings?.fiscal).toMatchObject({ legalName: "Casa A SL", taxRate: 0.1 });
     expect(settings?.locale).toBe("en");
     expect(settings?.currency).toBe("USD");
+  });
+
+  it("crea la fila de settings si el tenant aún no tiene una (rama INSERT del upsert)", async () => {
+    await updateTenantSettings(tenantFresh.tenantId, {
+      branding: { name: "Nuevo" },
+      fiscal: {},
+      locale: "es",
+      currency: "EUR",
+    });
+    const settings = await getTenantSettings(tenantFresh.tenantId);
+    expect(settings?.branding).toMatchObject({ name: "Nuevo" });
+    expect(settings?.locale).toBe("es");
+    expect(settings?.currency).toBe("EUR");
   });
 
   it("no toca los ajustes de otro tenant", async () => {
