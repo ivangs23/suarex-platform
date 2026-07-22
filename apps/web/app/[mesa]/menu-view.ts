@@ -6,6 +6,8 @@ export type MenuNode = {
   id: string;
   slug: string;
   name: string;
+  /** Emoji de la categoría, o `null`. Los temas lo pintan si viene; ninguno depende de él. */
+  icon: string | null;
   productCount: number;
   href: string;
 };
@@ -138,6 +140,7 @@ export function buildMenuView(params: {
     id: category.id,
     slug: category.slug,
     name: categoryName(category),
+    icon: category.icon,
     productCount: countSubtree(category.id),
     href: hrefFor(category.slug),
   }));

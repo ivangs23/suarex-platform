@@ -26,6 +26,10 @@ export type Category = {
    * árbol navegables por niveles, imprescindible en cartas grandes. */
   parentId: string | null;
   nameI18n: Record<string, string>;
+  /** Emoji identificativo de la categoría (🍷, ☕...), o `null`. En una carta que se
+   * navega por niveles es lo que permite reconocer una categoría de un vistazo antes de
+   * leerla. Opcional: sin icono, el tema simplemente no pinta nada. */
+  icon: string | null;
   sortOrder: number;
 };
 

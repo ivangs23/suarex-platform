@@ -51,6 +51,13 @@ export const ManuelaTheme: MenuTheme = ({ businessName, mesa, branding, view }) 
           {view.children.map((node) => (
             <li key={node.id} data-testid="category">
               <a className={styles.card} href={node.href}>
+                {/* aria-hidden: el emoji es apoyo visual, el nombre de al lado ya dice qué
+                    es. Sin esto, un lector de pantalla anuncia "copa de vino Vinos". */}
+                {node.icon ? (
+                  <span className={styles.cardIcon} aria-hidden="true">
+                    {node.icon}
+                  </span>
+                ) : null}
                 <span className={styles.cardName}>{node.name}</span>
                 <span className={styles.cardCount}>
                   {node.productCount} {node.productCount === 1 ? "plato" : "platos"}

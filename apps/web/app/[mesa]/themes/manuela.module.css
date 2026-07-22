@@ -125,6 +125,11 @@
   border-radius: 1.25rem;
 }
 
+.cardIcon {
+  font-size: 2rem;
+  line-height: 1;
+}
+
 .cardName {
   font-size: 1.1rem;
   font-weight: 800;

@@ -2,8 +2,13 @@ import type { Category, Product } from "@suarex/db";
 import { describe, expect, it } from "vitest";
 import { buildMenuView } from "./menu-view";
 
-function cat(slug: string, parentId: string | null, name = slug): Category {
-  return { id: `c-${slug}`, slug, parentId, nameI18n: { es: name }, sortOrder: 0 };
+function cat(
+  slug: string,
+  parentId: string | null,
+  name = slug,
+  icon: string | null = null,
+): Category {
+  return { id: `c-${slug}`, slug, parentId, nameI18n: { es: name }, icon, sortOrder: 0 };
 }
 
 function prod(id: string, categoryId: string, name: string, price: number): Product {
@@ -86,6 +91,17 @@ describe("buildMenuView", () => {
     const leaf = buildMenuView({ categories, products, currentSlug: "tinto", basePath: "/5" });
     expect(root.totalProducts).toBe(4);
     expect(leaf.totalProducts).toBe(4);
+  });
+
+  it("pasa el icono de la categoría, y null cuando no tiene", () => {
+    // Una categoría sin icono es válida: el tema no debe pintar un hueco ni romperse.
+    const view = buildMenuView({
+      categories: [cat("vinos", null, "Vinos", "🍷"), cat("tapas", null, "Tapas")],
+      products: [],
+      currentSlug: null,
+      basePath: "/5",
+    });
+    expect(view.children.map((c) => c.icon)).toEqual(["🍷", null]);
   });
 
   it("formatea el precio en el idioma y la moneda del tenant", () => {
