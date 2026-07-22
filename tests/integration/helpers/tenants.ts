@@ -35,6 +35,18 @@ export function anonClient(): SupabaseClient {
   });
 }
 
+/** URL de Supabase local para tests que construyen su propio cliente (p. ej.
+ * `createDeviceClient` de `@suarex/agent`), mismo `SUPABASE_URL` que usa `anonClient`. */
+export function supabaseUrlForTest(): string {
+  return url;
+}
+
+/** Anon key local para tests que construyen su propio cliente, misma
+ * `SUPABASE_ANON_KEY` que usa `anonClient`. */
+export function anonKeyForTest(): string {
+  return anonKey;
+}
+
 export type TenantFixture = {
   tenantId: string;
   userId: string;

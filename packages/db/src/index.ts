@@ -33,7 +33,13 @@ export type {
   DeviceRow,
   RegeneratePairingCodeResult,
 } from "./admin-devices.js";
-export { createDevice, deleteDevice, listDevices, regeneratePairingCode } from "./admin-devices.js";
+export {
+  createDevice,
+  deleteDevice,
+  listDevices,
+  regeneratePairingCode,
+  resetDevice,
+} from "./admin-devices.js";
 export type {
   CreatePrinterInput,
   PrinterConnection,
@@ -65,8 +71,15 @@ export {
   markOrderPaid,
   OrderCartError,
 } from "./orders.js";
-export type { PrintableItem, PrintableOrder } from "./print-jobs.js";
-export { reservePrinted, unprintedPaidOrders } from "./print-jobs.js";
+export { checkPairRateLimit } from "./pair-rate-limit.js";
+export type {
+  EnabledPrinterRow,
+  PaidOrderRow,
+  PrintableItem,
+  PrintableOrder,
+} from "./print-jobs.js";
+export { reservePrinted, selectUnprintedOrders, unprintedPaidOrders } from "./print-jobs.js";
+export { destinationsMissingPrinter } from "./printer-coverage.js";
 export type { StaffOrder, StaffOrderItem, StationStatus } from "./staff-orders.js";
 export { listActiveOrders, markStationDone } from "./staff-orders.js";
 export { uploadBrandingLogo, uploadProductImage } from "./storage.js";

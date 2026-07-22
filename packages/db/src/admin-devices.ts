@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { tenantScoped } from "./client.js";
+import { authAdminForDeviceReset, tenantScoped } from "./client.js";
 
 /** Minutos de validez por defecto de un código de emparejamiento recién generado --
  * intencionadamente corto: es la única prueba de posesión de un instalador sin secretos
@@ -209,4 +209,48 @@ export async function listDevices(tenantId: string): Promise<DeviceRow[]> {
 export async function deleteDevice(tenantId: string, deviceId: string): Promise<void> {
   const { error } = await tenantScoped("devices", tenantId).delete().eq("id", deviceId);
   if (error) throw error;
+}
+
+/**
+ * Resetea un dispositivo YA emparejado (robo, o cambio de PC). En un solo flujo:
+ *   1. Si tiene cuenta de Auth, la BORRA (`deleteUser`) -- revoca sus refresh tokens y, en
+ *      cascada, elimina su `memberships` (FK on delete cascade) y pone `auth_user_id` a null
+ *      (FK on delete set null). LÍMITE HONESTO (JWT stateless): esto NO invalida un access
+ *      token ya emitido antes de que caduque; lo que revoca de inmediato es la capacidad de
+ *      RENOVAR y la membership. El PC robado pierde acceso como muy tarde al caducar su
+ *      token en curso (TTL del proyecto). Mismo tipo de límite honesto que el ACK de
+ *      impresión de C1.
+ *   2. Desempareja (`paired_at = null`) y emite un código nuevo, para un PC de repuesto.
+ * `deviceId` de otro tenant no casa el `tenantScoped` → no borra ni resetea nada ajeno.
+ */
+export async function resetDevice(
+  tenantId: string,
+  deviceId: string,
+): Promise<{ pairingCode: string; expiresAt: string }> {
+  const { data: device, error: readError } = await tenantScoped("devices", tenantId)
+    .select("id, auth_user_id")
+    .eq("id", deviceId)
+    .maybeSingle();
+  if (readError) throw readError;
+  if (!device) throw new Error("Dispositivo no encontrado en este tenant.");
+
+  const authUserId = (device as { auth_user_id: string | null }).auth_user_id;
+  if (authUserId) {
+    const { error: deleteError } = await authAdminForDeviceReset().deleteUser(authUserId);
+    if (deleteError) throw deleteError;
+  }
+
+  const pairingCode = generatePairingCode();
+  const expiresAt = new Date(Date.now() + resolveTtlMinutes(undefined) * 60_000).toISOString();
+  const { error: updateError } = await tenantScoped("devices", tenantId)
+    .update({
+      paired_at: null,
+      auth_user_id: null,
+      pairing_code: pairingCode,
+      pairing_expires_at: expiresAt,
+    })
+    .eq("id", deviceId);
+  if (updateError) throw updateError;
+
+  return { pairingCode, expiresAt };
 }

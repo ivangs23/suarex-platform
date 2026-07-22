@@ -1,4 +1,4 @@
-import { listDevices, listPrinters, listVenues } from "@suarex/db";
+import { destinationsMissingPrinter, listDevices, listPrinters, listVenues } from "@suarex/db";
 import { requireManager } from "@/lib/require-manager";
 import { ConfirmDeleteForm } from "../catalogo/ConfirmDeleteForm";
 import { deletePrinterAction } from "./actions";
@@ -23,6 +23,7 @@ export default async function AdminImpresorasPage() {
     listDevices(session.tenantId),
     listVenues(session.tenantId),
   ]);
+  const venueGaps = await destinationsMissingPrinter(session.tenantId);
 
   const defaultVenueId = venues.find((venue) => venue.isDefault)?.id ?? venues[0]?.id;
   const deviceOptions = devices.map((device) => ({ id: device.id, name: device.name }));
@@ -30,6 +31,18 @@ export default async function AdminImpresorasPage() {
   return (
     <main>
       <h1>Gestión de impresoras</h1>
+
+      {venueGaps.length > 0 ? (
+        <div role="alert" data-testid="printer-warning">
+          {venueGaps.map((gap) => (
+            <p key={gap.venueId}>
+              ⚠ {gap.venueName}: no hay impresora habilitada para {gap.destinations.join(", ")}. Los
+              tickets de {gap.destinations.length === 1 ? "ese destino" : "esos destinos"} en este
+              local no se imprimen hasta que añadas una impresora habilitada.
+            </p>
+          ))}
+        </div>
+      ) : null}
 
       {printers.length === 0 ? <p>Todavía no hay impresoras.</p> : null}
 
