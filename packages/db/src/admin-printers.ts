@@ -3,24 +3,23 @@ import { tenantScoped } from "./client.js";
 export type PrinterDestination = "cocina" | "barra" | "all";
 
 /**
- * D2 solo admite impresoras de RED (`type: "network"`): host + puerto TCP directo al
- * dispositivo (normalmente puerto 9100, RAW/JetDirect). USB (`type: "usb"`, con un
- * identificador de dispositivo local en vez de host/port) es C2 -- fuera de esta tarea.
- * No se acepta ningún otro `type` porque ninguna función de este fichero recibe un `type`
- * como entrada: `createPrinter`/`updatePrinter` lo fijan ellos mismos a `"network"`, así
- * que no hay ningún camino por el que un caller pueda colar otro valor.
+ * Conexión de una impresora: RED (`type: "network"`, host + puerto TCP directo al
+ * dispositivo, normalmente puerto 9100 RAW/JetDirect) o USB (`type: "usb"`, `printerName`
+ * tal como aparece en Windows). El caller compone el descriptor (`buildConnection` lo
+ * valida por tipo); un `type` desconocido lo rechaza `buildConnection`.
  */
-export type PrinterConnection = {
-  type: "network";
-  host: string;
-  port: number;
-};
+export type PrinterConnection =
+  | { type: "network"; host: string; port: number }
+  | { type: "usb"; printerName: string };
+
+/** Descriptor de conexión que recibe el repositorio (lo compone la Server Action a partir
+ * del formulario). Misma forma que `PrinterConnection`; se valida en `buildConnection`. */
+export type PrinterConnectionInput = PrinterConnection;
 
 export type CreatePrinterInput = {
   venueId: string;
   name: string;
-  host: string;
-  port: number;
+  connection: PrinterConnectionInput;
   destination?: PrinterDestination;
   deviceId?: string;
   isDefault?: boolean;
@@ -30,8 +29,7 @@ export type CreatePrinterInput = {
 export type UpdatePrinterInput = Partial<{
   venueId: string;
   name: string;
-  host: string;
-  port: number;
+  connection: PrinterConnectionInput;
   destination: PrinterDestination;
   deviceId: string | null;
   isDefault: boolean;
@@ -73,6 +71,22 @@ function buildNetworkConnection(host: string, port: number): PrinterConnection {
   return { type: "network", host, port };
 }
 
+/** Validación de la conexión USB: `printerName` no vacío tras `trim()` (un nombre en blanco
+ * no identifica ninguna impresora de Windows). Análogo de `buildNetworkConnection`. */
+export function buildUsbConnection(printerName: string): PrinterConnection {
+  if (printerName.trim() === "") {
+    throw new Error("printerName inválido: no puede estar vacío");
+  }
+  return { type: "usb", printerName };
+}
+
+/** Despacha por tipo al validador correspondiente. Un tipo desconocido se rechaza. */
+function buildConnection(input: PrinterConnectionInput): PrinterConnection {
+  if (input.type === "network") return buildNetworkConnection(input.host, input.port);
+  if (input.type === "usb") return buildUsbConnection(input.printerName);
+  throw new Error(`tipo de conexión no soportado: ${(input as { type: string }).type}`);
+}
+
 /**
  * Crea una impresora de red. `venueId` que pertenezca a otro tenant, o un `deviceId` (si
  * se indica) que pertenezca a otro tenant, los rechaza el trigger `assert_same_tenant`
@@ -85,7 +99,7 @@ export async function createPrinter(
   tenantId: string,
   input: CreatePrinterInput,
 ): Promise<{ id: string }> {
-  const connection = buildNetworkConnection(input.host, input.port);
+  const connection = buildConnection(input.connection);
 
   const { data, error } = await tenantScoped("printers", tenantId)
     .insert({
@@ -126,11 +140,8 @@ export async function updatePrinter(
   if (patch.isDefault !== undefined) values.is_default = patch.isDefault;
   if (patch.enabled !== undefined) values.enabled = patch.enabled;
 
-  if (patch.host !== undefined || patch.port !== undefined) {
-    if (patch.host === undefined || patch.port === undefined) {
-      throw new Error("Para cambiar la conexión de red hay que indicar host y port a la vez");
-    }
-    values.connection = buildNetworkConnection(patch.host, patch.port);
+  if (patch.connection !== undefined) {
+    values.connection = buildConnection(patch.connection);
   }
 
   const { error } = await tenantScoped("printers", tenantId).update(values).eq("id", printerId);

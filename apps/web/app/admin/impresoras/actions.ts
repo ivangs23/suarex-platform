@@ -66,8 +66,7 @@ export const createPrinterAction = managerAction(async (session, formData: FormD
   await createPrinter(session.tenantId, {
     venueId,
     name,
-    host,
-    port,
+    connection: { type: "network", host, port },
     destination: parseDestination(formData),
     deviceId: optionalString(formData, "device_id"),
     isDefault: parseOptionalBoolean(formData, "is_default"),
@@ -78,12 +77,14 @@ export const createPrinterAction = managerAction(async (session, formData: FormD
 
 export const updatePrinterAction = managerAction(async (session, formData: FormData) => {
   const printerId = requiredString(formData, "printer_id");
+  const host = optionalString(formData, "host");
+  const port = parseOptionalInt(formData, "port");
 
   await updatePrinter(session.tenantId, printerId, {
     venueId: optionalString(formData, "venue_id"),
     name: optionalString(formData, "name"),
-    host: optionalString(formData, "host"),
-    port: parseOptionalInt(formData, "port"),
+    connection:
+      host !== undefined && port !== undefined ? { type: "network", host, port } : undefined,
     destination: parseDestination(formData),
     // `optionalString` nunca devuelve "" (ver su docstring): un `device_id` ausente o en
     // blanco produce `undefined` -- "no tocar este campo" para `updatePrinter`, no "poner

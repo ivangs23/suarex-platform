@@ -11,9 +11,11 @@ import { PrinterForm } from "./PrinterForm";
  * guarda.
  *
  * `listDevices` alimenta el `<select>` opcional de dispositivo del formulario de alta --
- * D2 solo admite impresoras de red (`connection.type === "network"`, ver
- * `packages/db/src/admin-printers.ts`), así que `printer.connection.host`/`.port` son
- * siempre esos dos campos.
+ * el formulario (`PrinterForm`) sigue siendo solo red en esta fase (C2b-a Task 3); la
+ * opción USB en el formulario llega en la Task 4. `connection` ya es una unión
+ * (`packages/db/src/admin-printers.ts`), así que la fila distingue por
+ * `connection.type` para poder mostrar filas USB creadas fuera del formulario (agente,
+ * tests) sin romper el tipo.
  */
 export default async function AdminImpresorasPage() {
   const session = await requireManager();
@@ -50,7 +52,10 @@ export default async function AdminImpresorasPage() {
         <article key={printer.id} data-testid="admin-printer" data-printer-id={printer.id}>
           <h3>{printer.name}</h3>
           <p>
-            {printer.connection.host}:{printer.connection.port} -- destino: {printer.destination}
+            {printer.connection.type === "network"
+              ? `${printer.connection.host}:${printer.connection.port}`
+              : `USB: ${printer.connection.printerName}`}{" "}
+            -- destino: {printer.destination}
             {printer.enabled ? null : " (deshabilitada)"}
           </p>
           <ConfirmDeleteForm

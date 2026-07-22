@@ -43,11 +43,13 @@ export {
 export type {
   CreatePrinterInput,
   PrinterConnection,
+  PrinterConnectionInput,
   PrinterDestination,
   PrinterRow,
   UpdatePrinterInput,
 } from "./admin-printers.js";
 export {
+  buildUsbConnection,
   createPrinter,
   deletePrinter,
   listPrinters,
