@@ -12,11 +12,11 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@suarex/agent": "workspace:*",
-    "@suarex/printing": "workspace:*",
     "koffi": "^2.9.0"
   },
   "devDependencies": {
+    "@suarex/agent": "workspace:*",
+    "@suarex/printing": "workspace:*",
     "electron": "^33.0.0",
     "electron-builder": "^25.1.8",
     "electron-vite": "^5.0.0",

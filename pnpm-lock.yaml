@@ -47,16 +47,16 @@ importers:
 
   apps/agent-desktop:
     dependencies:
+      koffi:
+        specifier: ^2.9.0
+        version: 2.16.3
+    devDependencies:
       '@suarex/agent':
         specifier: workspace:*
         version: link:../../packages/agent
       '@suarex/printing':
         specifier: workspace:*
         version: link:../../packages/printing
-      koffi:
-        specifier: ^2.9.0
-        version: 2.16.3
-    devDependencies:
       '@types/node':
         specifier: ^26.1.1
         version: 26.1.1
