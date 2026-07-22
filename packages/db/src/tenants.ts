@@ -85,3 +85,42 @@ export async function getTenantSettings(tenantId: string): Promise<TenantSetting
     features: invalid.has("features") ? {} : (data.features as Record<string, unknown>),
   };
 }
+
+export type UpdateTenantSettingsInput = {
+  branding: Record<string, unknown>;
+  fiscal: Record<string, unknown>;
+  locale: string;
+  currency: string;
+};
+
+/**
+ * Escribe los ajustes del negocio del tenant (marca, fiscal, idioma, moneda). UPSERT sobre
+ * la PK `tenant_id`: si el tenant todavía no tiene fila en `tenant_settings` la crea, si la
+ * tiene la actualiza -- así el panel funciona igual para un tenant recién provisionado que
+ * para uno ya configurado, sin depender de que exista un trigger que siembre la fila.
+ *
+ * Deliberadamente NO escribe `channels` ni `features`: quedan fuera del alcance de D3 y se
+ * preservan intactos (el UPSERT solo toca las columnas que recibe). `updated_at` se fija a
+ * mano porque no hay trigger que lo haga (ver el esquema de `20260721000001_core_tenancy.sql`).
+ *
+ * `branding`/`fiscal` se guardan tal cual como jsonb: la validación de forma vive en el
+ * borde de la Server Action (`apps/web/lib/settings-action-input.ts`) en escritura y en
+ * `parseBranding`/`tenantSettingsSchema` en lectura. Este repositorio no revalida para no
+ * ser una segunda fuente de verdad divergente.
+ */
+export async function updateTenantSettings(
+  tenantId: string,
+  input: UpdateTenantSettingsInput,
+): Promise<void> {
+  const { error } = await tenantScoped("tenant_settings", tenantId).upsert(
+    {
+      branding: input.branding,
+      fiscal: input.fiscal,
+      locale: input.locale,
+      currency: input.currency,
+      updated_at: new Date().toISOString(),
+    },
+    "tenant_id",
+  );
+  if (error) throw error;
+}

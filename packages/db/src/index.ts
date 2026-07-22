@@ -69,7 +69,13 @@ export type { StaffOrder, StaffOrderItem, StationStatus } from "./staff-orders.j
 export { listActiveOrders, markStationDone } from "./staff-orders.js";
 export { uploadProductImage } from "./storage.js";
 export { findTableByToken } from "./tables.js";
-export { findTenantByHost, getTenantSettings, getTenantStripeAccount } from "./tenants.js";
+export type { UpdateTenantSettingsInput } from "./tenants.js";
+export {
+  findTenantByHost,
+  getTenantSettings,
+  getTenantStripeAccount,
+  updateTenantSettings,
+} from "./tenants.js";
 export type {
   CartLineInput,
   Category,
