@@ -42,6 +42,10 @@
     {
       "includes": ["scripts/seed-staff.mjs"],
       "linter": { "rules": { "style": { "noRestrictedImports": "off" } } }
+    },
+    {
+      "includes": ["tests/integration/device-pairing.test.ts"],
+      "linter": { "rules": { "style": { "noRestrictedImports": "off" } } }
     }
   ]
 }

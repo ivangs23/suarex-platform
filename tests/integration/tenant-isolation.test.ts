@@ -281,6 +281,39 @@ const WRITE_FIXTURES: Record<string, WriteFixture> = {
     updateColumn: "price",
     updateValue: 999,
   },
+  devices: {
+    // venue_id apunta al venue real de B (seedB.venueId, sembrado por seedCatalog). Mismo
+    // razonamiento que tables/orders: el trigger assert_same_tenant (ver
+    // 20260722000001_devices_printers.sql) resuelve `venues` bajo los privilegios (y por
+    // tanto la RLS) del invocador -- A no puede ver el venue real de B, la subconsulta
+    // devuelve 0 filas, `parent_tenant` queda NULL, y dispara P0001 antes de que el WITH
+    // CHECK de devices_isolation llegue a evaluarse. Ver SAME_TENANT_TRIGGER_REJECTION.
+    insertPayload: ({ tenantB, seedB }) => ({
+      tenant_id: tenantB.tenantId,
+      venue_id: seedB.venueId,
+      name: "Intruso",
+    }),
+    expectedInsertRejection: SAME_TENANT_TRIGGER_REJECTION,
+    updateColumn: "name",
+    updateValue: "hackeado",
+  },
+  printers: {
+    // Mismo razonamiento que devices: venue_id real de B, invisible para A bajo su propia
+    // RLS, dispara el trigger assert_same_tenant (rama `printers`, que comprueba primero
+    // venue_id) antes de que la policy de printers_isolation llegue a evaluar su WITH
+    // CHECK. device_id se omite (queda NULL): esta fixture ya cubre la rama de venue_id;
+    // la rama de device_id del trigger sigue el mismo patrón y no necesita su propio caso
+    // aquí para que la cobertura de escritura de esta tabla sea genuina.
+    insertPayload: ({ tenantB, seedB }) => ({
+      tenant_id: tenantB.tenantId,
+      venue_id: seedB.venueId,
+      name: "Intruso",
+      connection: { type: "network", host: "127.0.0.1", port: 9100 },
+    }),
+    expectedInsertRejection: SAME_TENANT_TRIGGER_REJECTION,
+    updateColumn: "name",
+    updateValue: "hackeado",
+  },
 };
 
 let tenantA: TenantFixture;

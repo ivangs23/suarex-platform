@@ -144,3 +144,29 @@ export function nextOrderNumberRpc(tenantId: string, venueId: string) {
     p_venue_id: venueId,
   });
 }
+
+/**
+ * QUINTA EXENCIÓN DELIBERADA, mismo razonamiento que `ordersTableForPaymentResolution`:
+ * el emparejamiento de un dispositivo se busca por `pairing_code` (índice único parcial
+ * `devices_pairing_code_idx`, ver la migración), y en ese momento el llamante todavía no
+ * conoce el tenant -- es precisamente esa búsqueda la que lo revela. Acotado por firma a
+ * `devices`; no es un escape hatch de propósito general. Se reutiliza también para el
+ * UPDATE que enlaza `auth_user_id`/`paired_at`/`pairing_code` tras el canje: en ese punto
+ * la fila ya se identifica por su `id` (primary key), así que sigue siendo una operación
+ * de una sola fila conocida, nunca un barrido.
+ */
+export function devicesTableForPairing() {
+  return serviceClient().from("devices");
+}
+
+/**
+ * SEXTA EXENCIÓN DELIBERADA. El emparejamiento de un dispositivo crea su propia cuenta de
+ * Supabase Auth (la cuenta de servicio no humana del tenant) antes de que exista ningún
+ * `tenantId` conocido para filtrar nada -- no hay tabla que filtrar aquí, es la API de
+ * administración de Auth, así que no encaja en `tenantScoped` ni necesita una. Acotado por
+ * firma al único uso legítimo: `pairDevice` (`src/devices.ts`) llamando a
+ * `createUser` para dar de alta la cuenta de servicio del dispositivo recién emparejado.
+ */
+export function authAdminForDevicePairing() {
+  return serviceClient().auth.admin;
+}

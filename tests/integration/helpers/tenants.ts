@@ -215,6 +215,28 @@ export async function seedCatalog(tenantId: string, label: string): Promise<Seed
   });
   if (orderItemExtraError) throw orderItemExtraError;
 
+  // devices/printers también son tenant-scoped (dispositivo agente de impresión y sus
+  // impresoras físicas, ver 20260722000001_devices_printers.sql): se siembra una fila de
+  // cada una aquí, igual que el resto de tablas de este helper, para que tanto el control
+  // positivo de "SELECT ve las propias filas" como la cobertura de escritura cross-tenant
+  // (WRITE_FIXTURES) tengan una fila real de este tenant sobre la que operar. Sin
+  // pairing_code (queda NULL): estas filas no representan un emparejamiento en curso.
+  const { data: device, error: deviceError } = await admin
+    .from("devices")
+    .insert({ tenant_id: tenantId, venue_id: venue.id, name: `Agente ${label}` })
+    .select("id")
+    .single();
+  if (deviceError) throw deviceError;
+
+  const { error: printerError } = await admin.from("printers").insert({
+    tenant_id: tenantId,
+    venue_id: venue.id,
+    device_id: device.id,
+    name: `Impresora ${label}`,
+    connection: { type: "network", host: "127.0.0.1", port: 9100 },
+  });
+  if (printerError) throw printerError;
+
   return {
     categoryId: category.id,
     productId: product.id,
