@@ -115,6 +115,19 @@ const DEVICE_SELF_ROW_FORM =
  * o `ALLERGENS_READ_DEVICE_EXCLUDED_FORM` (allergens) ya existentes en este allowlist --
  * preserva la exclusión de `device` de 000005 en vez de reabrirla, así que no hace
  * falta ninguna entrada nueva para esos SELECT.
+ *
+ * D2 tarea 1 (ver `20260722000008_device_printer_role_writes.sql`) reutiliza esta MISMA
+ * forma para `devices_write`/`printers_write` (`devices_insert`/`_update`/`_delete` y
+ * `printers_insert`/`_update`/`_delete` de 000005, que solo excluían a `device`, pasan a
+ * exigir owner/admin). Confirmado byte a byte contra la base local con
+ *   select tablename, policyname, cmd, qual, with_check from pg_policies
+ *   where tablename in ('devices','printers');
+ * así que `devices`/`printers` se AÑADEN al conjunto de tablas de esta misma entrada en
+ * vez de crear una entrada nueva. El SELECT de ambas tablas NO se toca: `printers_select`
+ * sigue siendo `TENANT_SCOPED_FORM` (ya permitida sin restricción de tabla) y
+ * `devices_select_tenant`/`devices_select_own` siguen usando `ROLE_EXCLUDED_FORM` y
+ * `DEVICE_SELF_ROW_FORM` respectivamente (ambas ya en este allowlist) -- ninguna entrada
+ * nueva hace falta para esos SELECT tampoco.
  */
 const OWNER_ADMIN_WRITE_FORM =
   "((tenant_id = current_tenant_id()) AND (current_tenant_role() = ANY (ARRAY['owner'::text, 'admin'::text])))";
@@ -211,6 +224,8 @@ const PERMITTED_FORMS: readonly PermittedForm[] = [
       "tables",
       "venues",
       "tenant_settings",
+      "devices",
+      "printers",
     ]),
   },
   {
@@ -225,6 +240,8 @@ const PERMITTED_FORMS: readonly PermittedForm[] = [
       "tables",
       "venues",
       "tenant_settings",
+      "devices",
+      "printers",
     ]),
   },
 ];
