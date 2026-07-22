@@ -1,4 +1,4 @@
-import { storageServiceClient } from "./client.js";
+import { catalogBucket } from "./client.js";
 
 const ALLOWED_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 const MAX_BYTES = 5 * 1024 * 1024;
@@ -48,9 +48,10 @@ export async function uploadProductImage(
     file.contentType === "image/png" ? "png" : file.contentType === "image/webp" ? "webp" : "jpg";
   const path = `tenant/${tenantId}/products/${crypto.randomUUID()}.${ext}`;
 
-  const { error } = await storageServiceClient()
-    .from("catalog")
-    .upload(path, file.bytes, { contentType: file.contentType, upsert: false });
+  const { error } = await catalogBucket().upload(path, file.bytes, {
+    contentType: file.contentType,
+    upsert: false,
+  });
   if (error) throw error;
 
   return path;

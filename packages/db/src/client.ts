@@ -102,6 +102,19 @@ export function tenantScoped(table: TenantScopedTable, tenantId: string) {
       const scoped = { ...rest, tenant_id: tenantId };
       return serviceClient().from(table).upsert(scoped, { onConflict });
     },
+
+    /**
+     * El filtro de tenant se aplica ANTES de devolver el builder, igual que en
+     * `select`/`update`: quien llama solo puede acotar el DELETE más (`.eq("id", ...)`,
+     * ...) sobre un conjunto que ya está limitado a `tenant_id = tenantId` -- no hay
+     * forma de borrar una fila de otro tenant pasando su id, porque el WHERE de tenant ya
+     * está fijado antes de que el llamante añada nada. Añadido para el CRUD de catálogo
+     * de administración (`src/admin-catalog.ts`): ningún repositorio anterior a este
+     * necesitaba borrar filas.
+     */
+    delete() {
+      return serviceClient().from(table).delete().eq("tenant_id", tenantId);
+    },
   };
 }
 
@@ -221,15 +234,34 @@ export function reservePrintedRpc(
 }
 
 /**
- * OCTAVA EXENCIÓN DELIBERADA. Expone únicamente `.storage` del cliente de service
- * role -- no el cliente completo -- así que quien la use puede subir/listar objetos
- * del bucket, pero no puede colarse a ninguna tabla sin pasar por `tenantScoped`. El
+ * OCTAVA EXENCIÓN DELIBERADA. Devuelve el accessor de Storage ya atado al bucket
+ * `catalog` (`.storage.from("catalog")`), NO `.storage` a secas -- así, igual que
+ * `tenantScoped` ata cada llamada a UNA tabla, esta función ata cada llamada a UN
+ * bucket: quien la use puede subir/listar objetos de `catalog`, pero no puede pedir
+ * ningún otro bucket ni colarse a ninguna tabla sin pasar por `tenantScoped`. El
  * bucket `catalog` (ver `supabase/migrations/20260722000007_catalog_storage.sql`) es
  * público en lectura y sin policies de escritura para anon/authenticated: solo el
  * service role escribe, y solo a través de esta función. Acotado por firma a
  * `uploadProductImage` (`src/storage.ts`), el único punto del paquete que sube
  * imágenes de producto.
  */
-export function storageServiceClient() {
-  return serviceClient().storage;
+export function catalogBucket() {
+  return serviceClient().storage.from("catalog");
+}
+
+/**
+ * NOVENA EXENCIÓN DELIBERADA. Los 14 alérgenos globales de la UE (`tenant_id` NULL, ver
+ * `20260721000002_catalog.sql`) son un catálogo de referencia compartido por todos los
+ * tenants -- no pertenecen a ninguno, así que no encajan en `tenantScoped` (que exige
+ * `tenant_id = tenantId`) ni tiene sentido inventarles un tenant ficticio para colarlos
+ * ahí. El filtro `tenant_id is null` va DENTRO de esta función, no expuesto como
+ * parámetro: quien llama solo puede pedir "los globales", nunca los de un tenant
+ * arbitrario (para eso ya existe `tenantScoped("allergens", tenantId)`). Acotado por
+ * firma a `listAssignableAllergens` (`src/admin-catalog.ts`, Task 5): el formulario de
+ * producto del panel de administración necesita ofrecer como casillas los 14 globales
+ * MÁS los propios del tenant, y `listAdminCatalog` deliberadamente solo devuelve estos
+ * últimos (ver su docstring).
+ */
+export function globalAllergensTable() {
+  return serviceClient().from("allergens").select("id, name_i18n, icon").is("tenant_id", null);
 }

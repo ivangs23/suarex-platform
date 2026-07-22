@@ -203,11 +203,29 @@ const PERMITTED_FORMS: readonly PermittedForm[] = [
     expr: OWNER_ADMIN_WRITE_FORM,
     clause: "qual",
     commands: ["ALL"],
+    tables: new Set([
+      "categories",
+      "products",
+      "product_extras",
+      "allergens",
+      "tables",
+      "venues",
+      "tenant_settings",
+    ]),
   },
   {
     expr: OWNER_ADMIN_WRITE_FORM,
     clause: "with_check",
     commands: ["ALL"],
+    tables: new Set([
+      "categories",
+      "products",
+      "product_extras",
+      "allergens",
+      "tables",
+      "venues",
+      "tenant_settings",
+    ]),
   },
 ];
 

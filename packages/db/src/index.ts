@@ -1,3 +1,32 @@
+export type {
+  AdminAllergen,
+  AdminCatalog,
+  AdminCategory,
+  AdminExtra,
+  AdminProduct,
+  CategoryDestination,
+  CreateCategoryInput,
+  CreateExtraInput,
+  CreateProductInput,
+  CreateTenantAllergenInput,
+  UpdateCategoryInput,
+  UpdateProductInput,
+} from "./admin-catalog.js";
+export {
+  createCategory,
+  createExtra,
+  createProduct,
+  createTenantAllergen,
+  deleteCategory,
+  deleteExtra,
+  deleteProduct,
+  deleteTenantAllergen,
+  listAdminCatalog,
+  listAssignableAllergens,
+  setProductAvailability,
+  updateCategory,
+  updateProduct,
+} from "./admin-catalog.js";
 export { getCategories, getProducts } from "./catalog.js";
 export type { PairDeviceResult } from "./devices.js";
 export { pairDevice } from "./devices.js";
