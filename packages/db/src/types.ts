@@ -22,6 +22,12 @@ export type Category = {
   sortOrder: number;
 };
 
+export type ProductExtra = {
+  id: string;
+  nameI18n: Record<string, string>;
+  price: number;
+};
+
 export type Product = {
   id: string;
   categoryId: string;
@@ -30,4 +36,27 @@ export type Product = {
   price: number;
   isAvailable: boolean;
   sortOrder: number;
+  extras: ProductExtra[];
+};
+
+export type TableRow = {
+  id: string;
+  tenantId: string;
+  venueId: string;
+  label: string;
+  isActive: boolean;
+};
+
+export type CartLineInput = {
+  productId: string;
+  quantity: number;
+  extraIds: string[];
+  notes: string | null;
+};
+
+export type OrderStatus = {
+  orderNumber: number;
+  status: string;
+  totalCents: number;
+  currency: string;
 };

@@ -32,7 +32,19 @@
   },
   "overrides": [
     {
-      "includes": ["packages/db/src/**", "tests/integration/helpers/**"],
+      "includes": ["packages/db/src/**", "tests/integration/helpers/**", "tests/e2e/helpers/**"],
+      "linter": { "rules": { "style": { "noRestrictedImports": "off" } } }
+    },
+    {
+      "includes": ["packages/realtime/src/**"],
+      "linter": { "rules": { "style": { "noRestrictedImports": "off" } } }
+    },
+    {
+      "includes": ["scripts/seed-staff.mjs"],
+      "linter": { "rules": { "style": { "noRestrictedImports": "off" } } }
+    },
+    {
+      "includes": ["tests/integration/device-pairing.test.ts"],
       "linter": { "rules": { "style": { "noRestrictedImports": "off" } } }
     }
   ]

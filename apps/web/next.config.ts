@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const config: NextConfig = {
-  transpilePackages: ["@suarex/config", "@suarex/db"],
+  transpilePackages: ["@suarex/config", "@suarex/db", "@suarex/realtime"],
   // @suarex/config y @suarex/db se consumen como fuente TypeScript sin compilar
   // (workspace:*, exports "." -> "./src/index.ts") y sus imports internos usan
   // la convención NodeNext ("./tenants.js" referenciando "./tenants.ts"). Webpack

@@ -12,7 +12,8 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.95.3",
-    "@suarex/config": "workspace:*"
+    "@suarex/config": "workspace:*",
+    "@suarex/domain": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.9.3"

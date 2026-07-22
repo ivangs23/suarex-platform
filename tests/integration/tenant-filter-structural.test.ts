@@ -1,6 +1,8 @@
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { tenantScoped } from "../../packages/db/src/client.js";
+import { admin, createTenantFixture, deleteTenantFixture } from "./helpers/tenants.js";
 
 /**
  * Prueba, EJECUTABLE POR MÁQUINA, de que la garantía estructural de `packages/db` (ver
@@ -64,5 +66,103 @@ describe("garantía estructural: sin filtro de tenant es un error de compilació
     expect(output, `esperaba el mensaje de argumento faltante; salida real:\n${output}`).toContain(
       "Expected 2 arguments, but got 1",
     );
+  });
+});
+
+describe("tenantScoped.insert", () => {
+  it("ignora un tenant_id ajeno que venga en la fila", async () => {
+    const a = await createTenantFixture(`ins-a-${Date.now()}`);
+    const b = await createTenantFixture(`ins-b-${Date.now()}`);
+
+    await tenantScoped("categories", a.tenantId).insert({
+      tenant_id: b.tenantId,
+      slug: "intento",
+      name_i18n: { es: "Intento" },
+    });
+
+    const { data } = await admin.from("categories").select("tenant_id").eq("slug", "intento");
+
+    expect(data).toHaveLength(1);
+    expect(data?.[0]?.tenant_id).toBe(a.tenantId);
+
+    await admin.from("categories").delete().eq("slug", "intento");
+    await deleteTenantFixture(a);
+    await deleteTenantFixture(b);
+  });
+});
+
+describe("tenantScoped.update", () => {
+  it("ignora un tenant_id ajeno en los valores y un filtro no puede alcanzar la fila de otro tenant", async () => {
+    const a = await createTenantFixture(`upd-a-${Date.now()}`);
+    const b = await createTenantFixture(`upd-b-${Date.now()}`);
+
+    const { data: rowA, error: rowAError } = await admin
+      .from("categories")
+      .insert({ tenant_id: a.tenantId, slug: "propia-a", name_i18n: { es: "Original A" } })
+      .select("id")
+      .single();
+    if (rowAError) throw rowAError;
+
+    const { data: rowB, error: rowBError } = await admin
+      .from("categories")
+      .insert({ tenant_id: b.tenantId, slug: "propia-b", name_i18n: { es: "Original B" } })
+      .select("id")
+      .single();
+    if (rowBError) throw rowBError;
+
+    // 1. Un `tenant_id` ajeno en los valores no reasigna la fila propia a otro tenant.
+    await tenantScoped("categories", a.tenantId)
+      .update({ tenant_id: b.tenantId, name_i18n: { es: "Renombrada A" } })
+      .eq("id", rowA.id);
+
+    const { data: afterOwnUpdate } = await admin
+      .from("categories")
+      .select("tenant_id, name_i18n")
+      .eq("id", rowA.id)
+      .single();
+
+    expect(afterOwnUpdate?.tenant_id).toBe(a.tenantId);
+    expect(afterOwnUpdate?.name_i18n).toEqual({ es: "Renombrada A" });
+
+    // 2. Un `.eq()` encadenado que nombra la fila de otro tenant por su `id` no puede
+    // alcanzarla: el filtro base `tenant_id = a.tenantId` ya aplicado excluye la fila de
+    // B, así que la actualización afecta a cero filas y B queda intacta.
+    const { data: crossByIdResult, error: crossByIdError } = await tenantScoped(
+      "categories",
+      a.tenantId,
+    )
+      .update({ name_i18n: { es: "Hackeada por id" } })
+      .eq("id", rowB.id)
+      .select("id");
+
+    expect(crossByIdError).toBeNull();
+    expect(crossByIdResult).toHaveLength(0);
+
+    // 3. Un `.eq()` encadenado que nombra el `tenant_id` ajeno directamente tampoco puede
+    // alcanzar ninguna fila (contradice el filtro base ya aplicado).
+    const { data: crossByTenantResult, error: crossByTenantError } = await tenantScoped(
+      "categories",
+      a.tenantId,
+    )
+      .update({ name_i18n: { es: "Hackeada por tenant_id" } })
+      .eq("tenant_id", b.tenantId)
+      .select("id");
+
+    expect(crossByTenantError).toBeNull();
+    expect(crossByTenantResult).toHaveLength(0);
+
+    const { data: rowBUntouched } = await admin
+      .from("categories")
+      .select("tenant_id, name_i18n")
+      .eq("id", rowB.id)
+      .single();
+
+    expect(rowBUntouched?.tenant_id).toBe(b.tenantId);
+    expect(rowBUntouched?.name_i18n).toEqual({ es: "Original B" });
+
+    await admin.from("categories").delete().eq("id", rowA.id);
+    await admin.from("categories").delete().eq("id", rowB.id);
+    await deleteTenantFixture(a);
+    await deleteTenantFixture(b);
   });
 });

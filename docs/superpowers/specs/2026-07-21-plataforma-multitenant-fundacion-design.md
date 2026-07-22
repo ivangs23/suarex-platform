@@ -105,7 +105,7 @@ venues           id uuid PK, tenant_id uuid FK, name text, slug text,
 
 tenant_settings  tenant_id uuid PK FK,
                  branding jsonb,   -- { colors, logo_url, fonts }
-                 fiscal   jsonb,   -- { legal_name, cif, address, phone, tax_rate }
+                 fiscal   jsonb,   -- { legalName, cif, address, phone, taxRate }
                  locale text, currency text,
                  channels text[],  -- ['qr-mesa','kiosko']
                  features jsonb
@@ -212,13 +212,25 @@ Acción recomendada: rotar el `GH_TOKEN` y las credenciales de Paytef, retirar l
 
 ## Hoja de ruta
 
-| # | Sub-proyecto | Entregable verificable |
+Los sub-proyectos se nombran por **canal o capacidad**, nunca por cliente. No existe ni existirá código específico de un cliente: un tenant activa un canal poniéndolo en `tenant_settings.channels`. Garum y Manuela se mencionan abajo solo como los primeros tenants que ejercitarán cada canal, no como destinatarios de desarrollo a medida.
+
+| # | Sub-proyecto | Entregable verificable en local |
 |---|---|---|
 | 1 | Fundación multitenant | Este documento |
-| 2 | Canal QR en mesa | Garum funcionando como tenant real en producción |
-| 3 | Escritorio unificado | Un solo Electron imprimiendo para Garum y Manuela |
-| 4 | Canal kiosko | Manuela migrada, con Paytef y modo offline |
-| 5 | Billing y onboarding | Stripe Connect, superadmin, signup self-service |
+| 2 | Canal QR en mesa | Un tenant con el canal `qr-mesa` completa el flujo carta → carrito → pago → comanda |
+| 3 | App de escritorio unificada | Un solo binario Electron imprime comandas para dos tenants distintos |
+| 4 | Canal kiosko | Un tenant con el canal `kiosko` opera en pantalla táctil, con TPV y modo offline |
+| 5 | Billing y onboarding | Alta self-service de un tenant nuevo, con Stripe Connect y suscripción |
 | 6 | Marketing | Astro en el monorepo, pricing, páginas legales |
 
 Cada sub-proyecto tendrá su propio ciclo de spec, plan e implementación.
+
+## Regla de despliegue: primero local, y demostrado
+
+Ningún sub-proyecto tiene como entregable "migrar un cliente a producción". El entregable es siempre que la capacidad quede **demostrada en local**, con tenants de prueba.
+
+La migración de un negocio real es un paso posterior y separado, que ocurre solo cuando la plataforma está más que probada, y que decide el propietario del proyecto — no un sub-proyecto de desarrollo. Hasta entonces:
+
+- Los repos `GARUM`, `web-manuela`, `kiosko-manuela` y `agente-impresora-v2` siguen dando servicio y **no se tocan**.
+- Sus proyectos Supabase de producción **no se tocan**, ni siquiera para corregir políticas RLS. Cualquier corrección se redacta y se entrega para que la aplique el propietario.
+- Los datos reales de esos negocios no se copian a la plataforma hasta ese momento.

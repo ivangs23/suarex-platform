@@ -1,0 +1,217 @@
+import { reservePrintedRpc, tenantScoped } from "./client.js";
+
+export type PrintableItem = {
+  name: string;
+  quantity: number;
+  destination: "cocina" | "barra";
+  notes: string | null;
+};
+
+export type PrintableOrder = {
+  id: string;
+  orderNumber: number;
+  tableLabel: string | null;
+  createdAt: string;
+  printedTargets: Record<string, string>;
+  items: PrintableItem[];
+};
+
+type StationStatus = "pending" | "done" | "na";
+
+type PaidOrderRow = {
+  id: string;
+  order_number: number;
+  created_at: string;
+  printed_targets: Record<string, string>;
+  venue_id: string;
+  kitchen_status: StationStatus;
+  bar_status: StationStatus;
+  tables: { label: string } | null;
+  order_items: {
+    name_snapshot: Record<string, string>;
+    quantity: number;
+    destination: "cocina" | "barra";
+    notes: string | null;
+  }[];
+};
+
+type EnabledPrinterRow = {
+  id: string;
+  venue_id: string;
+  destination: "cocina" | "barra" | "all";
+};
+
+/** Mismo criterio de resolución que `staff-orders.ts`: `es` primero, con fallback al
+ * primer valor presente si algún día se siembra un tenant sin `es`. */
+function resolveItemName(nameSnapshot: Record<string, string>): string {
+  return nameSnapshot.es ?? Object.values(nameSnapshot)[0] ?? "";
+}
+
+/**
+ * Impresoras de destino de UN pedido: las habilitadas del MISMO local (venue) cuyo
+ * `destination` coincide con alguna estación que el pedido realmente usa
+ * (`kitchen_status`/`bar_status` distinto de 'na' -- mismo criterio con el que
+ * `createPendingOrder`, en `orders.ts`, decide esas columnas) o que están marcadas
+ * 'all' (imprimen cualquier pedido, sin importar la estación).
+ *
+ * Si el resultado es una lista vacía (ninguna impresora habilitada aplica a este
+ * pedido/local), se trata como trivialmente cubierto en el llamante: no hay nada que
+ * imprimir, así que el pedido no debe quedar pendiente para siempre de una impresora
+ * que no existe. La MISMA regla vive, por separado, en `reserve_printed()` (SQL, ver
+ * `supabase/migrations/20260722000003_print_reservation.sql`) para decidir cuándo fijar
+ * `printed_at` -- ambas deben mantenerse en sync (ver el test de acuerdo SQL/TS en
+ * `tests/integration/print-jobs.test.ts`).
+ *
+ * TRADE-OFF DELIBERADO (revisado y confirmado -- NO cambiar este comportamiento): una
+ * lista vacía cubre dos situaciones muy distintas que esta función no puede distinguir
+ * con la información que recibe:
+ *   1. El pedido de verdad no necesita esa estación (`kitchen_status`/`bar_status` en
+ *      `'na'`) -- caso normal, nada que imprimir.
+ *   2. El local tiene una estación configurada (`kitchen_status`/`bar_status` distinto
+ *      de `'na'`) pero CERO impresoras habilitadas para ese `destination` -- típicamente
+ *      un local mal configurado (p. ej. nadie asignó impresora de barra).
+ * En el caso (2), tratar la estación como "cubierta" evita que el pedido quede
+ * pendiente para siempre (la alternativa -- nunca trivialmente cubierto -- deja al
+ * pedido atascado sin ninguna forma de completarse, ya que jamás habrá una impresora
+ * real que lo reclame). El coste es que el ticket de esa estación se pierde en
+ * silencio: el pedido aparece como completamente impreso aunque cocina o barra nunca
+ * vieron nada. Hoy nada registra que esto ocurrió.
+ *
+ * DEFERRED (no implementado aquí, a propósito): una fase posterior debería exponer en
+ * la UI de admin qué pedidos se completaron con una estación sin impresora asignada,
+ * para que el dueño del local pueda corregir la configuración. No existe ningún sink de
+ * logging/telemetría en este paquete (`packages/db`) sobre el que enganchar un aviso
+ * sin inventar infraestructura nueva -- ver `reservePrinted` más abajo para el mismo
+ * razonamiento aplicado al lado SQL. Aceptado para C1 porque el agente de impresión
+ * (consumidor de este módulo) no tiene UI propia donde mostrar este aviso.
+ */
+function targetPrinterIds(
+  order: Pick<PaidOrderRow, "venue_id" | "kitchen_status" | "bar_status">,
+  printers: EnabledPrinterRow[],
+): string[] {
+  const needed = new Set<"cocina" | "barra">();
+  if (order.kitchen_status !== "na") needed.add("cocina");
+  if (order.bar_status !== "na") needed.add("barra");
+
+  return printers
+    .filter((p) => p.venue_id === order.venue_id)
+    .filter((p) => p.destination === "all" || needed.has(p.destination))
+    .map((p) => p.id);
+}
+
+/**
+ * Pedidos pagados de `tenantId` cuyo `printed_targets` todavía NO cubre todas sus
+ * impresoras de destino (ver `targetPrinterIds`). Un pedido totalmente cubierto (todas
+ * sus impresoras de destino ya presentes en `printed_targets`, con lo que
+ * `reservePrinted` ya habrá fijado `printed_at`) NO aparece -- es el mecanismo de
+ * recuperación de la fase C: cualquier proceso que llame a esto en bucle reintenta
+ * exactamente lo que falta, ni más ni menos.
+ *
+ * Fix (revisión final whole-branch, seam entre fases): el predicado YA NO es
+ * `status = 'paid'`. `paid` no es un estado estable -- el trigger `orders_auto_serve`
+ * (`20260721000008_orders_auto_serve.sql`) puede saltar `paid -> served` dentro de la
+ * MISMA sentencia que `markOrderPaid` ejecuta, si el personal ya había resuelto ambas
+ * estaciones en el tablero ANTES de que el webhook de Stripe confirmara el cobro (el
+ * tablero no espera al pago, ver `listActiveOrders`/`markStationDone` en
+ * `staff-orders.ts`). El pedido nunca "descansa" en `paid`, así que un filtro
+ * `status = 'paid'` no lo ve jamás: su ticket no se imprime nunca y nada lo registra.
+ *
+ * El predicado correcto es "pagado pero todavía no completamente impreso",
+ * independiente de cuánto haya avanzado `status` después del pago:
+ * `paid_at is not null and printed_at is null`. `paid_at` solo lo escribe `markOrderPaid`
+ * (`packages/db/src/orders.ts`), UNA sola vez, cuando el pedido sale de `pending`; nada
+ * más en el paquete lo toca. `printed_at` solo lo escribe `reserve_printed` (SQL, ver
+ * `supabase/migrations/20260722000003_print_reservation.sql`) cuando TODAS las
+ * impresoras de destino quedan cubiertas. Esto hace el filtro estable frente a
+ * `preparing`/`served`: el pedido sigue apareciendo aquí mientras le falte imprimir,
+ * pase por los estados que pase, y deja de aparecer en cuanto `reserve_printed` fija
+ * `printed_at`, sin importar en qué `status` esté entonces.
+ *
+ * Un pedido `cancelled` NUNCA puede colarse aquí: los dos únicos caminos que escriben
+ * `status = 'cancelled'` (`cancelOrphanedPendingOrder` en `orders.ts`, y la función SQL
+ * `expire_pending_orders` en `20260721000009_expire_pending_orders.sql`) llevan
+ * `where status = 'pending'` -- un pedido solo puede cancelarse ANTES de que
+ * `markOrderPaid` llegue a escribir `paid_at` nunca. Por construcción, `cancelled`
+ * implica `paid_at is null`, así que ya queda excluido por el propio predicado sin
+ * necesitar (ni querer) una comprobación explícita de `status <> 'cancelled'` --
+ * añadirla sería redundante y, peor, sugeriría (falsamente) que un pedido cancelado
+ * SÍ podría tener `paid_at` puesto en algún camino de escritura de este sistema. El
+ * segundo test de "seam" de abajo (`tests/integration/print-jobs.test.ts`) fija este
+ * comportamiento con un pedido cancelado real, no solo con esta nota.
+ *
+ * El índice que sirve esta consulta es `orders_unprinted_v2_idx`
+ * (`supabase/migrations/20260722000004_orders_unprinted_predicate_fix.sql`), parcial
+ * sobre exactamente este mismo predicado -- ver esa migración para la justificación de
+ * su forma.
+ *
+ * El filtro por tenant lo aplica `tenantScoped` tanto para `orders` como para
+ * `printers`: un pedido o una impresora de otro tenant sencillamente no aparecen en las
+ * filas leídas aquí, así que no pueden colarse en el cálculo de qué está cubierto.
+ */
+export async function unprintedPaidOrders(tenantId: string): Promise<PrintableOrder[]> {
+  const { data: printerRows, error: printersError } = await tenantScoped("printers", tenantId)
+    .select("id, venue_id, destination")
+    .eq("enabled", true);
+  if (printersError) throw printersError;
+
+  const { data: orderRows, error: ordersError } = await tenantScoped("orders", tenantId)
+    .select(
+      "id, order_number, created_at, printed_targets, venue_id, kitchen_status, bar_status, " +
+        "tables(label), order_items(name_snapshot, quantity, destination, notes)",
+    )
+    .not("paid_at", "is", null)
+    .is("printed_at", null)
+    .order("created_at", { ascending: true });
+  if (ordersError) throw ordersError;
+
+  const printers = printerRows as unknown as EnabledPrinterRow[];
+
+  return (orderRows as unknown as PaidOrderRow[])
+    .filter((row) => {
+      const targets = targetPrinterIds(row, printers);
+      // Decisión (ver el comentario de trade-off en targetPrinterIds): targets vacío
+      // puede significar "nada que imprimir" O "estación necesaria sin ninguna
+      // impresora habilitada" -- ambos se excluyen de pendientes aquí. El segundo caso
+      // es un drop silencioso de esa estación; queda documentado como deferred item,
+      // no resuelto en este cambio.
+      if (targets.length === 0) return false; // nada que imprimir: no queda pendiente
+      const covered = row.printed_targets ?? {};
+      return !targets.every((id) => Object.hasOwn(covered, id));
+    })
+    .map((row) => ({
+      id: row.id,
+      orderNumber: row.order_number,
+      tableLabel: row.tables?.label ?? null,
+      createdAt: row.created_at,
+      printedTargets: row.printed_targets ?? {},
+      items: row.order_items.map((item) => ({
+        name: resolveItemName(item.name_snapshot),
+        quantity: item.quantity,
+        destination: item.destination,
+        notes: item.notes,
+      })),
+    }));
+}
+
+/**
+ * Registra que UNA impresora concreta imprimió UN pedido. Delegado ENTERO en la función
+ * SQL `reserve_printed` (SECURITY DEFINER, filtra por `tenantId` dentro de la propia
+ * función) -- ver `supabase/migrations/20260722000003_print_reservation.sql` para el
+ * merge atómico de `printed_targets` y el razonamiento de concurrencia/idempotencia. Un
+ * `orderId` de otro tenant, o inexistente, resulta en un no-op silencioso (la función
+ * SQL no encuentra fila y retorna sin hacer nada) -- igual que `markStationDone`.
+ *
+ * El propio SQL fija `printed_at` bajo el mismo trade-off "estación sin impresora ==
+ * trivialmente cubierta" descrito arriba en `targetPrinterIds` -- ver el comentario en
+ * la sentencia `coalesce(bool_and(...), true)` de la migración para el punto de
+ * decisión exacto y el deferred item (aviso a admin, no implementado todavía).
+ */
+export async function reservePrinted(
+  tenantId: string,
+  orderId: string,
+  printerId: string,
+  at: string,
+): Promise<void> {
+  const { error } = await reservePrintedRpc(tenantId, orderId, printerId, at);
+  if (error) throw error;
+}

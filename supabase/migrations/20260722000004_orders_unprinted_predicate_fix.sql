@@ -1,0 +1,56 @@
+-- Revisión final whole-branch: fix del seam entre fases en la consulta de recuperación
+-- de impresión (`unprintedPaidOrders`, `packages/db/src/print-jobs.ts`).
+--
+-- El problema: `unprintedPaidOrders` filtraba por `status = 'paid'`, pero `paid` NO es
+-- un estado estable. El trigger `orders_auto_serve`
+-- (`20260721000008_orders_auto_serve.sql`) puede saltar `paid -> served` DENTRO de la
+-- misma sentencia que `markOrderPaid` (`packages/db/src/orders.ts`) ejecuta, si el
+-- personal ya había resuelto `kitchen_status`/`bar_status` en el tablero ANTES de que el
+-- webhook de Stripe confirmara el cobro -- el tablero resuelve estaciones con
+-- independencia del pago (ver `listActiveOrders`/`markStationDone`,
+-- `packages/db/src/staff-orders.ts`). El pedido nunca llega a persistir con
+-- `status = 'paid'`: pasa de `pending` a `served` en un único UPDATE. Un filtro
+-- `status = 'paid'` no lo ve jamás, así que su ticket no se imprime nunca y nada lo
+-- registra ("targets vacío = trivialmente cubierto" no aplica -- el pedido ni siquiera
+-- entra en la consulta). Ver el test de seam en
+-- `tests/integration/print-jobs.test.ts` (describe "seam: estaciones resueltas ANTES
+-- del pago") para la reproducción exacta.
+--
+-- El fix (en `packages/db/src/print-jobs.ts`, este mismo cambio) sustituye
+-- `status = 'paid'` por `paid_at is not null and printed_at is null` -- estable frente a
+-- cuánto haya avanzado `status` después del pago (paid/preparing/served, cualquiera).
+-- Esta migración actualiza el índice parcial que sirve esa consulta para que siga
+-- acotando el escaneo al nuevo predicado, en vez de dejarlo huérfano (el índice viejo,
+-- `orders_unprinted_idx` de `20260721000005_orders.sql`, incluye `status` en sus
+-- columnas y su predicado no incluye `paid_at is not null` -- ya no sirve de nada a la
+-- consulta reescrita, y mantenerlo sería puro coste de escritura sin ningún beneficio de
+-- lectura).
+--
+-- Forma del índice nuevo: `(tenant_id) where printed_at is null and paid_at is not
+-- null` -- una sola columna, no `(tenant_id, paid_at)`. Razonamiento:
+--   - `tenant_id` es la única condición de IGUALDAD que queda en la consulta
+--     (`tenantScoped` siempre añade `eq("tenant_id", tenantId)`) -- es la columna que de
+--     verdad decide qué porción del índice escanear, así que va primero y sola.
+--   - El predicado parcial (`printed_at is null and paid_at is not null`) ya hace todo
+--     el trabajo de filtrado adicional: por diseño, un pedido pagado y sin imprimir es
+--     una fracción pequeña de los pedidos de un tenant en un momento dado (la mayoría ya
+--     está impresa o cancelada/pendiente-de-pago) -- no hace falta una segunda columna
+--     para acotar más, porque el predicado del índice YA excluyó todo lo demás antes de
+--     que `tenant_id` entre en juego.
+--   - `paid_at` como segunda columna (la alternativa sugerida) no aportaría nada aquí:
+--     no participa en ninguna condición de IGUALDAD ni de RANGO de la consulta (el único
+--     uso de `paid_at` es "is not null", que ya vive en el predicado parcial, no en una
+--     columna indexada) y la consulta ordena por `created_at`, no por `paid_at` -- una
+--     segunda columna `paid_at` no serviría ni para filtrar más ni para servir el
+--     `ORDER BY`. Añadirla sería una columna sin uso real, más ancha y más cara de
+--     mantener en cada INSERT/UPDATE de `orders` que toque estas columnas.
+--   - No se añade `created_at` (que sí serviría al `ORDER BY`) porque el volumen
+--     esperado bajo este predicado es pequeño (el mecanismo de recuperación de la fase
+--     C es precisamente para el caso -- raro -- de pedidos varados; no es una consulta de
+--     listado de alto volumen), así que el coste de un sort en memoria sobre un puñado
+--     de filas ya filtradas por el índice es despreciable frente a la complejidad de
+--     mantener una columna extra.
+drop index if exists public.orders_unprinted_idx;
+
+create index orders_unprinted_v2_idx on public.orders (tenant_id)
+  where printed_at is null and paid_at is not null;
