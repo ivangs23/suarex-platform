@@ -52,24 +52,32 @@ export async function requireManager(): Promise<ManagerSession> {
  * `packages/db/src/client.ts`) y con la propia `resolveStaffSession` (`hostTenant`
  * obligatorio).
  *
- * `managerAction(fn)` devuelve una función con la firma `(...args) => Promise<void>` --
- * pensada para `(formData: FormData) => Promise<void>`, la que usan los `<form action=…>`
- * -- que SIEMPRE ejecuta `checkManager()` (`requireManager` en producción) ANTES de
- * invocar `fn`. El cuerpo de la action recibe la sesión YA verificada como primer
- * argumento: no hay ningún camino para que `fn` se ejecute sin que la comprobación de rol
- * haya pasado primero -- la barrera ya no depende de que quien escriba la siguiente action
- * se acuerde de copiarla, vive en la firma de `fn`.
+ * `managerAction(fn)` devuelve una función con la firma `(...args) => Promise<R>` --
+ * pensada sobre todo para `(formData: FormData) => Promise<void>`, la que usan los
+ * `<form action=…>` -- que SIEMPRE ejecuta `checkManager()` (`requireManager` en
+ * producción) ANTES de invocar `fn`. El cuerpo de la action recibe la sesión YA
+ * verificada como primer argumento: no hay ningún camino para que `fn` se ejecute sin
+ * que la comprobación de rol haya pasado primero -- la barrera ya no depende de que quien
+ * escriba la siguiente action se acuerde de copiarla, vive en la firma de `fn`.
+ *
+ * `R` es genérico (por defecto `void`, inferido de las 11 actions de catálogo/mesas que
+ * no devuelven nada) en vez de fijarse a `Promise<void>`: la generación del código de
+ * emparejamiento (Task 3, `apps/web/app/admin/dispositivos/actions.ts`) necesita que
+ * `createDeviceAction` devuelva `{ pairingCode, expiresAt }` a quien la invoca -- es el
+ * ÚNICO sitio por el que ese código en claro puede viajar de vuelta a la UI para
+ * mostrarlo una vez (nunca se registra en logs, nunca se vuelve a leer de la base) -- así
+ * que el wrapper no puede seguir forzando `void` para todas las actions.
  *
  * `checkManager` es un segundo parámetro inyectable (por defecto `requireManager`)
  * EXCLUSIVAMENTE para poder probar unitariamente la composición del propio wrapper (ver
  * `require-manager.test.ts`) sin tener que simular cookies/headers de una request de
- * Next -- ninguna de las 11 actions de producción pasa un segundo argumento, todas usan
+ * Next -- ninguna de las actions de producción pasa un segundo argumento, todas usan
  * el default real.
  */
-export function managerAction<Args extends unknown[]>(
-  fn: (session: ManagerSession, ...args: Args) => Promise<void>,
+export function managerAction<Args extends unknown[], R = void>(
+  fn: (session: ManagerSession, ...args: Args) => Promise<R>,
   checkManager: () => Promise<ManagerSession> = requireManager,
-): (...args: Args) => Promise<void> {
+): (...args: Args) => Promise<R> {
   return async (...args: Args) => {
     const session = await checkManager();
     return fn(session, ...args);

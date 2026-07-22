@@ -45,6 +45,15 @@ export type TableRow = {
   venueId: string;
   label: string;
   isActive: boolean;
+  /**
+   * Fix (Task 5, D2): `findTableByToken` ya conocía este valor (busca precisamente POR
+   * él) pero no lo devolvía en la fila; `listTables` (`admin-tables.ts`) tampoco lo
+   * seleccionaba. La pantalla de gestión de mesas (Task 5) necesita el token de CADA
+   * mesa para componer `https://{host}/m/{token}` y generar su QR (`tableQrSvg`,
+   * `apps/web/lib/qr.ts`) -- añadido aquí, al tipo compartido, en vez de crear un tipo
+   * `AdminTableRow` paralelo solo por este campo.
+   */
+  token: string;
 };
 
 export type CartLineInput = {

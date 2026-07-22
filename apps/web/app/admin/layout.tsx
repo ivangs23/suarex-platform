@@ -6,7 +6,9 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   return (
     <div>
       <nav>
-        <a href="/admin">Inicio</a> · <a href="/admin/catalogo">Catálogo</a>
+        <a href="/admin">Inicio</a> · <a href="/admin/catalogo">Catálogo</a> ·{" "}
+        <a href="/admin/mesas">Mesas</a> · <a href="/admin/dispositivos">Dispositivos</a> ·{" "}
+        <a href="/admin/impresoras">Impresoras</a>
       </nav>
       {children}
     </div>
