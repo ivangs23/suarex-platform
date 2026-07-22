@@ -95,13 +95,16 @@ test("un owner crea una mesa y ve su QR", async ({ page }) => {
   const tableRow = page.getByTestId("admin-table").filter({ hasText: label });
   await expect(tableRow).toBeVisible({ timeout: 15_000 });
 
+  // Captura el id EN CUANTO la fila existe -- antes de cualquier otra aserción -- para
+  // que `test.afterEach` pueda limpiarla aunque la comprobación del SVG (más abajo)
+  // reviente. Ver docstring de `createdTableId` arriba.
+  createdTableId = (await tableRow.getAttribute("data-table-id")) ?? undefined;
+  expect(createdTableId).toBeTruthy();
+
   // El QR es un <svg> real (generado por `tableQrSvg` sobre una URL compuesta en el
   // servidor a partir del Host de la petición + el token de la mesa), no una imagen ni
   // un placeholder de texto.
   await expect(tableRow.locator("svg")).toBeVisible();
-
-  createdTableId = (await tableRow.getAttribute("data-table-id")) ?? undefined;
-  expect(createdTableId).toBeTruthy();
 });
 
 test("un owner da de alta un dispositivo y ve el código una vez", async ({ page }) => {
@@ -117,12 +120,17 @@ test("un owner da de alta un dispositivo y ve el código una vez", async ({ page
   const pairingCode = page.getByTestId("pairing-code");
   await expect(pairingCode).toBeVisible({ timeout: 15_000 });
   const codeText = (await pairingCode.innerText()).trim();
-  expect(codeText.length).toBeGreaterThanOrEqual(32);
 
   const deviceRow = page.getByTestId("admin-device").filter({ hasText: name });
   await expect(deviceRow).toBeVisible();
+
+  // Captura el id EN CUANTO la fila existe -- antes de cualquier otra aserción (longitud
+  // del código, recarga) -- para que `test.afterEach` pueda limpiarla aunque alguna de
+  // esas comprobaciones (más abajo) reviente. Ver docstring de `createdDeviceId` arriba.
   createdDeviceId = (await deviceRow.getAttribute("data-device-id")) ?? undefined;
   expect(createdDeviceId).toBeTruthy();
+
+  expect(codeText.length).toBeGreaterThanOrEqual(32);
 
   // El código de emparejamiento es de un solo uso visual: tras recargar la página ya no
   // se muestra en ningún sitio (no se persiste en el cliente, y `listDevices` nunca lo
@@ -146,10 +154,14 @@ test("un owner configura una impresora de red", async ({ page }) => {
 
   const printerRow = page.getByTestId("admin-printer").filter({ hasText: name });
   await expect(printerRow).toBeVisible({ timeout: 15_000 });
-  await expect(printerRow.getByText("127.0.0.1:9100")).toBeVisible();
 
+  // Captura el id EN CUANTO la fila existe -- antes de cualquier otra aserción -- para
+  // que `test.afterEach` pueda limpiarla aunque la comprobación del host:port (más abajo)
+  // reviente. Ver docstring de `createdPrinterId` arriba.
   createdPrinterId = (await printerRow.getAttribute("data-printer-id")) ?? undefined;
   expect(createdPrinterId).toBeTruthy();
+
+  await expect(printerRow.getByText("127.0.0.1:9100")).toBeVisible();
 });
 
 test("un staff no ve la gestión de mesas/dispositivos/impresoras", async ({ page }) => {
