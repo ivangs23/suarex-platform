@@ -46,7 +46,7 @@ export async function getTenantStripeAccount(tenantId: string): Promise<string |
 
 export async function getTenantSettings(tenantId: string): Promise<TenantSettingsRow | null> {
   const { data, error } = await tenantScoped("tenant_settings", tenantId)
-    .select("tenant_id, branding, fiscal, locale, currency, channels, features")
+    .select("tenant_id, branding, fiscal, locale, currency, channels, features, theme")
     .maybeSingle();
 
   if (error) throw error;
@@ -64,6 +64,7 @@ export async function getTenantSettings(tenantId: string): Promise<TenantSetting
     currency: data.currency,
     channels: data.channels,
     features: data.features,
+    theme: data.theme,
   });
 
   // Nunca lanza: si la fila no valida contra el schema (drift de datos -- hoy no hay
@@ -83,6 +84,7 @@ export async function getTenantSettings(tenantId: string): Promise<TenantSetting
     currency: invalid.has("currency") ? "EUR" : (data.currency as string),
     channels: invalid.has("channels") ? [] : (data.channels as string[]),
     features: invalid.has("features") ? {} : (data.features as Record<string, unknown>),
+    theme: invalid.has("theme") ? "generic" : (data.theme as string),
   };
 }
 

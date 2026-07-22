@@ -1,0 +1,119 @@
+/* Tema A MEDIDA de Garum Vinoteca. Réplica del lenguaje visual de su frontend original
+   (ivangs23/GARUM-new): fondo verde con textura sutil, cabeceras serif en morado, tarjetas
+   blancas con sombra suave y acentos en verde. Fija sus propios colores a propósito -- NO
+   depende de `branding.colors`: eso es justo lo que distingue un tema a medida del genérico. */
+
+.page {
+  --garum-bg: #d6e8d2;
+  --garum-surface: #ffffff;
+  --garum-primary: #7b4f96;
+  --garum-secondary: #4a7860;
+  --garum-text: #111111;
+  --garum-text-muted: #3f5548;
+  --garum-border: rgba(123, 79, 150, 0.18);
+  --garum-shadow: 0 2px 16px rgba(0, 0, 0, 0.07);
+
+  min-height: 100vh;
+  background-color: var(--garum-bg);
+  /* Textura discreta en lugar del pattern.svg original (asset del repo antiguo). */
+  background-image: radial-gradient(rgba(74, 120, 96, 0.09) 1px, transparent 1px);
+  background-size: 22px 22px;
+  color: var(--garum-text);
+  font-family: var(--font-inter), system-ui, sans-serif;
+  padding: 2.5rem 1.25rem 5rem;
+}
+
+.inner {
+  max-width: 54rem;
+  margin: 0 auto;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 3rem;
+}
+
+.logo {
+  max-height: 5rem;
+  width: auto;
+  margin: 0 auto 1.25rem;
+  display: block;
+}
+
+.name {
+  font-family: var(--font-playfair), Georgia, serif;
+  font-weight: 700;
+  font-size: clamp(2.4rem, 7vw, 3.6rem);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: var(--garum-primary);
+  margin: 0;
+}
+
+.rule {
+  width: 3.5rem;
+  height: 2px;
+  background: var(--garum-secondary);
+  border: 0;
+  margin: 1.1rem auto 0.9rem;
+}
+
+.mesa {
+  margin: 0;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.24em;
+  color: var(--garum-text-muted);
+}
+
+.category {
+  margin-bottom: 3rem;
+}
+
+.categoryName {
+  font-family: var(--font-playfair), Georgia, serif;
+  font-size: 1.55rem;
+  font-weight: 700;
+  color: var(--garum-secondary);
+  margin: 0 0 1.1rem;
+  text-align: center;
+}
+
+.items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1.25rem;
+  background: var(--garum-surface);
+  border: 1px solid var(--garum-border);
+  border-radius: 0.5rem;
+  box-shadow: var(--garum-shadow);
+  padding: 1rem 1.25rem;
+}
+
+.itemName {
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.price {
+  font-family: var(--font-playfair), Georgia, serif;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--garum-primary);
+  white-space: nowrap;
+}
+
+.empty {
+  text-align: center;
+  color: var(--garum-text-muted);
+  padding: 3rem 0;
+}

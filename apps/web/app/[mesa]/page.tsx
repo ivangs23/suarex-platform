@@ -2,6 +2,8 @@ import { parseBranding } from "@suarex/config";
 import { getCategories, getProducts, getTenantSettings } from "@suarex/db";
 import { notFound } from "next/navigation";
 import { requireTenant } from "@/lib/tenant-context";
+import type { ThemeCategory } from "./themes";
+import { resolveTheme } from "./themes";
 
 // Los identificadores de mesa son siempre numéricos (ver el diseño: canal
 // "QR en mesa" -> `/{mesa}`). Este catch-all de un solo segmento también
@@ -16,6 +18,13 @@ import { requireTenant } from "@/lib/tenant-context";
 // numérico se resuelve aquí como 404 limpio, antes de tocar el tenant.
 const MESA_PATTERN = /^\d+$/;
 
+/**
+ * Carta pública de una mesa. Esta página hace UNA sola carga de datos y delega toda la
+ * presentación al tema del tenant (`tenant_settings.theme`, resuelto por `resolveTheme`):
+ * `generic` se pinta con el branding, y los temas a medida (garum, manuela) son componentes
+ * codificados. Añadir un tema no toca este fichero -- todos consumen el mismo contrato
+ * `MenuThemeProps`.
+ */
 export default async function MenuPage({ params }: { params: Promise<{ mesa: string }> }) {
   const { mesa } = await params;
 
@@ -39,34 +48,37 @@ export default async function MenuPage({ params }: { params: Promise<{ mesa: str
     getProducts(tenant.id),
     getTenantSettings(tenant.id).catch(() => null),
   ]);
-  const businessName = parseBranding(settings?.branding).name ?? tenant.slug;
+
+  const branding = parseBranding(settings?.branding);
+  const businessName = branding.name ?? tenant.slug;
+
+  // El catálogo se aplana al contrato del tema: categorías con sus productos ya anidados,
+  // resueltos al idioma por defecto. Un tema nunca vuelve a consultar la base.
+  const themeCategories: ThemeCategory[] = categories.map((category) => ({
+    id: category.id,
+    name: category.nameI18n.es ?? category.slug,
+    products: products
+      .filter((product) => product.categoryId === category.id)
+      .map((product) => ({
+        id: product.id,
+        name: product.nameI18n.es ?? "",
+        price: product.price,
+      })),
+  }));
+
+  const Theme = resolveTheme(settings?.theme);
 
   return (
-    <main>
-      <h1 data-testid="tenant-name">{businessName}</h1>
-      <p data-testid="mesa">Mesa {mesa}</p>
-      {/* Cuenta cruda de getProducts(tenant.id), sin filtrar por categoría:
-          si el filtro tenant_id de getProducts se perdiera, este número
-          cambiaría aunque ningún producto huérfano se renderizase abajo
-          (el filtrado por category_id ya oculta huérfanos de la vista). */}
-      <p data-testid="product-count" hidden>
-        {products.length}
-      </p>
-
-      {categories.map((category) => (
-        <section key={category.id} data-testid="category">
-          <h2>{category.nameI18n.es}</h2>
-          <ul>
-            {products
-              .filter((product) => product.categoryId === category.id)
-              .map((product) => (
-                <li key={product.id} data-testid="product">
-                  {product.nameI18n.es} — {product.price.toFixed(2)} €
-                </li>
-              ))}
-          </ul>
-        </section>
-      ))}
-    </main>
+    <Theme
+      tenantSlug={tenant.slug}
+      businessName={businessName}
+      mesa={mesa}
+      branding={branding}
+      categories={themeCategories}
+      // Cuenta cruda de getProducts(tenant.id), sin filtrar por categoría: si el filtro
+      // tenant_id de getProducts se perdiera, este número cambiaría aunque ningún producto
+      // huérfano se renderizase (el filtrado por category_id ya oculta huérfanos de la vista).
+      productCount={products.length}
+    />
   );
 }

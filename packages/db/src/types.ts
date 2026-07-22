@@ -13,6 +13,10 @@ export type TenantSettingsRow = {
   currency: string;
   channels: string[];
   features: Record<string, unknown>;
+  /** Slug del tema de la carta pública (`tenant_settings.theme`). Ver
+   * `apps/web/app/[mesa]/themes`: `generic` se pinta con el branding, los temas a medida
+   * son componentes codificados. */
+  theme: string;
 };
 
 export type Category = {

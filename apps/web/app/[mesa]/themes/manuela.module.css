@@ -1,0 +1,111 @@
+/* Tema A MEDIDA de Manuela Desayuna. Réplica del lenguaje visual de su frontend original
+   (ivangs23/web-manuela): crema cálido, acentos dorados, marrón oscuro para el texto y
+   tiles muy redondeados -- venía de un kiosko táctil, de ahí las tarjetas grandes. Fija sus
+   propios colores; no depende de `branding.colors`. */
+
+.page {
+  --manuela-bg: #f9f7f2;
+  --manuela-surface: #fff8e7;
+  --manuela-accent: #c28744;
+  --manuela-text: #2c1a0f;
+  --manuela-border: rgba(194, 135, 68, 0.18);
+
+  min-height: 100vh;
+  background-color: var(--manuela-bg);
+  color: var(--manuela-text);
+  font-family: var(--font-inter), system-ui, sans-serif;
+  padding: 2rem 1.25rem 4.5rem;
+}
+
+.inner {
+  max-width: 56rem;
+  margin: 0 auto;
+}
+
+.header {
+  background: var(--manuela-surface);
+  border: 1px solid var(--manuela-border);
+  border-radius: 1.25rem;
+  padding: 2rem 1.5rem;
+  text-align: center;
+  margin-bottom: 2.5rem;
+}
+
+.logo {
+  max-height: 4.5rem;
+  width: auto;
+  margin: 0 auto 1rem;
+  display: block;
+  border-radius: 50%;
+}
+
+.name {
+  font-size: clamp(2rem, 6vw, 2.9rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  margin: 0;
+  color: var(--manuela-text);
+}
+
+.mesa {
+  display: inline-block;
+  margin: 0.9rem 0 0;
+  padding: 0.3rem 0.9rem;
+  border-radius: 999px;
+  background: rgba(194, 135, 68, 0.14);
+  color: var(--manuela-accent);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.category {
+  margin-bottom: 2.5rem;
+}
+
+.categoryName {
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: var(--manuela-accent);
+  margin: 0 0 1rem;
+  padding-left: 0.75rem;
+  border-left: 4px solid var(--manuela-accent);
+}
+
+.items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: 0.9rem;
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  background: var(--manuela-surface);
+  border: 2px solid var(--manuela-border);
+  border-radius: 1.25rem;
+  padding: 1.1rem 1.25rem;
+}
+
+.itemName {
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.price {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--manuela-accent);
+}
+
+.empty {
+  text-align: center;
+  color: rgba(44, 26, 15, 0.6);
+  padding: 3rem 0;
+}
