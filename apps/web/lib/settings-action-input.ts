@@ -7,7 +7,7 @@
  * Los regex de color/fuente NO se duplican aquí -- se reusan vía `isHexColor`/`isFontName`
  * de `@suarex/config`, la misma fuente que usa `parseBranding` en lectura.
  */
-import { isFontName, isHexColor } from "@suarex/config";
+import { isFontName, isHexColor, normalizeCustomDomain } from "@suarex/config";
 import { InvalidFormFieldError, optionalString, requiredString } from "./form-parse";
 
 function requiredHexColor(formData: FormData, field: string): string {
@@ -114,4 +114,30 @@ export function parseCurrency(formData: FormData): string {
     throw new InvalidFormFieldError(`Código de moneda inválido (3 letras): ${JSON.stringify(raw)}`);
   }
   return upper;
+}
+
+/**
+ * Dominio propio del cliente (`tenants.custom_domain`), o `null` si el campo viene vacío
+ * (que es cómo se quita uno ya configurado).
+ *
+ * Se RECHAZA en el borde en vez de degradar, y con más motivo que el resto de campos: lo
+ * que se guarde aquí decide qué certificados pide Caddy a Let's Encrypt (ver
+ * `/api/tls-check`). Un valor basura no rompe una pantalla, agota una cuota compartida por
+ * todos los clientes.
+ *
+ * `rootDomains` se pasa como parámetro en vez de leerse aquí de `process.env` para que la
+ * función siga siendo pura y testeable sin tocar el entorno.
+ */
+export function parseCustomDomain(formData: FormData, rootDomains: string[]): string | null {
+  const raw = optionalString(formData, "custom_domain");
+  if (raw === undefined) return null;
+
+  const normalized = normalizeCustomDomain(raw, rootDomains);
+  if (!normalized) {
+    throw new InvalidFormFieldError(
+      `Dominio inválido: ${JSON.stringify(raw)}. Escribe solo el nombre del dominio ` +
+        "(ejemplo.com), sin https:// ni rutas, y que no cuelgue del dominio de la plataforma.",
+    );
+  }
+  return normalized;
 }

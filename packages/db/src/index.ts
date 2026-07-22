@@ -89,8 +89,11 @@ export { findTableByToken } from "./tables.js";
 export type { UpdateTenantSettingsInput } from "./tenants.js";
 export {
   findTenantByHost,
+  getTenantCustomDomain,
   getTenantSettings,
   getTenantStripeAccount,
+  isActiveCustomDomain,
+  setTenantCustomDomain,
   updateTenantSettings,
 } from "./tenants.js";
 export type {

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   parseBrandingFields,
   parseCurrency,
+  parseCustomDomain,
   parseFiscalFields,
   parseLocale,
 } from "./settings-action-input";
@@ -163,5 +164,37 @@ describe("parseLocale", () => {
   });
   it("recoge el locale dado", () => {
     expect(parseLocale(fd({ locale: "en" }))).toBe("en");
+  });
+});
+
+describe("parseCustomDomain", () => {
+  const ROOTS = ["suarex.app"];
+
+  it("acepta un dominio real y lo normaliza", () => {
+    expect(parseCustomDomain(fd({ custom_domain: "GarumVinoteca.com" }), ROOTS)).toBe(
+      "garumvinoteca.com",
+    );
+  });
+
+  it("un campo vacío quita el dominio configurado", () => {
+    expect(parseCustomDomain(fd({}), ROOTS)).toBeNull();
+    expect(parseCustomDomain(fd({ custom_domain: "   " }), ROOTS)).toBeNull();
+  });
+
+  it("rechaza en el borde en vez de degradar", () => {
+    // Este campo decide qué certificados pide Caddy: un valor basura no rompe una
+    // pantalla, agota una cuota de Let's Encrypt compartida por todos los clientes.
+    expect(() => parseCustomDomain(fd({ custom_domain: "https://x.com" }), ROOTS)).toThrow(
+      /Dominio inválido/,
+    );
+    expect(() => parseCustomDomain(fd({ custom_domain: "localhost" }), ROOTS)).toThrow(
+      /Dominio inválido/,
+    );
+  });
+
+  it("rechaza reclamar algo bajo el dominio de la plataforma", () => {
+    expect(() => parseCustomDomain(fd({ custom_domain: "otro.suarex.app" }), ROOTS)).toThrow(
+      /Dominio inválido/,
+    );
   });
 });

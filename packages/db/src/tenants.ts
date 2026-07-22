@@ -1,5 +1,9 @@
 import { parseTenantHost, tenantSettingsSchema } from "@suarex/config";
-import { tenantScoped, tenantsTableForHostResolution } from "./client.js";
+import {
+  tenantScoped,
+  tenantsTableForCustomDomainWrite,
+  tenantsTableForHostResolution,
+} from "./client.js";
 import type { Tenant, TenantSettingsRow } from "./types.js";
 
 export async function findTenantByHost(
@@ -26,6 +30,63 @@ export async function findTenantByHost(
     name: data.name as string,
     status: data.status as Tenant["status"],
   };
+}
+
+/**
+ * ¿Hay un tenant ACTIVO sirviendo este dominio propio? Es la pregunta que hace Caddy antes
+ * de pedir un certificado on-demand (ver `/api/tls-check`).
+ *
+ * Devuelve false para un tenant suspendido a propósito: si un cliente deja de pagar y se
+ * suspende, la plataforma no debe seguir renovando su certificado por él.
+ *
+ * El dominio llega ya normalizado por `normalizeCustomDomain`; aquí solo se compara. Es una
+ * búsqueda de una fila por columna con índice único, nunca un barrido.
+ */
+export async function isActiveCustomDomain(domain: string): Promise<boolean> {
+  const { data, error } = await tenantsTableForHostResolution()
+    .select("status")
+    .eq("custom_domain", domain)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data?.status === "active";
+}
+
+/**
+ * Fija (o borra, con `null`) el dominio propio del tenant.
+ *
+ * El `tenantId` viene SIEMPRE de la sesión (`managerAction`), nunca del formulario, y el
+ * `domain` ya pasó por `normalizeCustomDomain` en el borde de la Server Action.
+ *
+ * `custom_domain` tiene un índice único en la base: si otro cliente ya reclamó ese dominio,
+ * Postgres rechaza la escritura con 23505 y aquí se traduce a un error legible. Esa unicidad
+ * es una garantía de seguridad, no una comodidad -- dos tenants con el mismo dominio harían
+ * que `findTenantByHost` sirviera uno u otro de forma imprevisible.
+ */
+export async function setTenantCustomDomain(
+  tenantId: string,
+  domain: string | null,
+): Promise<void> {
+  const { error } = await tenantsTableForCustomDomainWrite()
+    .update({ custom_domain: domain })
+    .eq("id", tenantId);
+
+  if (!error) return;
+  if (error.code === "23505") {
+    throw new Error(`El dominio ${domain} ya está asignado a otro cliente.`);
+  }
+  throw error;
+}
+
+/** Dominio propio del tenant, o null si no tiene. */
+export async function getTenantCustomDomain(tenantId: string): Promise<string | null> {
+  const { data, error } = await tenantsTableForHostResolution()
+    .select("custom_domain")
+    .eq("id", tenantId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return (data?.custom_domain as string | null) ?? null;
 }
 
 /**

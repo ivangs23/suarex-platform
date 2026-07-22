@@ -6,9 +6,25 @@
 # subdominio y darlos de alta uno a uno en el certificado obligaría a reemitirlo con cada
 # alta. Let's Encrypt solo firma comodines por challenge DNS-01: de ahí el token de
 # Cloudflare (ver Dockerfile.caddy).
-
 {
 	email {$ACME_EMAIL}
+
+	# Certificados para los dominios PROPIOS de los clientes (garumvinoteca.com), que el
+	# comodín no cubre. Se emiten en caliente, la primera vez que llega una petición para
+	# ese host, por challenge HTTP-01: al cliente le basta con apuntar su registro A aquí,
+	# no hace falta acceso a su DNS.
+	#
+	# `ask` NO es opcional. Sin él, cualquiera que apunte un dominio suyo a esta IP hace
+	# que Caddy pida un certificado por él; Let's Encrypt limita a 300 pedidos nuevos por
+	# cuenta y hora, así que unos pocos dominios agotan la cuota y dejan a TODOS los
+	# clientes sin renovar. La web responde 200 solo si el dominio es el `custom_domain`
+	# de un cliente ACTIVO.
+	#
+	# Caddy 2 ya no admite `interval`/`burst` aquí: el `ask` es el único control, y por eso
+	# ese endpoint falla CERRADO (si la base no responde, deniega).
+	on_demand_tls {
+		ask http://web:3000/api/tls-check
+	}
 }
 
 # El comodín NO cubre el dominio desnudo (`*.suarex.app` no incluye `suarex.app`), así que
@@ -48,4 +64,30 @@
 	handle {
 		reverse_proxy web:3000
 	}
+}
+
+# DOMINIOS PROPIOS DE CLIENTE (garumvinoteca.com, carta.otrocliente.es...).
+#
+# Bloque sin nombre de host: recoge todo lo que no casó con los de arriba. Caddy elige
+# siempre el bloque más específico, así que `*.{$PLATFORM_DOMAIN}` sigue ganando para los
+# subdominios de la plataforma y este solo ve los dominios ajenos.
+#
+# No hay que tocar este fichero al dar de alta un cliente con dominio propio: basta con
+# guardarlo en el panel (queda en `tenants.custom_domain`) y que apunte su registro A aquí.
+# El resto lo resuelven `on_demand_tls` y `findTenantByHost`.
+:443 {
+	tls {
+		on_demand
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	# Un Host desconocido llega igualmente hasta aquí, pero no filtra nada: `proxy.ts` no lo
+	# encuentra en `tenants` y devuelve 404 sin renderizar ninguna página de cliente.
+	reverse_proxy web:3000
 }

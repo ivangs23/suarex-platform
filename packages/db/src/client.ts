@@ -153,6 +153,24 @@ export function tenantsTableForHostResolution() {
 }
 
 /**
+ * DECIMOTERCERA EXENCIÓN DELIBERADA, hermana de `tenantsTableForHostResolution` pero para
+ * ESCRITURA, y separada de ella justamente para que aquel siga siendo de solo lectura.
+ *
+ * Único uso legítimo: `setTenantCustomDomain` (`./tenants.js`), que fija el dominio propio
+ * del tenant. Acotada por firma a `tenants` y, sobre todo, por contrato: su único llamante
+ * SIEMPRE filtra `.eq("id", tenantId)` con el `tenantId` de la sesión, nunca uno que venga
+ * del formulario. `tenants` no admite `tenantScoped` porque no tiene columna `tenant_id`
+ * (se identifica por su propia `id`), que es el mismo motivo de la exención de lectura.
+ *
+ * Lo que se escribe por aquí decide qué certificados pide Caddy y qué tenant sirve un Host,
+ * así que el valor pasa antes por `normalizeCustomDomain` (`@suarex/config`) en el borde de
+ * la Server Action: aquí nunca llega texto crudo del formulario.
+ */
+export function tenantsTableForCustomDomainWrite() {
+  return serviceClient().from("tenants");
+}
+
+/**
  * SEGUNDA EXENCIÓN DELIBERADA, con el mismo razonamiento que
  * `tenantsTableForHostResolution`: el token del QR es lo que determina a qué tenant
  * pertenece la mesa, así que la búsqueda no puede filtrarse por un tenant que aún no
