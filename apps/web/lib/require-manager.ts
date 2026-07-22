@@ -29,3 +29,37 @@ export async function requireManager(): Promise<ManagerSession> {
 
   return { userId: session.userId, tenantId: session.tenantId, role: session.role };
 }
+
+/**
+ * Fix round 1 (Finding 1): envoltorio OBLIGATORIO para toda Server Action de gestión de
+ * catálogo (ver `apps/web/app/admin/catalogo/actions.ts`). Antes, cada una de esas 11
+ * actions empezaba a mano por `const session = await requireManager();` -- correcto hoy,
+ * pero una futura action (D2/D3: mesas, dispositivos, personal) podría omitirlo sin que
+ * nada lo detectara: la misma brecha "convención, no estructura" que este proyecto ya
+ * cerró en otros puntos con `tenantScoped` (`tenantId` obligatorio, ver
+ * `packages/db/src/client.ts`) y con la propia `resolveStaffSession` (`hostTenant`
+ * obligatorio).
+ *
+ * `managerAction(fn)` devuelve una función con la firma `(...args) => Promise<void>` --
+ * pensada para `(formData: FormData) => Promise<void>`, la que usan los `<form action=…>`
+ * -- que SIEMPRE ejecuta `checkManager()` (`requireManager` en producción) ANTES de
+ * invocar `fn`. El cuerpo de la action recibe la sesión YA verificada como primer
+ * argumento: no hay ningún camino para que `fn` se ejecute sin que la comprobación de rol
+ * haya pasado primero -- la barrera ya no depende de que quien escriba la siguiente action
+ * se acuerde de copiarla, vive en la firma de `fn`.
+ *
+ * `checkManager` es un segundo parámetro inyectable (por defecto `requireManager`)
+ * EXCLUSIVAMENTE para poder probar unitariamente la composición del propio wrapper (ver
+ * `require-manager.test.ts`) sin tener que simular cookies/headers de una request de
+ * Next -- ninguna de las 11 actions de producción pasa un segundo argumento, todas usan
+ * el default real.
+ */
+export function managerAction<Args extends unknown[]>(
+  fn: (session: ManagerSession, ...args: Args) => Promise<void>,
+  checkManager: () => Promise<ManagerSession> = requireManager,
+): (...args: Args) => Promise<void> {
+  return async (...args: Args) => {
+    const session = await checkManager();
+    return fn(session, ...args);
+  };
+}

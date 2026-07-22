@@ -14,6 +14,7 @@ import {
 } from "@suarex/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
+  admin as adminClient,
   createTenantFixture,
   deleteTenantFixture,
   nonce,
@@ -158,6 +159,94 @@ describe("aislamiento entre tenants", () => {
 
     const catalogB = await listAdminCatalog(tenantB.tenantId);
     expect(catalogB.categories.some((c) => c.id === id)).toBe(false);
+  });
+});
+
+/**
+ * Fix round 1 (Finding 3): `tenantScoped(table, tenantId).update(...)/.delete(...)` ya
+ * añade `.eq("tenant_id", tenantId)` como filtro base (ver `packages/db/src/client.ts`),
+ * lo que hace que un `id` de otro tenant sea un no-op seguro -- probado para `categories`
+ * en `tenant-filter-structural.test.ts` a nivel de `tenantScoped` directamente. Este
+ * bloque pins la MISMA garantía pero en los cuatro repositorios de este fichero que la
+ * capa de Server Actions llama de verdad (`updateProduct`/`deleteProduct`/
+ * `updateCategory`/`deleteCategory`): que el filtro se sostiene en el camino de
+ * update/delete de `admin-catalog.ts`, no solo en el de "adjuntar por FK" ya cubierto por
+ * el bloque "aislamiento entre tenants" de arriba.
+ */
+describe("update/delete cross-tenant es un no-op seguro", () => {
+  it("updateCategory con el id de otro tenant no afecta ninguna fila y B queda intacta", async () => {
+    const { id: categoryOfB } = await createCategory(tenantB.tenantId, {
+      slug: `cross-cat-upd-${nonce()}`,
+      nameI18n: { es: "Original B" },
+    });
+
+    await updateCategory(tenantA.tenantId, categoryOfB, { nameI18n: { es: "Hackeada por A" } });
+
+    const { data: rowB } = await adminClient
+      .from("categories")
+      .select("name_i18n")
+      .eq("id", categoryOfB)
+      .single();
+    expect(rowB?.name_i18n).toEqual({ es: "Original B" });
+  });
+
+  it("deleteCategory con el id de otro tenant no borra la fila de B", async () => {
+    const { id: categoryOfB } = await createCategory(tenantB.tenantId, {
+      slug: `cross-cat-del-${nonce()}`,
+      nameI18n: { es: "Sigue viva" },
+    });
+
+    await deleteCategory(tenantA.tenantId, categoryOfB);
+
+    const { data: rowB } = await adminClient
+      .from("categories")
+      .select("id")
+      .eq("id", categoryOfB)
+      .maybeSingle();
+    expect(rowB?.id).toBe(categoryOfB);
+  });
+
+  it("updateProduct con el id de otro tenant no afecta ninguna fila y B queda intacta", async () => {
+    const { id: categoryOfB } = await createCategory(tenantB.tenantId, {
+      slug: `cross-prod-upd-${nonce()}`,
+      nameI18n: { es: "Cat B" },
+    });
+    const { id: productOfB } = await createProduct(tenantB.tenantId, {
+      categoryId: categoryOfB,
+      nameI18n: { es: "Original B" },
+      price: 4.5,
+    });
+
+    await updateProduct(tenantA.tenantId, productOfB, { price: 999 });
+
+    const { data: rowB } = await adminClient
+      .from("products")
+      .select("price, name_i18n")
+      .eq("id", productOfB)
+      .single();
+    expect(Number(rowB?.price)).toBe(4.5);
+    expect(rowB?.name_i18n).toEqual({ es: "Original B" });
+  });
+
+  it("deleteProduct con el id de otro tenant no borra la fila de B", async () => {
+    const { id: categoryOfB } = await createCategory(tenantB.tenantId, {
+      slug: `cross-prod-del-${nonce()}`,
+      nameI18n: { es: "Cat B" },
+    });
+    const { id: productOfB } = await createProduct(tenantB.tenantId, {
+      categoryId: categoryOfB,
+      nameI18n: { es: "Sigue vivo" },
+      price: 2,
+    });
+
+    await deleteProduct(tenantA.tenantId, productOfB);
+
+    const { data: rowB } = await adminClient
+      .from("products")
+      .select("id")
+      .eq("id", productOfB)
+      .maybeSingle();
+    expect(rowB?.id).toBe(productOfB);
   });
 });
 

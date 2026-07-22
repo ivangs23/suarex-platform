@@ -15,14 +15,20 @@ import {
   uploadProductImage,
 } from "@suarex/db";
 import { revalidatePath } from "next/cache";
-import { requireManager } from "@/lib/require-manager";
+import { parseAllergenId, parseAvailability } from "@/lib/catalog-action-input";
+import { managerAction } from "@/lib/require-manager";
 
 /**
  * SECURITY: patrón obligatorio de TODA Server Action de este fichero.
  *
- *   1. `requireManager()` es la PRIMERA línea, antes de leer ningún campo del
- *      formulario -- rechaza (redirige) a `staff`/`device`/no-autenticado/otro-tenant
- *      antes de que se ejecute una sola sentencia de escritura.
+ *   1. Fix round 1 (Finding 1): cada action de este fichero se define como
+ *      `managerAction(async (session, formData) => { ... })` (`apps/web/lib/require-manager.ts`)
+ *      en vez de empezar a mano por `const session = await requireManager();`. El wrapper
+ *      ejecuta `requireManager()` -- rechaza (redirige) a `staff`/`device`/no-autenticado/
+ *      otro-tenant -- ANTES de invocar el cuerpo de la action, así que `fn` recibe la
+ *      sesión ya verificada como primer argumento y no tiene ningún camino de ejecución
+ *      que la sortee: una futura action (D2/D3: mesas, dispositivos, personal) no puede
+ *      "olvidar" la comprobación porque no hay ningún sitio donde escribirla a mano.
  *   2. El `tenantId` que llega a cada repositorio de `@suarex/db` es SIEMPRE
  *      `session.tenantId` (derivado del claim `tenant_id` verificado del JWT, vía
  *      `resolveStaffSession` -- ver `apps/web/lib/staff-session.ts`), NUNCA un campo
@@ -100,8 +106,7 @@ async function extractImagePath(tenantId: string, formData: FormData): Promise<s
 
 // ---------------------------------------------------------------- categorías
 
-export async function createCategoryAction(formData: FormData): Promise<void> {
-  const session = await requireManager(); // rechaza a staff/device y a otro tenant
+export const createCategoryAction = managerAction(async (session, formData: FormData) => {
   const slug = requiredString(formData, "slug");
   const nameEs = requiredString(formData, "name_es");
 
@@ -111,10 +116,9 @@ export async function createCategoryAction(formData: FormData): Promise<void> {
     destination: parseDestination(formData),
   });
   revalidatePath("/admin/catalogo");
-}
+});
 
-export async function updateCategoryAction(formData: FormData): Promise<void> {
-  const session = await requireManager();
+export const updateCategoryAction = managerAction(async (session, formData: FormData) => {
   const categoryId = requiredString(formData, "category_id");
   const nameEs = optionalString(formData, "name_es");
 
@@ -124,20 +128,18 @@ export async function updateCategoryAction(formData: FormData): Promise<void> {
     destination: parseDestination(formData),
   });
   revalidatePath("/admin/catalogo");
-}
+});
 
-export async function deleteCategoryAction(formData: FormData): Promise<void> {
-  const session = await requireManager();
+export const deleteCategoryAction = managerAction(async (session, formData: FormData) => {
   const categoryId = requiredString(formData, "category_id");
 
   await deleteCategory(session.tenantId, categoryId);
   revalidatePath("/admin/catalogo");
-}
+});
 
 // ---------------------------------------------------------------- productos
 
-export async function createProductAction(formData: FormData): Promise<void> {
-  const session = await requireManager();
+export const createProductAction = managerAction(async (session, formData: FormData) => {
   const categoryId = requiredString(formData, "category_id");
   const nameEs = requiredString(formData, "name_es");
   const price = parseEuroPrice(formData, "price");
@@ -153,10 +155,9 @@ export async function createProductAction(formData: FormData): Promise<void> {
     allergenIds: parseAllergenIds(formData),
   });
   revalidatePath("/admin/catalogo");
-}
+});
 
-export async function updateProductAction(formData: FormData): Promise<void> {
-  const session = await requireManager();
+export const updateProductAction = managerAction(async (session, formData: FormData) => {
   const productId = requiredString(formData, "product_id");
   const nameEs = optionalString(formData, "name_es");
   const descriptionEs = optionalString(formData, "description_es");
@@ -171,60 +172,54 @@ export async function updateProductAction(formData: FormData): Promise<void> {
     allergenIds: parseAllergenIds(formData),
   });
   revalidatePath("/admin/catalogo");
-}
+});
 
-export async function deleteProductAction(formData: FormData): Promise<void> {
-  const session = await requireManager();
+export const deleteProductAction = managerAction(async (session, formData: FormData) => {
   const productId = requiredString(formData, "product_id");
 
   await deleteProduct(session.tenantId, productId);
   revalidatePath("/admin/catalogo");
-}
+});
 
-export async function setProductAvailabilityAction(formData: FormData): Promise<void> {
-  const session = await requireManager();
+export const setProductAvailabilityAction = managerAction(async (session, formData: FormData) => {
   const productId = requiredString(formData, "product_id");
-  const isAvailable = requiredString(formData, "is_available") === "true";
+  const isAvailable = parseAvailability(requiredString(formData, "is_available"));
 
   await setProductAvailability(session.tenantId, productId, isAvailable);
   revalidatePath("/admin/catalogo");
-}
+});
 
 // ---------------------------------------------------------------- extras
 
-export async function createExtraAction(formData: FormData): Promise<void> {
-  const session = await requireManager();
+export const createExtraAction = managerAction(async (session, formData: FormData) => {
   const productId = requiredString(formData, "product_id");
   const nameEs = requiredString(formData, "name_es");
   const price = parseEuroPrice(formData, "price");
 
   await createExtra(session.tenantId, { productId, nameI18n: { es: nameEs }, price });
   revalidatePath("/admin/catalogo");
-}
+});
 
-export async function deleteExtraAction(formData: FormData): Promise<void> {
-  const session = await requireManager();
+export const deleteExtraAction = managerAction(async (session, formData: FormData) => {
   const extraId = requiredString(formData, "extra_id");
 
   await deleteExtra(session.tenantId, extraId);
   revalidatePath("/admin/catalogo");
-}
+});
 
 // ---------------------------------------------------------------- alérgenos del tenant
 
-export async function createTenantAllergenAction(formData: FormData): Promise<void> {
-  const session = await requireManager();
+export const createTenantAllergenAction = managerAction(async (session, formData: FormData) => {
   const nameEs = requiredString(formData, "name_es");
   const icon = optionalString(formData, "icon");
 
   await createTenantAllergen(session.tenantId, { nameI18n: { es: nameEs }, icon });
   revalidatePath("/admin/catalogo");
-}
+});
 
-export async function deleteTenantAllergenAction(formData: FormData): Promise<void> {
-  const session = await requireManager();
-  const allergenId = Number(requiredString(formData, "allergen_id"));
+export const deleteTenantAllergenAction = managerAction(async (session, formData: FormData) => {
+  const allergenId = parseAllergenId(requiredString(formData, "allergen_id"));
 
   await deleteTenantAllergen(session.tenantId, allergenId);
   revalidatePath("/admin/catalogo");
-}
+});
