@@ -111,6 +111,16 @@ export async function runAgentTick(client: SupabaseClient): Promise<AgentTickRes
       }
     }
   }
+
+  // Heartbeat informativo: nunca derriba el tick. `client.rpc(...)` devuelve un
+  // PostgrestBuilder que solo implementa `PromiseLike` (tiene `.then`, no `.catch`), así que
+  // se envuelve en try/await/catch en vez de encadenar `.catch` directamente.
+  try {
+    await client.rpc("device_heartbeat", { p_app_version: null });
+  } catch {
+    // informativo: un fallo aquí no debe derribar el tick de impresión.
+  }
+
   return { printed, failed };
 }
 
