@@ -47,6 +47,8 @@ export {
   listPrinters,
   updatePrinter,
 } from "./admin-printers.js";
+export type { CreateStaffInput, CreateStaffResult, StaffMember } from "./admin-staff.js";
+export { createStaff, listStaff } from "./admin-staff.js";
 export type { CreateTableInput, UpdateTableInput } from "./admin-tables.js";
 export { createTable, deleteTable, listTables, updateTable } from "./admin-tables.js";
 export { getCategories, getProducts } from "./catalog.js";
