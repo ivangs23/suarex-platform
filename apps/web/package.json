@@ -19,12 +19,14 @@
     "@suarex/realtime": "workspace:*",
     "@supabase/ssr": "^0.12.3",
     "next": "^16.2.6",
+    "qrcode": "^1.5.4",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "stripe": "^22.3.2"
   },
   "devDependencies": {
     "@types/node": "^25.6.0",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "typescript": "^5.9.3",
