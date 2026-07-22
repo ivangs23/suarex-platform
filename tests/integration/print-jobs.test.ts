@@ -108,8 +108,146 @@ async function seedVenueWithPrinters(tenant: TenantFixture, label: string): Prom
   };
 }
 
+/**
+ * Local igual que `seedVenueWithPrinters` (mismas categorías/productos de cocina Y de
+ * barra, así que se pueden montar pedidos que necesiten cualquier combinación de
+ * estaciones), pero con impresoras habilitadas SOLO para las estaciones listadas en
+ * `enabledFor` -- para fijar el caso "estación necesaria sin ninguna impresora
+ * habilitada" (Finding 1 de la revisión de C1 task 4: ver el trade-off documentado en
+ * `targetPrinterIds`, `packages/db/src/print-jobs.ts`, y en el comentario de
+ * `coalesce(bool_and(...), true)` de `supabase/migrations/20260722000003_print_reservation.sql`).
+ * Las estaciones NO listadas en `enabledFor` quedan con `kitchenPrinterId`/`barPrinterId`
+ * a `null` -- cero impresoras habilitadas de ese destino en este local.
+ */
+async function seedVenueWithPrintersFor(
+  tenant: TenantFixture,
+  label: string,
+  enabledFor: readonly ("cocina" | "barra")[],
+): Promise<
+  Omit<Venue, "kitchenPrinterId" | "barPrinterId"> & {
+    kitchenPrinterId: string | null;
+    barPrinterId: string | null;
+  }
+> {
+  // `is_default: false` -- a propósito, a diferencia de seedVenueWithPrinters: esta
+  // función crea locales ADICIONALES para un tenant que, en estos tests, ya tiene su
+  // propio local por defecto (el `venue` compartido de `beforeAll`). `venues_single_default_per_tenant`
+  // es un UNIQUE parcial sobre `tenant_id where is_default`, así que un segundo local
+  // `is_default: true` del MISMO tenant violaría esa restricción. `is_default` no lo lee
+  // ningún código de este fichero (siempre se pasa `venueId` explícito), así que `false`
+  // aquí no afecta a nada de lo que se prueba.
+  const { data: venueRow, error: venueError } = await admin
+    .from("venues")
+    .insert({ tenant_id: tenant.tenantId, slug: `v-${label}`, name: "V", is_default: false })
+    .select("id")
+    .single();
+  if (venueError) throw venueError;
+  const venueId = venueRow?.id as string;
+
+  const { data: kitchenCategory, error: kitchenCategoryError } = await admin
+    .from("categories")
+    .insert({
+      tenant_id: tenant.tenantId,
+      slug: `k-${label}`,
+      name_i18n: { es: "Cocina" },
+      destination: "cocina",
+    })
+    .select("id")
+    .single();
+  if (kitchenCategoryError) throw kitchenCategoryError;
+  const { data: barCategory, error: barCategoryError } = await admin
+    .from("categories")
+    .insert({
+      tenant_id: tenant.tenantId,
+      slug: `b-${label}`,
+      name_i18n: { es: "Barra" },
+      destination: "barra",
+    })
+    .select("id")
+    .single();
+  if (barCategoryError) throw barCategoryError;
+
+  const { data: kitchenProduct, error: kitchenProductError } = await admin
+    .from("products")
+    .insert({
+      tenant_id: tenant.tenantId,
+      category_id: kitchenCategory?.id,
+      name_i18n: { es: "Paella" },
+      price: 12,
+    })
+    .select("id")
+    .single();
+  if (kitchenProductError) throw kitchenProductError;
+  const { data: barProduct, error: barProductError } = await admin
+    .from("products")
+    .insert({
+      tenant_id: tenant.tenantId,
+      category_id: barCategory?.id,
+      name_i18n: { es: "Cerveza" },
+      price: 3,
+    })
+    .select("id")
+    .single();
+  if (barProductError) throw barProductError;
+
+  const { data: table, error: tableError } = await admin
+    .from("tables")
+    .insert({ tenant_id: tenant.tenantId, venue_id: venueId, label: `mesa-${label}` })
+    .select("id")
+    .single();
+  if (tableError) throw tableError;
+
+  let kitchenPrinterId: string | null = null;
+  if (enabledFor.includes("cocina")) {
+    const { data: kitchenPrinter, error: kitchenPrinterError } = await admin
+      .from("printers")
+      .insert({
+        tenant_id: tenant.tenantId,
+        venue_id: venueId,
+        name: `Cocina ${label}`,
+        connection: { type: "network", host: "127.0.0.1", port: 9100 },
+        destination: "cocina",
+        enabled: true,
+      })
+      .select("id")
+      .single();
+    if (kitchenPrinterError) throw kitchenPrinterError;
+    kitchenPrinterId = kitchenPrinter?.id as string;
+  }
+
+  let barPrinterId: string | null = null;
+  if (enabledFor.includes("barra")) {
+    const { data: barPrinter, error: barPrinterError } = await admin
+      .from("printers")
+      .insert({
+        tenant_id: tenant.tenantId,
+        venue_id: venueId,
+        name: `Barra ${label}`,
+        connection: { type: "network", host: "127.0.0.1", port: 9101 },
+        destination: "barra",
+        enabled: true,
+      })
+      .select("id")
+      .single();
+    if (barPrinterError) throw barPrinterError;
+    barPrinterId = barPrinter?.id as string;
+  }
+
+  return {
+    venueId,
+    tableId: table?.id as string,
+    kitchenProductId: kitchenProduct?.id as string,
+    barProductId: barProduct?.id as string,
+    kitchenPrinterId,
+    barPrinterId,
+  };
+}
+
 /** Pedido con una línea de cocina y una de barra (paga las dos impresoras), marcado `paid`. */
-async function createPaidMixedOrder(tenant: TenantFixture, venue: Venue): Promise<string> {
+async function createPaidMixedOrder(
+  tenant: TenantFixture,
+  venue: Pick<Venue, "venueId" | "tableId" | "kitchenProductId" | "barProductId">,
+): Promise<string> {
   const order = await createPendingOrder({
     tenantId: tenant.tenantId,
     venueId: venue.venueId,
@@ -129,7 +267,10 @@ async function createPaidMixedOrder(tenant: TenantFixture, venue: Venue): Promis
 }
 
 /** Pedido SOLO de barra (bebidas), marcado `paid`: cocina no tiene nada que atender. */
-async function createPaidDrinksOnlyOrder(tenant: TenantFixture, venue: Venue): Promise<string> {
+async function createPaidDrinksOnlyOrder(
+  tenant: TenantFixture,
+  venue: Pick<Venue, "venueId" | "tableId" | "barProductId">,
+): Promise<string> {
   const order = await createPendingOrder({
     tenantId: tenant.tenantId,
     venueId: venue.venueId,
@@ -236,6 +377,167 @@ describe("unprintedPaidOrders", () => {
     expect(pending.some((o) => o.id === orderId)).toBe(true);
     // El pedido ajeno nunca aparece, aunque también esté pagado y sin imprimir.
     expect(pending.some((o) => o.id === otherOrderId)).toBe(false);
+  });
+});
+
+/**
+ * Finding 1 de la revisión de C1 task 4: la rama "trivialmente cubierto" (estación
+ * necesaria pero cero impresoras habilitadas) es la lógica de mayor riesgo de toda la
+ * tarea -- decide entre "el pedido se queda atascado sin imprimir para siempre" y "el
+ * pedido se da por completo aunque una estación nunca recibió su ticket" -- y antes de
+ * este cambio no tenía ningún test que la ejerciera. Estos tests fijan el
+ * comportamiento CONFIRMADO CORRECTO (ver el trade-off documentado en
+ * `targetPrinterIds`, `packages/db/src/print-jobs.ts`, y en el comentario de
+ * `coalesce(bool_and(...), true)` de
+ * `supabase/migrations/20260722000003_print_reservation.sql`) para que un cambio futuro
+ * no pueda romperlo en silencio.
+ */
+describe("unprintedPaidOrders / reservePrinted — estación necesaria sin impresoras habilitadas", () => {
+  it("pedido que necesita SOLO una estación sin ninguna impresora habilitada: trivialmente cubierto desde el principio", async () => {
+    // Local con impresora SOLO de cocina -- CERO impresoras habilitadas para barra.
+    const barlessVenue = await seedVenueWithPrintersFor(tenant, nonce(), ["cocina"]);
+    const orderId = await createPaidDrinksOnlyOrder(tenant, barlessVenue); // solo necesita barra
+
+    // Trivialmente cubierto DESDE EL PRINCIPIO: barra no tiene ninguna impresora
+    // habilitada, así que no hay ningún id de impresora pendiente de cubrir -- el pedido
+    // nunca aparece como pendiente, ni siquiera antes de llamar a reservePrinted.
+    expect((await unprintedPaidOrders(tenant.tenantId)).some((o) => o.id === orderId)).toBe(false);
+
+    const { data: before } = await admin
+      .from("orders")
+      .select("printed_at")
+      .eq("id", orderId)
+      .single();
+    expect(before?.printed_at).toBeNull(); // aún no se ha llamado a reservePrinted
+
+    // La cobertura vacía es trivialmente `true`: CUALQUIER llamada a reservePrinted para
+    // este pedido -- aquí, con la impresora de cocina del local, aunque el pedido no
+    // tenga ninguna línea de cocina -- basta para fijar printed_at, precisamente porque
+    // no hay ningún id de impresora de destino que bloquee la cobertura.
+    await reservePrinted(
+      tenant.tenantId,
+      orderId,
+      barlessVenue.kitchenPrinterId as string,
+      new Date().toISOString(),
+    );
+
+    const { data: after } = await admin
+      .from("orders")
+      .select("printed_at")
+      .eq("id", orderId)
+      .single();
+    expect(after?.printed_at).not.toBeNull();
+  });
+
+  it("pedido mixto con barra sin ninguna impresora habilitada: reservar SOLO la de cocina lo completa", async () => {
+    const cocinaOnlyVenue = await seedVenueWithPrintersFor(tenant, nonce(), ["cocina"]);
+    const orderId = await createPaidMixedOrder(tenant, cocinaOnlyVenue);
+
+    // Control positivo: cocina SÍ tiene impresora y aún no se ha reservado, así que el
+    // pedido sigue pendiente (no es un caso trivial todavía).
+    expect((await unprintedPaidOrders(tenant.tenantId)).some((o) => o.id === orderId)).toBe(true);
+
+    await reservePrinted(
+      tenant.tenantId,
+      orderId,
+      cocinaOnlyVenue.kitchenPrinterId as string,
+      new Date().toISOString(),
+    );
+
+    // Barra necesitaba una impresora que no existe -- trivialmente cubierta -- así que
+    // reservar SOLO la impresora de cocina (la "otra" estación, la que sí tiene
+    // impresora real) basta para completar el pedido.
+    expect((await unprintedPaidOrders(tenant.tenantId)).some((o) => o.id === orderId)).toBe(false);
+    const { data } = await admin.from("orders").select("printed_at").eq("id", orderId).single();
+    expect(data?.printed_at).not.toBeNull();
+  });
+
+  it("impresora deshabilitada DESPUÉS de crear el pedido: la finalización cuenta solo impresoras actualmente habilitadas", async () => {
+    // Tenant y local PROPIOS de este test (no el `tenant`/`venue` compartidos del
+    // fichero) para poder deshabilitar una impresora sin afectar a otros tests: por un
+    // lado `venues_single_default_per_tenant` impide un segundo local `is_default` en el
+    // tenant compartido, y por otro deshabilitar la impresora de barra del `venue`
+    // compartido rompería los demás tests de este fichero que siguen necesitándola.
+    const ownTenant = await createTenantFixture(`prn-disable-${nonce()}`);
+    const ownVenue = await seedVenueWithPrinters(ownTenant, nonce());
+    const orderId = await createPaidMixedOrder(ownTenant, ownVenue);
+
+    // Control positivo: con las dos impresoras todavía habilitadas, el pedido está pendiente.
+    expect((await unprintedPaidOrders(ownTenant.tenantId)).some((o) => o.id === orderId)).toBe(
+      true,
+    );
+
+    // La impresora de barra se deshabilita DESPUÉS de crear el pedido (p. ej. alguien la
+    // apaga o la retira de la configuración) y ANTES de que nadie la reserve.
+    const { error: disableError } = await admin
+      .from("printers")
+      .update({ enabled: false })
+      .eq("id", ownVenue.barPrinterId);
+    if (disableError) throw disableError;
+
+    await reservePrinted(
+      ownTenant.tenantId,
+      orderId,
+      ownVenue.kitchenPrinterId,
+      new Date().toISOString(),
+    );
+
+    // reservePrinted (SQL) y unprintedPaidOrders (TS) recalculan las impresoras de
+    // destino EN CADA llamada -- no las congelan en el momento de crear el pedido -- así
+    // que barra, ahora sin ninguna impresora habilitada, se trata como trivialmente
+    // cubierta y reservar solo cocina basta para completar el pedido.
+    expect((await unprintedPaidOrders(ownTenant.tenantId)).some((o) => o.id === orderId)).toBe(
+      false,
+    );
+    const { data } = await admin.from("orders").select("printed_at").eq("id", orderId).single();
+    expect(data?.printed_at).not.toBeNull();
+  });
+});
+
+/**
+ * Finding 3 de la revisión de C1 task 4: el mapeo estación→impresora vive duplicado en
+ * `targetPrinterIds` (TS, `packages/db/src/print-jobs.ts`) y en `reserve_printed` (SQL,
+ * `supabase/migrations/20260722000003_print_reservation.sql`), con comentarios de "keep
+ * in sync" en ambos lados pero sin ninguna prueba que lo confirme. Este test ejerce un
+ * caso NO trivial (una impresora de cocina Y una de barra, ambas habilitadas, reserva
+ * PARCIAL) y comprueba que las DOS implementaciones -- `unprintedPaidOrders` (TS) y el
+ * `printed_at` que fija `reservePrinted` (SQL) -- coinciden en cada paso, para que una
+ * futura divergencia entre ambas quede atrapada aquí.
+ */
+describe("unprintedPaidOrders / reservePrinted — acuerdo SQL/TS en el mapeo estación→impresora", () => {
+  it("con una impresora de cocina y una de barra habilitadas, TS y SQL coinciden en cada paso de una reserva parcial", async () => {
+    const orderId = await createPaidMixedOrder(tenant, venue);
+
+    // Antes de reservar nada: las dos implementaciones coinciden en "pendiente".
+    expect((await unprintedPaidOrders(tenant.tenantId)).some((o) => o.id === orderId)).toBe(true);
+    const rowBefore = (await admin.from("orders").select("printed_at").eq("id", orderId).single())
+      .data;
+    expect(rowBefore?.printed_at).toBeNull();
+
+    // Reserva PARCIAL: solo cocina.
+    const atKitchen = new Date().toISOString();
+    await reservePrinted(tenant.tenantId, orderId, venue.kitchenPrinterId, atKitchen);
+
+    // Tras la reserva parcial: las dos siguen de acuerdo en "pendiente" (falta barra en
+    // ambas -- ni TS deja de listarlo ni SQL fija printed_at).
+    const pendingAfterPartial = await unprintedPaidOrders(tenant.tenantId);
+    const foundAfterPartial = pendingAfterPartial.find((o) => o.id === orderId);
+    expect(foundAfterPartial).toBeDefined(); // TS: sigue pendiente
+    expect(foundAfterPartial?.printedTargets).toEqual({ [venue.kitchenPrinterId]: atKitchen });
+    const rowAfterPartial = (
+      await admin.from("orders").select("printed_at").eq("id", orderId).single()
+    ).data;
+    expect(rowAfterPartial?.printed_at).toBeNull(); // SQL: tampoco cubierto todavía
+
+    // Reserva COMPLETA: barra también.
+    await reservePrinted(tenant.tenantId, orderId, venue.barPrinterId, new Date().toISOString());
+
+    // Tras cubrir ambas impresoras: las dos implementaciones coinciden en "completo".
+    expect((await unprintedPaidOrders(tenant.tenantId)).some((o) => o.id === orderId)).toBe(false);
+    const rowAfterFull = (
+      await admin.from("orders").select("printed_at").eq("id", orderId).single()
+    ).data;
+    expect(rowAfterFull?.printed_at).not.toBeNull();
   });
 });
 

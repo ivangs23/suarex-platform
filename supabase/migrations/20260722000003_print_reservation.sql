@@ -92,6 +92,23 @@ begin
 
   -- bool_and sobre un conjunto vacío (ninguna impresora de destino aplica) da NULL;
   -- coalesce a true trata "nada que imprimir" como trivialmente cubierto.
+  --
+  -- TRADE-OFF DELIBERADO (revisado y confirmado -- NO cambiar este `true`): un
+  -- v_needed_printer_ids vacío cubre dos casos que esta función no distingue:
+  --   1. El pedido de verdad no necesita esa estación (kitchen_status/bar_status
+  --      'na') -- nada que imprimir, caso normal.
+  --   2. Una estación que el pedido SÍ necesita pero el local tiene CERO impresoras
+  --      habilitadas para ese destination -- local mal configurado (p. ej. nadie
+  --      asignó impresora de barra).
+  -- Coalescer a `true` evita que el pedido quede pendiente para siempre en el caso
+  -- (2) (la alternativa, `false`, lo deja atascado sin ninguna impresora real que
+  -- pueda jamás satisfacerlo). El coste: en el caso (2) el ticket de esa estación se
+  -- pierde en silencio -- printed_at se fija aunque cocina o barra nunca vieron nada.
+  -- DEFERRED: no hay hoy ningún aviso a admin de que esto ocurrió; una fase
+  -- posterior debería exponerlo en la UI de admin. No se añade aquí ninguna
+  -- infraestructura de logging/telemetría nueva -- ver el mismo razonamiento en
+  -- `targetPrinterIds`, packages/db/src/print-jobs.ts. Aceptado para C1 porque el
+  -- agente de impresión (único consumidor hoy) no tiene UI donde mostrarlo.
   select coalesce(bool_and(v_targets ? pid::text), true)
     into v_covered
     from unnest(v_needed_printer_ids) as pid;

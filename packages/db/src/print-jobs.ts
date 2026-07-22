@@ -59,7 +59,31 @@ function resolveItemName(nameSnapshot: Record<string, string>): string {
  * imprimir, así que el pedido no debe quedar pendiente para siempre de una impresora
  * que no existe. La MISMA regla vive, por separado, en `reserve_printed()` (SQL, ver
  * `supabase/migrations/20260722000003_print_reservation.sql`) para decidir cuándo fijar
- * `printed_at` -- ambas deben mantenerse en sync.
+ * `printed_at` -- ambas deben mantenerse en sync (ver el test de acuerdo SQL/TS en
+ * `tests/integration/print-jobs.test.ts`).
+ *
+ * TRADE-OFF DELIBERADO (revisado y confirmado -- NO cambiar este comportamiento): una
+ * lista vacía cubre dos situaciones muy distintas que esta función no puede distinguir
+ * con la información que recibe:
+ *   1. El pedido de verdad no necesita esa estación (`kitchen_status`/`bar_status` en
+ *      `'na'`) -- caso normal, nada que imprimir.
+ *   2. El local tiene una estación configurada (`kitchen_status`/`bar_status` distinto
+ *      de `'na'`) pero CERO impresoras habilitadas para ese `destination` -- típicamente
+ *      un local mal configurado (p. ej. nadie asignó impresora de barra).
+ * En el caso (2), tratar la estación como "cubierta" evita que el pedido quede
+ * pendiente para siempre (la alternativa -- nunca trivialmente cubierto -- deja al
+ * pedido atascado sin ninguna forma de completarse, ya que jamás habrá una impresora
+ * real que lo reclame). El coste es que el ticket de esa estación se pierde en
+ * silencio: el pedido aparece como completamente impreso aunque cocina o barra nunca
+ * vieron nada. Hoy nada registra que esto ocurrió.
+ *
+ * DEFERRED (no implementado aquí, a propósito): una fase posterior debería exponer en
+ * la UI de admin qué pedidos se completaron con una estación sin impresora asignada,
+ * para que el dueño del local pueda corregir la configuración. No existe ningún sink de
+ * logging/telemetría en este paquete (`packages/db`) sobre el que enganchar un aviso
+ * sin inventar infraestructura nueva -- ver `reservePrinted` más abajo para el mismo
+ * razonamiento aplicado al lado SQL. Aceptado para C1 porque el agente de impresión
+ * (consumidor de este módulo) no tiene UI propia donde mostrar este aviso.
  */
 function targetPrinterIds(
   order: Pick<PaidOrderRow, "venue_id" | "kitchen_status" | "bar_status">,
@@ -107,6 +131,11 @@ export async function unprintedPaidOrders(tenantId: string): Promise<PrintableOr
   return (orderRows as unknown as PaidOrderRow[])
     .filter((row) => {
       const targets = targetPrinterIds(row, printers);
+      // Decisión (ver el comentario de trade-off en targetPrinterIds): targets vacío
+      // puede significar "nada que imprimir" O "estación necesaria sin ninguna
+      // impresora habilitada" -- ambos se excluyen de pendientes aquí. El segundo caso
+      // es un drop silencioso de esa estación; queda documentado como deferred item,
+      // no resuelto en este cambio.
       if (targets.length === 0) return false; // nada que imprimir: no queda pendiente
       const covered = row.printed_targets ?? {};
       return !targets.every((id) => Object.hasOwn(covered, id));
@@ -133,6 +162,11 @@ export async function unprintedPaidOrders(tenantId: string): Promise<PrintableOr
  * merge atómico de `printed_targets` y el razonamiento de concurrencia/idempotencia. Un
  * `orderId` de otro tenant, o inexistente, resulta en un no-op silencioso (la función
  * SQL no encuentra fila y retorna sin hacer nada) -- igual que `markStationDone`.
+ *
+ * El propio SQL fija `printed_at` bajo el mismo trade-off "estación sin impresora ==
+ * trivialmente cubierta" descrito arriba en `targetPrinterIds` -- ver el comentario en
+ * la sentencia `coalesce(bool_and(...), true)` de la migración para el punto de
+ * decisión exacto y el deferred item (aviso a admin, no implementado todavía).
  */
 export async function reservePrinted(
   tenantId: string,
