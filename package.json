@@ -23,6 +23,8 @@
     "@biomejs/biome": "2.4.12",
     "@playwright/test": "^1.61.1",
     "@suarex/db": "workspace:*",
+    "@suarex/printing": "workspace:*",
+    "@suarex/ticket": "workspace:*",
     "@supabase/supabase-js": "^2.110.7",
     "@types/node": "^26.1.1",
     "dotenv": "^17.4.2",

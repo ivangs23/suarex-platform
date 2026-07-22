@@ -17,6 +17,12 @@ importers:
       '@suarex/db':
         specifier: workspace:*
         version: link:packages/db
+      '@suarex/printing':
+        specifier: workspace:*
+        version: link:packages/printing
+      '@suarex/ticket':
+        specifier: workspace:*
+        version: link:packages/ticket
       '@supabase/supabase-js':
         specifier: ^2.110.7
         version: 2.110.7
