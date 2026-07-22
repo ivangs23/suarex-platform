@@ -1,4 +1,9 @@
-export type StoredCredentials = { deviceId: string; email: string; password: string; tenantId: string };
+export type StoredCredentials = {
+  deviceId: string;
+  email: string;
+  password: string;
+  tenantId: string;
+};
 
 export type ConfigBackend = {
   read(): string | null;

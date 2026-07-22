@@ -35,7 +35,12 @@ export async function pairDevice(
     if (!data.deviceId || !data.email || !data.password || !data.tenantId) {
       throw pairError("network");
     }
-    return { deviceId: data.deviceId, email: data.email, password: data.password, tenantId: data.tenantId };
+    return {
+      deviceId: data.deviceId,
+      email: data.email,
+      password: data.password,
+      tenantId: data.tenantId,
+    };
   } catch {
     throw pairError("network");
   }

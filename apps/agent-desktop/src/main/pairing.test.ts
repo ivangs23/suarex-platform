@@ -3,7 +3,10 @@ import { pairDevice } from "./pairing.js";
 
 function fakeFetch(status: number, body: unknown): typeof fetch {
   return (async () =>
-    new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } })) as typeof fetch;
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { "content-type": "application/json" },
+    })) as typeof fetch;
 }
 
 describe("pairDevice", () => {
@@ -14,13 +17,17 @@ describe("pairDevice", () => {
   });
 
   it("404 lanza invalid-code", async () => {
-    await expect(pairDevice("http://host", "X", fakeFetch(404, { error: "x" }))).rejects.toMatchObject({
+    await expect(
+      pairDevice("http://host", "X", fakeFetch(404, { error: "x" })),
+    ).rejects.toMatchObject({
       kind: "invalid-code",
     });
   });
 
   it("429 lanza rate-limited", async () => {
-    await expect(pairDevice("http://host", "X", fakeFetch(429, { error: "x" }))).rejects.toMatchObject({
+    await expect(
+      pairDevice("http://host", "X", fakeFetch(429, { error: "x" })),
+    ).rejects.toMatchObject({
       kind: "rate-limited",
     });
   });
