@@ -1,6 +1,10 @@
 import type { ResolvedTenant } from "./tenant-context";
 
-export type StaffSession = { userId: string; tenantId: string };
+export type StaffSession = {
+  userId: string;
+  tenantId: string;
+  role: "owner" | "admin" | "staff" | "device";
+};
 
 /**
  * Forma mínima que esta función necesita de un cliente de Auth de Supabase.
@@ -72,5 +76,11 @@ export async function resolveStaffSession(
   const userId = claims.sub;
   if (typeof userId !== "string") return null;
 
-  return { userId, tenantId };
+  const role = claims.tenant_role;
+  const validRoles = ["owner", "admin", "staff", "device"] as const;
+  if (typeof role !== "string" || !validRoles.includes(role as (typeof validRoles)[number])) {
+    return null;
+  }
+
+  return { userId, tenantId, role: role as (typeof validRoles)[number] };
 }

@@ -135,6 +135,10 @@ describe("resolveStaffSession — fail-closed", () => {
     if (!realToken) throw new Error("La fixture de tenantA no tiene sesión activa");
 
     const result = await resolveStaffSession(anonClient(), tenantOf(tenantA), realToken);
-    expect(result).toEqual({ userId: tenantA.userId, tenantId: tenantA.tenantId });
+    expect(result).toEqual({
+      userId: tenantA.userId,
+      tenantId: tenantA.tenantId,
+      role: "owner",
+    });
   });
 });

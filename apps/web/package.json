@@ -7,7 +7,8 @@
     "dev": "next dev --webpack -p 3000",
     "build": "next build --webpack",
     "start": "next start -p 3000",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@stripe/react-stripe-js": "^6.8.0",
@@ -26,6 +27,7 @@
     "@types/node": "^25.6.0",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.5"
   }
 }
