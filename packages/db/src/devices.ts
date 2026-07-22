@@ -61,10 +61,16 @@ async function findAuthUserIdByEmail(email: string): Promise<string | null> {
  *
  * En vez de eso: si `createUser` falla por email ya existente, se busca esa cuenta y se
  * le RESETEA la contraseña (nunca se guarda la contraseña en claro en ningún sitio, así
- * que no hay forma de recuperar la de un intento anterior; y si ese intento anterior
- * llegó a devolver credenciales a alguien, este re-emparejamiento las invalida a
- * propósito). El resultado es siempre exactamente una cuenta de Auth por dispositivo,
- * nunca dos, sin importar cuántas veces falle y se reintente el emparejamiento.
+ * que no hay forma de recuperar la de un intento anterior). El resultado es siempre
+ * exactamente una cuenta de Auth por dispositivo, nunca dos, sin importar cuántas veces
+ * falle y se reintente el emparejamiento.
+ *
+ * OJO — límite conocido, pendiente para la fase C2: cambiar la contraseña NO revoca por
+ * sí solo las sesiones/refresh tokens que un dispositivo anterior ya tuviera. Un
+ * dispositivo re-emparejado tras un robo podría seguir operando con su access token
+ * hasta que caduque. La revocación explícita de sesión (`auth.admin.signOut` del usuario)
+ * debe añadirse cuando exista el flujo de re-emparejamiento en el panel de admin, que es
+ * donde ese caso importa; hoy no hay generador de códigos ni re-emparejamiento real.
  */
 async function ensureDeviceAuthAccount(
   email: string,

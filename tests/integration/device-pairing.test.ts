@@ -82,10 +82,12 @@ describe("pairDevice", () => {
   // que las dos acababan devolviendo credenciales válidas: el código, pensado como de un
   // solo uso, servía dos veces. Este test dispara las dos llamadas con `Promise.all`
   // (sin await intermedio, para que de verdad se solapen) y exige que gane exactamente
-  // una. Contra el código viejo (no atómico) este test FALLA -- `winners` tiene longitud
-  // 2 -- y contra el canje atómico (`UPDATE ... WHERE pairing_code = $1 AND
-  // pairing_expires_at > now() ... RETURNING`, sin SELECT previo) PASA: la evidencia de
-  // ambas ejecuciones está en el informe de esta tarea.
+  // una. Contra el código viejo (no atómico) este test FALLA: las dos llamadas pasan el
+  // SELECT y ambas hacen `createUser` con el mismo email determinista, la segunda revienta
+  // por email duplicado y el `Promise.all` rechaza antes de contar `winners`. Contra el
+  // canje atómico (`UPDATE ... WHERE pairing_code = $1 AND pairing_expires_at > now() ...
+  // RETURNING`, sin SELECT previo) PASA: exactamente una llamada reclama la fila. La
+  // evidencia de ambas ejecuciones está en el informe de esta tarea.
   it("dos canjes concurrentes del mismo código: gana exactamente uno, nunca dos", async () => {
     const code = `RACE-${nonce()}`;
     const deviceId = await newDeviceWithCode(code, 60_000);
