@@ -56,3 +56,46 @@ export async function uploadProductImage(
 
   return path;
 }
+
+/**
+ * Sube un logo de marca al bucket `catalog` bajo `tenant/{tenantId}/branding/`, siempre por
+ * el servidor con service role -- mismo bucket, mismas garantías y misma validación que
+ * `uploadProductImage` (UUID de tenant, tipo, tamaño validados ANTES de construir la ruta o
+ * tocar Storage). A DIFERENCIA de `uploadProductImage`, devuelve la URL pública ABSOLUTA, no
+ * la ruta: `branding.logoUrl` (ver `@suarex/config`, `safeParseLogoUrl`) solo admite URLs
+ * absolutas http/https, así que quien consume el logo (el layout público) necesita la URL
+ * ya resuelta, no una ruta relativa que tendría que recomponer. Se compone igual que
+ * `catalogImageUrl` en `apps/web/app/admin/catalogo/page.tsx`: `${SUPABASE_URL}` +
+ * el prefijo público del bucket.
+ */
+export async function uploadBrandingLogo(
+  tenantId: string,
+  file: { bytes: Uint8Array; contentType: string },
+): Promise<string> {
+  if (!UUID_RE.test(tenantId)) {
+    throw new Error(`tenantId inválido: se esperaba un UUID, se recibió "${tenantId}"`);
+  }
+  if (!ALLOWED_TYPES.has(file.contentType)) {
+    throw new Error(`Tipo de imagen no permitido: ${file.contentType}`);
+  }
+  if (file.bytes.byteLength > MAX_BYTES) {
+    throw new Error(
+      `Tamaño de imagen no permitido: ${file.bytes.byteLength} bytes (máx ${MAX_BYTES})`,
+    );
+  }
+
+  const supabaseUrl = process.env.SUPABASE_URL;
+  if (!supabaseUrl) throw new Error("SUPABASE_URL es obligatoria para componer la URL del logo");
+
+  const ext =
+    file.contentType === "image/png" ? "png" : file.contentType === "image/webp" ? "webp" : "jpg";
+  const path = `tenant/${tenantId}/branding/${crypto.randomUUID()}.${ext}`;
+
+  const { error } = await catalogBucket().upload(path, file.bytes, {
+    contentType: file.contentType,
+    upsert: false,
+  });
+  if (error) throw error;
+
+  return `${supabaseUrl}/storage/v1/object/public/catalog/${path}`;
+}
