@@ -21,11 +21,20 @@ export function PrinterForm({ venueId, devices }: { venueId: string; devices: De
       <label htmlFor="printer-name">Nombre</label>
       <input id="printer-name" name="name" type="text" required />
 
+      <label htmlFor="printer-connection-type">Tipo de conexión</label>
+      <select id="printer-connection-type" name="connection_type" defaultValue="network">
+        <option value="network">Red (IP:puerto)</option>
+        <option value="usb">USB (impresora de Windows)</option>
+      </select>
+
       <label htmlFor="printer-host">Host</label>
-      <input id="printer-host" name="host" type="text" required />
+      <input id="printer-host" name="host" type="text" />
 
       <label htmlFor="printer-port">Puerto</label>
-      <input id="printer-port" name="port" type="number" min="1" max="65535" required />
+      <input id="printer-port" name="port" type="number" min="1" max="65535" />
+
+      <label htmlFor="printer-printername">Nombre de impresora Windows (solo USB)</label>
+      <input id="printer-printername" name="printer_name" type="text" />
 
       <label htmlFor="printer-destination">Destino</label>
       <select id="printer-destination" name="destination" defaultValue="cocina">

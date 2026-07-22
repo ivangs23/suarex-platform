@@ -60,13 +60,21 @@ function parseDestination(formData: FormData): "cocina" | "barra" | "all" | unde
 export const createPrinterAction = managerAction(async (session, formData: FormData) => {
   const venueId = requiredString(formData, "venue_id");
   const name = requiredString(formData, "name");
-  const host = requiredString(formData, "host");
-  const port = Number(requiredString(formData, "port"));
+
+  const connectionType = optionalString(formData, "connection_type") ?? "network";
+  const connection =
+    connectionType === "usb"
+      ? { type: "usb" as const, printerName: requiredString(formData, "printer_name") }
+      : {
+          type: "network" as const,
+          host: requiredString(formData, "host"),
+          port: Number(requiredString(formData, "port")),
+        };
 
   await createPrinter(session.tenantId, {
     venueId,
     name,
-    connection: { type: "network", host, port },
+    connection,
     destination: parseDestination(formData),
     deviceId: optionalString(formData, "device_id"),
     isDefault: parseOptionalBoolean(formData, "is_default"),
