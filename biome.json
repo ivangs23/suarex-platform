@@ -40,6 +40,10 @@
       "linter": { "rules": { "style": { "noRestrictedImports": "off" } } }
     },
     {
+      "includes": ["packages/agent/src/**"],
+      "linter": { "rules": { "style": { "noRestrictedImports": "off" } } }
+    },
+    {
       "includes": ["scripts/seed-staff.mjs"],
       "linter": { "rules": { "style": { "noRestrictedImports": "off" } } }
     },
