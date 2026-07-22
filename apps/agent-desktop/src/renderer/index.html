@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <title>SuarEx — Agente de impresión</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 1.5rem; }
+      section { margin-bottom: 1.25rem; }
+      #log { white-space: pre-wrap; background: #111; color: #0f0; padding: .75rem; height: 12rem; overflow: auto; font-family: monospace; }
+      button { margin: .25rem 0; }
+    </style>
+  </head>
+  <body>
+    <h1>SuarEx — Agente de impresión</h1>
+    <section id="status">Estado: cargando…</section>
+    <section>
+      <h2>Emparejamiento</h2>
+      <input id="code" placeholder="Código de emparejamiento" />
+      <button id="pair" type="button">Emparejar</button>
+      <button id="unpair" type="button">Des-emparejar</button>
+    </section>
+    <section>
+      <h2>Impresoras locales</h2>
+      <select id="printers"></select>
+      <button id="refresh" type="button">Actualizar lista</button>
+      <button id="test" type="button">Imprimir ticket de prueba</button>
+    </section>
+    <section>
+      <h2>Registro</h2>
+      <div id="log"></div>
+    </section>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
