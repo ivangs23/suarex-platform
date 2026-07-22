@@ -14,6 +14,8 @@ type Props = {
   };
   locale: string;
   currency: string;
+  /** Dominio propio ya guardado, o cadena vacía si el cliente no tiene. */
+  customDomain: string;
 };
 
 /** Formulario funcional (sin estilos) de ajustes del negocio. `encType` multipart para
@@ -91,6 +93,24 @@ export function AjustesForm(props: Props) {
             defaultValue={props.fiscal.taxRatePercent}
           />
         </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Dominio propio</legend>
+        <label>
+          Dominio propio (opcional)
+          <input
+            name="custom_domain"
+            defaultValue={props.customDomain}
+            placeholder="ejemplo.com"
+            data-testid="custom-domain-input"
+          />
+        </label>
+        <p>
+          Escribe solo el nombre del dominio, sin <code>https://</code> ni rutas. Apunta su registro
+          A a la IP de la plataforma: el certificado se emite solo la primera vez que alguien lo
+          visita. Déjalo vacío para volver a tu subdominio.
+        </p>
       </fieldset>
 
       <fieldset>

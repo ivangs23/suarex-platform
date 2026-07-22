@@ -1,7 +1,12 @@
 with t as (
-  insert into public.tenants (slug, name, status) values
-    ('garum', 'Garum Vinoteca', 'active'),
-    ('manuela', 'Manuela Desayuna', 'active')
+  -- garum lleva `custom_domain` para poder ejercer en local la vía del dominio propio: es
+  -- como su carta real (garumvinoteca.com/1) se serviría desde la plataforma conservando
+  -- los QR ya impresos en sus mesas. Es un dominio de ejemplo a propósito -- `.test` está
+  -- reservado por el RFC 2606 y no resuelve en internet, así que ningún test puede salir
+  -- por error hacia el sitio real de un cliente.
+  insert into public.tenants (slug, name, status, custom_domain) values
+    ('garum', 'Garum Vinoteca', 'active', 'garum-demo.test'),
+    ('manuela', 'Manuela Desayuna', 'active', null)
   returning id, slug
 )
 -- Marca real de cada cliente, extraída de sus frontends originales (ivangs23/GARUM-new y

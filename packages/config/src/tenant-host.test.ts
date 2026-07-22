@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseTenantHost, resolveRootDomains } from "./tenant-host.js";
+import { normalizeCustomDomain, parseTenantHost, resolveRootDomains } from "./tenant-host.js";
 
 const ROOTS = ["localhost", "suarex.app"];
 
@@ -96,5 +96,60 @@ describe("resolveRootDomains", () => {
     expect(() =>
       resolveRootDomains({ TENANT_ROOT_DOMAINS: " , ,", NODE_ENV: "production" }),
     ).toThrow(/no contiene ningún dominio válido/);
+  });
+});
+
+describe("normalizeCustomDomain", () => {
+  const ROOTS = ["suarex.app", "localhost"];
+
+  it("acepta un dominio real y lo normaliza", () => {
+    expect(normalizeCustomDomain("GarumVinoteca.com", ROOTS)).toBe("garumvinoteca.com");
+    expect(normalizeCustomDomain("  carta.garumvinoteca.com  ", ROOTS)).toBe(
+      "carta.garumvinoteca.com",
+    );
+  });
+
+  it("rechaza lo que no es un nombre de host", () => {
+    // Recortar la URL escondería el error del owner hasta que fallara el certificado.
+    expect(normalizeCustomDomain("https://garumvinoteca.com", ROOTS)).toBeNull();
+    expect(normalizeCustomDomain("garumvinoteca.com/carta", ROOTS)).toBeNull();
+    expect(normalizeCustomDomain("garumvinoteca.com:443", ROOTS)).toBeNull();
+    expect(normalizeCustomDomain("usuario@garumvinoteca.com", ROOTS)).toBeNull();
+    expect(normalizeCustomDomain("garum vinoteca.com", ROOTS)).toBeNull();
+  });
+
+  it("rechaza nombres sin punto y direcciones IP", () => {
+    // No pueden llevar certificado público ni resolverse desde fuera.
+    expect(normalizeCustomDomain("localhost", ROOTS)).toBeNull();
+    expect(normalizeCustomDomain("intranet", ROOTS)).toBeNull();
+    expect(normalizeCustomDomain("192.168.1.10", ROOTS)).toBeNull();
+  });
+
+  it("rechaza etiquetas mal formadas", () => {
+    expect(normalizeCustomDomain("-mal.com", ROOTS)).toBeNull();
+    expect(normalizeCustomDomain("mal-.com", ROOTS)).toBeNull();
+    expect(normalizeCustomDomain("do..ble.com", ROOTS)).toBeNull();
+    expect(normalizeCustomDomain(`${"a".repeat(64)}.com`, ROOTS)).toBeNull();
+    expect(normalizeCustomDomain(`${"a".repeat(63)}.com`, ROOTS)).toBe(`${"a".repeat(63)}.com`);
+  });
+
+  it("rechaza cualquier dominio bajo una raíz de la plataforma", () => {
+    // Guardarlo no secuestra nada hoy (parseTenantHost mira las raíces antes), pero deja
+    // una fila inútil que pediría certificados que el comodín ya cubre, y convierte
+    // cualquier cambio futuro en ese orden de resolución en un secuestro entre clientes.
+    expect(normalizeCustomDomain("otro.suarex.app", ROOTS)).toBeNull();
+    expect(normalizeCustomDomain("suarex.app", ROOTS)).toBeNull();
+    expect(normalizeCustomDomain("api.suarex.app", ROOTS)).toBeNull();
+    expect(normalizeCustomDomain("hondo.api.suarex.app", ROOTS)).toBeNull();
+    // Un dominio que solo TERMINA parecido no cuelga de la raíz: sí vale.
+    expect(normalizeCustomDomain("nosuarex.app", ROOTS)).toBe("nosuarex.app");
+  });
+
+  it("rechaza vacío y un dominio más largo que el límite del RFC", () => {
+    expect(normalizeCustomDomain("", ROOTS)).toBeNull();
+    expect(normalizeCustomDomain("   ", ROOTS)).toBeNull();
+    const largo = `${Array.from({ length: 11 }, () => "a".repeat(24)).join(".")}.com`;
+    expect(largo.length).toBeGreaterThan(253);
+    expect(normalizeCustomDomain(largo, ROOTS)).toBeNull();
   });
 });

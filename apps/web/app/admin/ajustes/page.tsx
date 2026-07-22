@@ -1,5 +1,5 @@
 import { parseBranding } from "@suarex/config";
-import { getTenantSettings } from "@suarex/db";
+import { getTenantCustomDomain, getTenantSettings } from "@suarex/db";
 import { requireManager } from "@/lib/require-manager";
 import { AjustesForm } from "./AjustesForm";
 
@@ -7,7 +7,10 @@ import { AjustesForm } from "./AjustesForm";
  * `updateSettingsAction` la vuelve a comprobar por su cuenta vía `managerAction`. */
 export default async function AdminAjustesPage() {
   const session = await requireManager();
-  const settings = await getTenantSettings(session.tenantId);
+  const [settings, customDomain] = await Promise.all([
+    getTenantSettings(session.tenantId),
+    getTenantCustomDomain(session.tenantId),
+  ]);
   const branding = parseBranding(settings?.branding);
 
   const fiscal = (settings?.fiscal ?? {}) as Record<string, unknown>;
@@ -31,6 +34,7 @@ export default async function AdminAjustesPage() {
         }}
         locale={settings?.locale ?? "es"}
         currency={settings?.currency ?? "EUR"}
+        customDomain={customDomain ?? ""}
       />
     </main>
   );

@@ -71,3 +71,19 @@ test("un host desconocido devuelve 404", async ({ page }) => {
   const response = await page.goto("http://desconocido.localhost:3000/1");
   expect(response?.status()).toBe(404);
 });
+
+test("un cliente con dominio propio sirve su carta por ese dominio", async ({ page }) => {
+  // Es la vía por la que garumvinoteca.com/1 pasaría a servirse desde la plataforma SIN
+  // redirección y conservando los QR ya impresos en sus mesas: misma forma de URL
+  // (`/{mesa}`), mismo tema, mismos datos. `garum-demo.test` es el custom_domain que
+  // siembra supabase/seed.sql (.test está reservado por RFC 2606: nunca sale a internet).
+  await page.goto("http://garum-demo.test:3000/5");
+
+  await expect(page.getByTestId("tenant-name")).toHaveText("Garum Vinoteca");
+  await expect(page.getByTestId("mesa")).toHaveText("Mesa 5");
+  await expect(page.locator("[data-theme]")).toHaveAttribute("data-theme", "garum");
+
+  // Y la navegación por niveles funciona igual que por el subdominio.
+  await page.getByTestId("category").filter({ hasText: "Vinos" }).getByRole("link").click();
+  await expect(page.getByTestId("category").filter({ hasText: "Tintos" })).toBeVisible();
+});

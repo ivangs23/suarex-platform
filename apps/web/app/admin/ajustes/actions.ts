@@ -1,15 +1,23 @@
 "use server";
 
-import { parseBranding } from "@suarex/config";
-import { getTenantSettings, updateTenantSettings, uploadBrandingLogo } from "@suarex/db";
+import { parseBranding, resolveRootDomains } from "@suarex/config";
+import {
+  getTenantSettings,
+  setTenantCustomDomain,
+  updateTenantSettings,
+  uploadBrandingLogo,
+} from "@suarex/db";
 import { revalidatePath } from "next/cache";
 import { managerAction } from "@/lib/require-manager";
 import {
   parseBrandingFields,
   parseCurrency,
+  parseCustomDomain,
   parseFiscalFields,
   parseLocale,
 } from "@/lib/settings-action-input";
+
+const ROOT_DOMAINS = resolveRootDomains(process.env);
 
 /**
  * SECURITY: mismo patrón obligatorio que el resto de `app/admin/**` (ver el docstring de
@@ -26,6 +34,7 @@ export const updateSettingsAction = managerAction(async (session, formData: Form
   const fiscal = parseFiscalFields(formData);
   const locale = parseLocale(formData);
   const currency = parseCurrency(formData);
+  const customDomain = parseCustomDomain(formData, ROOT_DOMAINS);
 
   // Punto de partida del logo: el que ya está guardado (o null).
   const current = await getTenantSettings(session.tenantId);
@@ -48,6 +57,12 @@ export const updateSettingsAction = managerAction(async (session, formData: Form
     locale,
     currency,
   });
+
+  // El dominio propio vive en `tenants`, no en `tenant_settings`: escritura aparte. Va
+  // DESPUÉS de los ajustes a propósito -- es la única que puede fallar por un conflicto con
+  // otro cliente (índice único), y así ese fallo no se lleva por delante el resto del
+  // formulario, que ya quedó guardado.
+  await setTenantCustomDomain(session.tenantId, customDomain);
 
   // La marca vive en el layout raíz (CSS vars) y el nombre en la carta: revalidar todo.
   revalidatePath("/admin/ajustes");

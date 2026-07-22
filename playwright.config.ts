@@ -14,7 +14,18 @@ dotenv.config({ path: ".env.test" });
 
 export default defineConfig({
   testDir: "tests/e2e",
-  use: { baseURL: "http://garum.localhost:3000" },
+  use: {
+    baseURL: "http://garum.localhost:3000",
+    // `*.localhost` lo resuelve el sistema a 127.0.0.1 solo, pero un DOMINIO PROPIO de
+    // cliente no puede ser `.localhost`: `proxy.ts` lo tomaría por un subdominio de la
+    // plataforma y lo buscaría por slug, que es justo la rama contraria a la que se quiere
+    // probar. Así que el seed usa `garum-demo.test` (`.test` está reservado por el RFC 2606
+    // y NUNCA resuelve en internet, de modo que ningún test puede salir por error hacia el
+    // sitio real de un cliente) y aquí se le dice a Chromium que lo mande a 127.0.0.1.
+    launchOptions: {
+      args: ["--host-resolver-rules=MAP garum-demo.test 127.0.0.1"],
+    },
+  },
   webServer: {
     command: "pnpm --filter @suarex/web dev",
     url: "http://garum.localhost:3000/1",
