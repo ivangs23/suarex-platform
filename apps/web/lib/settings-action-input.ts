@@ -26,13 +26,30 @@ function requiredFont(formData: FormData, field: string): string {
   return value;
 }
 
+/** Mismo límite que `nameSchema` en `@suarex/config` (`packages/config/src/branding.ts`):
+ * en lectura, un nombre por encima de este límite se degrada en silencio a `null` (y la
+ * carta pública cae a `tenant.slug`). Se rechaza aquí, en escritura, para que ese
+ * degradado nunca se alcance en uso normal -- igual que color/fuente/moneda. */
+const MAX_NAME_LENGTH = 80;
+
+function optionalBusinessName(formData: FormData, field: string): string | null {
+  const value = optionalString(formData, field);
+  if (value === undefined) return null;
+  if (value.length > MAX_NAME_LENGTH) {
+    throw new InvalidFormFieldError(
+      `El nombre del negocio no puede superar ${MAX_NAME_LENGTH} caracteres`,
+    );
+  }
+  return value;
+}
+
 export function parseBrandingFields(formData: FormData): {
   name: string | null;
   colors: { bg: string; fg: string; primary: string; accent: string; muted: string };
   fonts: { display: string; body: string };
 } {
   return {
-    name: optionalString(formData, "name") ?? null,
+    name: optionalBusinessName(formData, "name"),
     colors: {
       bg: requiredHexColor(formData, "color_bg"),
       fg: requiredHexColor(formData, "color_fg"),

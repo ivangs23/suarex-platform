@@ -25,7 +25,7 @@ export function AjustesForm(props: Props) {
         <legend>Marca</legend>
         <label>
           Nombre del negocio
-          <input name="name" defaultValue={props.name} />
+          <input name="name" defaultValue={props.name} maxLength={80} />
         </label>
         <label>
           Color de fondo

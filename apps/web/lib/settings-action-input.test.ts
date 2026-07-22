@@ -85,6 +85,41 @@ describe("parseBrandingFields", () => {
       ),
     ).toThrow(/fuente/i);
   });
+
+  it("acepta un nombre de exactamente 80 caracteres", () => {
+    const name = "a".repeat(80);
+    const out = parseBrandingFields(
+      fd({
+        name,
+        color_bg: "#ffffff",
+        color_fg: "#000000",
+        color_primary: "#a88445",
+        color_accent: "#1f1d1a",
+        color_muted: "#d9d1bd",
+        font_display: "Inter",
+        font_body: "Georgia",
+      }),
+    );
+    expect(out.name).toBe(name);
+  });
+
+  it("rechaza un nombre de 81 caracteres", () => {
+    const name = "a".repeat(81);
+    expect(() =>
+      parseBrandingFields(
+        fd({
+          name,
+          color_bg: "#ffffff",
+          color_fg: "#000000",
+          color_primary: "#a88445",
+          color_accent: "#1f1d1a",
+          color_muted: "#d9d1bd",
+          font_display: "Inter",
+          font_body: "Georgia",
+        }),
+      ),
+    ).toThrow(/80|nombre/i);
+  });
 });
 
 describe("parseFiscalFields", () => {
