@@ -44,7 +44,8 @@ export type TenantScopedTable =
   | "tables"
   | "orders"
   | "order_items"
-  | "order_item_extras";
+  | "order_item_extras"
+  | "printers";
 
 /**
  * ÚNICO punto de entrada a una tabla tenant-scoped desde este paquete. `tenantId` es un
@@ -188,4 +189,26 @@ export function devicesTableForPairing() {
  */
 export function authAdminForDevicePairing() {
   return serviceClient().auth.admin;
+}
+
+/**
+ * SÉPTIMA EXENCIÓN DELIBERADA, mismo razonamiento que `nextOrderNumberRpc`:
+ * `reserve_printed` es SECURITY DEFINER y recibe el tenant como parámetro, así que el
+ * filtro (y la comprobación de qué impresoras de destino cubren el pedido) va dentro de
+ * la propia función SQL, no aquí -- ver
+ * `supabase/migrations/20260722000003_print_reservation.sql` para el razonamiento de
+ * concurrencia. Acotado por firma a esa única RPC.
+ */
+export function reservePrintedRpc(
+  tenantId: string,
+  orderId: string,
+  printerId: string,
+  at: string,
+) {
+  return serviceClient().rpc("reserve_printed", {
+    p_tenant_id: tenantId,
+    p_order_id: orderId,
+    p_printer_id: printerId,
+    p_at: at,
+  });
 }
