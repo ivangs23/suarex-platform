@@ -71,7 +71,9 @@ export function parseFiscalFields(formData: FormData): {
   if (taxRaw !== undefined) {
     const percent = Number(taxRaw);
     if (!Number.isFinite(percent)) {
-      throw new InvalidFormFieldError(`IVA inválido (se esperaba un número): ${JSON.stringify(taxRaw)}`);
+      throw new InvalidFormFieldError(
+        `IVA inválido (se esperaba un número): ${JSON.stringify(taxRaw)}`,
+      );
     }
     if (percent < 0 || percent > 100) {
       throw new InvalidFormFieldError(`El IVA debe estar entre 0 y 100: ${percent}`);

@@ -28,7 +28,13 @@ describe("parseBrandingFields", () => {
     );
     expect(out).toEqual({
       name: "Bar Manuela",
-      colors: { bg: "#ffffff", fg: "#000000", primary: "#a88445", accent: "#1f1d1a", muted: "#d9d1bd" },
+      colors: {
+        bg: "#ffffff",
+        fg: "#000000",
+        primary: "#a88445",
+        accent: "#1f1d1a",
+        muted: "#d9d1bd",
+      },
       fonts: { display: "Inter", body: "Georgia" },
     });
   });
@@ -36,8 +42,13 @@ describe("parseBrandingFields", () => {
   it("nombre vacío => null", () => {
     const out = parseBrandingFields(
       fd({
-        color_bg: "#ffffff", color_fg: "#000000", color_primary: "#a88445",
-        color_accent: "#1f1d1a", color_muted: "#d9d1bd", font_display: "Inter", font_body: "Georgia",
+        color_bg: "#ffffff",
+        color_fg: "#000000",
+        color_primary: "#a88445",
+        color_accent: "#1f1d1a",
+        color_muted: "#d9d1bd",
+        font_display: "Inter",
+        font_body: "Georgia",
       }),
     );
     expect(out.name).toBeNull();
@@ -47,8 +58,13 @@ describe("parseBrandingFields", () => {
     expect(() =>
       parseBrandingFields(
         fd({
-          color_bg: "rojo", color_fg: "#000000", color_primary: "#a88445",
-          color_accent: "#1f1d1a", color_muted: "#d9d1bd", font_display: "Inter", font_body: "Georgia",
+          color_bg: "rojo",
+          color_fg: "#000000",
+          color_primary: "#a88445",
+          color_accent: "#1f1d1a",
+          color_muted: "#d9d1bd",
+          font_display: "Inter",
+          font_body: "Georgia",
         }),
       ),
     ).toThrow(/color/i);
@@ -58,8 +74,13 @@ describe("parseBrandingFields", () => {
     expect(() =>
       parseBrandingFields(
         fd({
-          color_bg: "#ffffff", color_fg: "#000000", color_primary: "#a88445",
-          color_accent: "#1f1d1a", color_muted: "#d9d1bd", font_display: "a<b", font_body: "Georgia",
+          color_bg: "#ffffff",
+          color_fg: "#000000",
+          color_primary: "#a88445",
+          color_accent: "#1f1d1a",
+          color_muted: "#d9d1bd",
+          font_display: "a<b",
+          font_body: "Georgia",
         }),
       ),
     ).toThrow(/fuente/i);
@@ -80,8 +101,15 @@ describe("parseFiscalFields", () => {
     expect(() => parseFiscalFields(fd({ tax_rate: "diez" }))).toThrow(/IVA|número/i);
   });
   it("recoge legalName/cif/address/phone opcionales", () => {
-    const out = parseFiscalFields(fd({ legal_name: "Casa SL", cif: "B123", address: "Calle 1", phone: "600" }));
-    expect(out).toMatchObject({ legalName: "Casa SL", cif: "B123", address: "Calle 1", phone: "600" });
+    const out = parseFiscalFields(
+      fd({ legal_name: "Casa SL", cif: "B123", address: "Calle 1", phone: "600" }),
+    );
+    expect(out).toMatchObject({
+      legalName: "Casa SL",
+      cif: "B123",
+      address: "Calle 1",
+      phone: "600",
+    });
   });
 });
 
