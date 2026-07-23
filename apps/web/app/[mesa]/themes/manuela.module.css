@@ -1,7 +1,15 @@
-/* Tema A MEDIDA de Manuela Desayuna. Réplica del lenguaje visual de su frontend original
-   (ivangs23/web-manuela): crema cálido, acentos dorados, marrón oscuro para el texto y
-   tiles muy redondeados -- venía de un kiosko táctil, de ahí las tarjetas grandes. Fija sus
-   propios colores; no depende de `branding.colors`. */
+/* Tema A MEDIDA de Manuela Desayuna. Reproduce su carta real (manueladesayuna.com):
+   crema cálido, acento dorado, marrón oscuro y tarjetas blancas muy redondeadas con borde
+   dorado translúcido.
+
+   Los tokens NO están inventados: se midieron sobre su sitio en producción recorriendo los
+   estilos calculados de todos sus elementos y quedándose con los dominantes:
+     #2c1a0f  texto (16 usos)      #c28744  acento (12 usos, + sus alfas 0.2/0.3/0.4)
+     #fff8e7  superficie cálida    blanco   tarjetas
+   Su borde es literalmente `border-2 border-[#c28744]/40`, de ahí el 40 % de aquí abajo.
+
+   Fija sus propios colores a propósito: no depende de `branding.colors` -- eso es lo que
+   distingue un tema a medida del genérico. */
 
 .page {
   --manuela-bg: #f9f7f2;
@@ -14,7 +22,36 @@
   background-color: var(--manuela-bg);
   color: var(--manuela-text);
   font-family: var(--font-inter), system-ui, sans-serif;
-  padding: 2rem 1.25rem 4.5rem;
+  padding: 0 0 4.5rem;
+}
+
+/* Cabecera con la foto REAL de su local (la pared de casetes enmarcados sobre terrazo) y su
+   firma manuscrita encima, como en su sitio. La foto va difuminada y oscurecida: es el
+   fondo de su pantalla de espera, no un elemento que deba competir con la carta. */
+.topbar {
+  position: relative;
+  padding: 2.25rem 1.25rem;
+  display: flex;
+  justify-content: center;
+  overflow: hidden;
+  border-bottom: 1px solid var(--manuela-border);
+}
+
+.topbarPhoto {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* Sin esto, el trazo fino de la firma se pierde sobre las molduras oscuras de los marcos. */
+  filter: blur(3px) brightness(1.15) saturate(0.85);
+  opacity: 0.4;
+}
+
+.signature {
+  position: relative;
+  width: min(20rem, 70vw);
+  height: auto;
 }
 
 .inner {
@@ -22,13 +59,18 @@
   margin: 0 auto;
 }
 
+.inner {
+  padding: 1.5rem 1.25rem 0;
+}
+
 .header {
-  background: var(--manuela-surface);
-  border: 1px solid var(--manuela-border);
+  background: #ffffff;
+  /* 2 px y dorado al 40 %: el borde exacto de sus tarjetas. */
+  border: 2px solid rgba(194, 135, 68, 0.4);
   border-radius: 1.25rem;
-  padding: 2rem 1.5rem;
+  padding: 1.75rem 1.5rem;
   text-align: center;
-  margin-bottom: 2.5rem;
+  margin-bottom: 2rem;
 }
 
 .logo {
@@ -120,9 +162,9 @@
   text-align: center;
   text-decoration: none;
   color: inherit;
-  background: var(--manuela-surface);
-  border: 2px solid var(--manuela-border);
-  border-radius: 1.25rem;
+  background: #ffffff;
+  border: 2px solid rgba(194, 135, 68, 0.4);
+  border-radius: 1rem;
 }
 
 .cardIcon {
@@ -159,9 +201,9 @@
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  background: var(--manuela-surface);
-  border: 2px solid var(--manuela-border);
-  border-radius: 1.25rem;
+  background: #ffffff;
+  border: 2px solid rgba(194, 135, 68, 0.4);
+  border-radius: 1rem;
   padding: 1.1rem 1.25rem;
 }
 
