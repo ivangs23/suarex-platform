@@ -121,6 +121,9 @@ export type Strings = {
   statusPreparing: string;
   statusServed: string;
   statusCancelled: string;
+  receiptTitle: string;
+  receiptTable: string;
+  receiptPrint: string;
 };
 
 const ES: Strings = {
@@ -163,6 +166,9 @@ const ES: Strings = {
   statusPreparing: "Preparándose",
   statusServed: "¡Servido! Que aproveche",
   statusCancelled: "Cancelado",
+  receiptTitle: "Recibo",
+  receiptTable: "Mesa",
+  receiptPrint: "Imprimir",
 };
 
 const EN: Strings = {
@@ -205,6 +211,9 @@ const EN: Strings = {
   statusPreparing: "Being prepared",
   statusServed: "Served! Enjoy",
   statusCancelled: "Cancelled",
+  receiptTitle: "Receipt",
+  receiptTable: "Table",
+  receiptPrint: "Print",
 };
 
 const PT: Strings = {
@@ -247,6 +256,9 @@ const PT: Strings = {
   statusPreparing: "A preparar",
   statusServed: "Servido! Bom apetite",
   statusCancelled: "Cancelado",
+  receiptTitle: "Recibo",
+  receiptTable: "Mesa",
+  receiptPrint: "Imprimir",
 };
 
 const STRINGS: Record<Lang, Strings> = { es: ES, en: EN, pt: PT };

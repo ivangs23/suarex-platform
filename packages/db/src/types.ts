@@ -89,3 +89,25 @@ export type OrderStatus = {
   totalCents: number;
   currency: string;
 };
+
+/** Una línea del recibo, con sus extras y su nota, todo desde el snapshot congelado en la
+ *  compra (no del catálogo de hoy, que pudo cambiar de precio o de nombre). */
+export type ReceiptLine = {
+  /** Id de la línea (order_items.id), estable para usar como key en el render. */
+  id: string;
+  name: string;
+  quantity: number;
+  lineTotalCents: number;
+  notes: string | null;
+  extras: { name: string; priceCents: number }[];
+};
+
+/** El recibo del comensal: el desglose de SU pedido, identificado por su `publicToken`. */
+export type OrderReceipt = {
+  orderNumber: number;
+  createdAt: string;
+  tableLabel: string | null;
+  totalCents: number;
+  currency: string;
+  lines: ReceiptLine[];
+};

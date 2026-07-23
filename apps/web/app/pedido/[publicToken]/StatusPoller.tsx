@@ -66,28 +66,26 @@ export function StatusPoller({
   const cancelado = order.status === "cancelled";
 
   return (
-    <main className={styles.page}>
-      <section className={styles.card}>
-        <p className={styles.number}>
-          {t.orderTitle} #{order.orderNumber}
-        </p>
+    <section className={styles.card}>
+      <p className={styles.number}>
+        {t.orderTitle} #{order.orderNumber}
+      </p>
 
-        <div
-          className={`${styles.badge} ${servido ? styles.done : ""} ${cancelado ? styles.cancelled : ""}`}
-          data-testid="order-status"
-        >
-          {/* Punto que late mientras el pedido sigue en marcha; fijo cuando ya terminó. */}
-          {!servido && !cancelado ? <span className={styles.pulse} aria-hidden="true" /> : null}
-          {orderStatusLabel(order.status, t)}
-        </div>
+      <div
+        className={`${styles.badge} ${servido ? styles.done : ""} ${cancelado ? styles.cancelled : ""}`}
+        data-testid="order-status"
+      >
+        {/* Punto que late mientras el pedido sigue en marcha; fijo cuando ya terminó. */}
+        {!servido && !cancelado ? <span className={styles.pulse} aria-hidden="true" /> : null}
+        {orderStatusLabel(order.status, t)}
+      </div>
 
-        <p className={styles.total}>
-          <span className={styles.totalLabel}>{t.orderTotal}</span>
-          <span>{formatCents(order.totalCents, locale, order.currency)}</span>
-        </p>
+      <p className={styles.total}>
+        <span className={styles.totalLabel}>{t.orderTotal}</span>
+        <span>{formatCents(order.totalCents, locale, order.currency)}</span>
+      </p>
 
-        {servido ? <p className={styles.thanks}>{t.orderThanks}</p> : null}
-      </section>
-    </main>
+      {servido ? <p className={styles.thanks}>{t.orderThanks}</p> : null}
+    </section>
   );
 }
