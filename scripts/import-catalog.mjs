@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
+import { optimizeImage } from "../packages/db/src/image.js";
 import { elegirAdaptador } from "./lib/source-adapters.mjs";
 
 /**
@@ -261,11 +262,55 @@ if (extrasAInsertar.length > 0) {
 // ---------------------------------------------------------------------------
 
 const TIPOS_IMAGEN = new Set(["image/png", "image/jpeg", "image/webp"]);
-const MAX_BYTES_IMAGEN = 5 * 1024 * 1024;
+
+/* Tope de lo que se DESCARGA, no de lo que se guarda: eso lo decide `optimizeImage`. Eran
+   5 MB y con eso se quedó fuera una foto de categoría de 10,5 MB del catálogo real, que es
+   precisamente el tipo de original que más falta hace reescalar. */
+const MAX_BYTES_IMAGEN = 15 * 1024 * 1024;
 
 let fotosSubidas = 0;
 let fotosConservadas = 0;
 const fotosFallidas = [];
+
+/**
+ * Descarga una imagen del origen y la sube a NUESTRO bucket. Devuelve la ruta, o lanza.
+ *
+ * Común a productos y categorías: las dos vienen del Storage del cliente y las dos tienen
+ * que dejar de depender de él.
+ */
+let ahorrado = 0;
+
+async function migrarImagen(urlOrigen, subcarpeta) {
+  const respuesta = await fetch(urlOrigen);
+  if (!respuesta.ok) throw new Error(`HTTP ${respuesta.status}`);
+
+  // El tipo lo dicta la respuesta, no la extensión de la URL: una `.png` servida como otra
+  // cosa produciría un objeto que luego no se puede mostrar.
+  const contentType = (respuesta.headers.get("content-type") ?? "").split(";")[0].trim();
+  if (!TIPOS_IMAGEN.has(contentType)) {
+    throw new Error(`tipo no admitido: ${contentType || "(sin content-type)"}`);
+  }
+
+  const bytes = new Uint8Array(await respuesta.arrayBuffer());
+  if (bytes.byteLength > MAX_BYTES_IMAGEN) {
+    throw new Error(`pesa ${(bytes.byteLength / 1024 / 1024).toFixed(1)} MB (máx 5)`);
+  }
+
+  // MISMA optimización que el panel de administración (`packages/db/src/image.js`), no una
+  // copia: las fotos de una migración son las que más pesan -- del catálogo real de un
+  // cliente salieron 89 MB, con originales de 6250 px para tarjetas de 250 -- y son
+  // exactamente las que se quedan ahí para siempre si entran sin tocar.
+  const optimizada = await optimizeImage(bytes);
+  ahorrado += bytes.byteLength - optimizada.bytes.byteLength;
+
+  const ruta = `tenant/${tenantId}/${subcarpeta}/${crypto.randomUUID()}.${optimizada.ext}`;
+
+  const { error } = await db.storage
+    .from("catalog")
+    .upload(ruta, optimizada.bytes, { contentType: optimizada.contentType, upsert: false });
+  if (error) throw error;
+  return ruta;
+}
 
 if (!sinImagenes) {
   const pendientes = [];
@@ -288,37 +333,13 @@ if (!sinImagenes) {
 
   for (const [i, foto] of pendientes.entries()) {
     try {
-      const respuesta = await fetch(foto.url);
-      if (!respuesta.ok) throw new Error(`HTTP ${respuesta.status}`);
-
-      // El tipo lo dicta la respuesta, no la extensión de la URL: una `.png` servida como
-      // otra cosa produciría un objeto que luego no se puede mostrar.
-      const contentType = (respuesta.headers.get("content-type") ?? "").split(";")[0].trim();
-      if (!TIPOS_IMAGEN.has(contentType)) {
-        throw new Error(`tipo no admitido: ${contentType || "(sin content-type)"}`);
-      }
-
-      const bytes = new Uint8Array(await respuesta.arrayBuffer());
-      if (bytes.byteLength > MAX_BYTES_IMAGEN) {
-        throw new Error(`pesa ${(bytes.byteLength / 1024 / 1024).toFixed(1)} MB (máx 5)`);
-      }
-
-      const ext =
-        contentType === "image/png" ? "png" : contentType === "image/webp" ? "webp" : "jpg";
-      const ruta = `tenant/${tenantId}/products/${crypto.randomUUID()}.${ext}`;
-
-      const { error: errSubida } = await db.storage
-        .from("catalog")
-        .upload(ruta, bytes, { contentType, upsert: false });
-      if (errSubida) throw errSubida;
-
-      const { error: errFila } = await db
+      const ruta = await migrarImagen(foto.url, "products");
+      const { error } = await db
         .from("products")
         .update({ image_url: ruta })
         .eq("id", foto.productId)
         .eq("tenant_id", tenantId);
-      if (errFila) throw errFila;
-
+      if (error) throw error;
       fotosSubidas++;
       process.stdout.write(`  ${i + 1}/${pendientes.length}\r`);
     } catch (e) {
@@ -328,6 +349,47 @@ if (!sinImagenes) {
     }
   }
   if (pendientes.length > 0) process.stdout.write("\n");
+
+  // --- Imágenes de CATEGORÍA -------------------------------------------------------
+  // Manuela usa una foto por categoría en sus tiles; garum solo emoji. Se migran igual:
+  // copiar su URL dejaría la carta dependiendo de su servidor.
+  const { data: catsDestino, error: errCats } = await db
+    .from("categories")
+    .select("id, slug, image_url")
+    .eq("tenant_id", tenantId);
+  if (errCats) throw errCats;
+  const catPorSlug = new Map(catsDestino.map((c) => [c.slug, c]));
+
+  const catsPendientes = origen.categories.filter((c) => {
+    if (!c.imageUrl) return false;
+    const destino = catPorSlug.get(c.slug);
+    if (!destino) return false;
+    if (destino.image_url) {
+      fotosConservadas++;
+      return false;
+    }
+    return true;
+  });
+
+  if (catsPendientes.length > 0)
+    console.log(`Descargando ${catsPendientes.length} fotos de categoría…`);
+
+  for (const [i, c] of catsPendientes.entries()) {
+    try {
+      const ruta = await migrarImagen(c.imageUrl, "categories");
+      const { error } = await db
+        .from("categories")
+        .update({ image_url: ruta })
+        .eq("tenant_id", tenantId)
+        .eq("slug", c.slug);
+      if (error) throw error;
+      fotosSubidas++;
+      process.stdout.write(`  ${i + 1}/${catsPendientes.length}\r`);
+    } catch (e) {
+      fotosFallidas.push(`categoría ${c.slug}: ${e.message}`);
+    }
+  }
+  if (catsPendientes.length > 0) process.stdout.write("\n");
 }
 
 // ---------------------------------------------------------------------------
@@ -346,7 +408,8 @@ console.log(`  extras:      ${extrasAInsertar.length} nuevos`);
 console.log(
   `  fotos:       ${fotosSubidas} subidas` +
     (fotosConservadas ? `, ${fotosConservadas} ya estaban` : "") +
-    (fotosFallidas.length ? `, ${fotosFallidas.length} fallidas` : ""),
+    (fotosFallidas.length ? `, ${fotosFallidas.length} fallidas` : "") +
+    (ahorrado > 0 ? ` (${(ahorrado / 1048576).toFixed(1)} MB ahorrados al optimizar)` : ""),
 );
 console.log(`  idiomas:     ${[...idiomas].sort().join(", ") || "(ninguno)"}`);
 console.log(
@@ -361,8 +424,7 @@ if (fotosFallidas.length > 0) {
 }
 
 const descartados = new Set();
-for (const c of origen.categories) if (c.imageUrl) descartados.add("imagen de categoría");
-if (sinImagenes) descartados.add("fotos de producto (--sin-imagenes)");
+if (sinImagenes) descartados.add("fotos de producto y categoría (--sin-imagenes)");
 if (descartados.size > 0) {
   console.log("\n  NO importado:");
   for (const d of [...descartados].sort()) console.log(`    - ${d}`);

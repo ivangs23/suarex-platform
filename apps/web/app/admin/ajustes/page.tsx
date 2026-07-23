@@ -24,6 +24,7 @@ export default async function AdminAjustesPage() {
         colors={branding.colors}
         fonts={branding.fonts}
         logoUrl={branding.logoUrl}
+        heroUrl={branding.heroUrl}
         fiscal={{
           legalName: typeof fiscal.legalName === "string" ? fiscal.legalName : "",
           cif: typeof fiscal.cif === "string" ? fiscal.cif : "",

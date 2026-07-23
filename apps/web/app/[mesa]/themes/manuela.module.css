@@ -12,11 +12,17 @@
    distingue un tema a medida del genérico. */
 
 .page {
+  /* Terrazo de su local: es el fondo de TODA su carta, repetido. Descargado de su sitio
+     (assets/fondo) y servido con la app. */
+  background-image: url("/brands/manuela-terrazo.png");
+  background-repeat: repeat;
   --manuela-bg: #f9f7f2;
   --manuela-surface: #fff8e7;
   --manuela-accent: #c28744;
   --manuela-text: #2c1a0f;
-  --manuela-border: rgba(194, 135, 68, 0.18);
+  --manuela-border: rgba(194, 135, 68, 0.4);
+  /* Verde de su insignia. Medido sobre su sitio: rgb(27, 77, 62). */
+  --manuela-green: #1b4d3e;
 
   min-height: 100vh;
   background-color: var(--manuela-bg);
@@ -25,33 +31,207 @@
   padding: 0 0 4.5rem;
 }
 
-/* Cabecera con la foto REAL de su local (la pared de casetes enmarcados sobre terrazo) y su
-   firma manuscrita encima, como en su sitio. La foto va difuminada y oscurecida: es el
-   fondo de su pantalla de espera, no un elemento que deba competir con la carta. */
-.topbar {
+/* HÉROE. Medido sobre manueladesayuna.com: foto de la pared de casetes de su local a
+   sangre completa, firma manuscrita encima, insignia verde con la taza y el saludo en
+   versales enormes. Es la primera pantalla de su carta, no un adorno. */
+/* Pantalla de bienvenida completa: ocupa todo el alto porque ES la primera pantalla, no
+   una cabecera. Se toca en cualquier punto para entrar. */
+.welcome {
   position: relative;
-  padding: 2.25rem 1.25rem;
-  display: flex;
-  justify-content: center;
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: 2rem 1.25rem;
   overflow: hidden;
-  border-bottom: 1px solid var(--manuela-border);
+  text-decoration: none;
+  color: inherit;
 }
 
-.topbarPhoto {
+.enter {
+  margin-top: 0.5rem;
+  padding: 0.6rem 1.4rem;
+  border-radius: 999px;
+  background: rgba(44, 26, 15, 0.85);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* Cabecera compacta de la carta, ya sin el héroe. */
+/* Tres zonas: mesa | firma | idiomas + pedido. En rejilla y no en `space-between` porque la
+   firma tiene que quedar centrada respecto a la BARRA, no respecto al hueco que dejen sus
+   vecinos: con la pastilla de la mesa a un lado y dos controles al otro, un flex la
+   descentraría en cuanto uno de los dos cambie de tamaño (al pasar a EN, al aparecer el
+   contador del pedido...). */
+.topbar {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.7rem 0.85rem;
+  background: #ffffff;
+  border-bottom: 1px solid var(--manuela-border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+/* Pastilla blanca con el número de mesa, a la izquierda. `justify-self: start` para que no
+   se estire con su columna. */
+.mesaPill {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  padding: 0.45rem 0.9rem;
+  border: 1px solid var(--manuela-border);
+  border-radius: 0.9rem;
+  background: #ffffff;
+  color: var(--manuela-text);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+/* La firma, centrada en la barra y suelta: es la marca del local, no un dato de la mesa. */
+.brand {
+  justify-self: center;
+  display: block;
+  line-height: 0;
+}
+
+.topbarLogo {
+  height: 1.9rem;
+  width: auto;
+  display: block;
+}
+
+/* Idiomas y pedido, juntos al final. */
+.topbarEnd {
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+/* Bolsa del pedido: marrón oscuro, el único elemento así de contrastado de la cabecera --
+   es la acción que remata la visita. */
+.cartButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  /* La etiqueta NO parte: "Tu pedido" en dos líneas dejaba un botón alto y descuadrado
+     justo en el control que remata la visita. */
+  white-space: nowrap;
+  padding: 0.6rem 1rem;
+  border: 0;
+  border-radius: 0.9rem;
+  background: var(--manuela-text);
+  color: #fff8e7;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+/* Bolsa dibujada como máscara y no como emoji: el emoji lo pinta cada sistema con SU color
+   -- en Apple sale rosa -- y ahí chocaba con el marrón y el dorado del local. Como máscara
+   toma `currentColor`, así que siempre va a juego con la letra del botón. */
+.cartButton::after {
+  content: "";
+  width: 1.15rem;
+  height: 1.15rem;
+  background-color: currentColor;
+  mask:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z'/%3E%3Cpath d='M3 6h18'/%3E%3Cpath d='M16 10a4 4 0 0 1-8 0'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+
+/* El número de unidades, dentro del botón oscuro: crema sobre marrón, que es el contraste
+   que ya usa el resto de la carta. */
+.cartButton span {
+  min-width: 1.4rem;
+  padding: 0.15rem 0.4rem;
+  border-radius: 999px;
+  background: var(--manuela-surface);
+  color: var(--manuela-text);
+  font-size: 0.78rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+/* Solo para lectores de pantalla y para el contrato de los tests: en esta vista el nombre
+   ya lo dice el logo, y repetirlo en grande robaría sitio a la carta. */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.hero {
+  position: relative;
+  min-height: 68vh;
+  display: grid;
+  place-items: center;
+  padding: 2rem 1.25rem 2.5rem;
+  overflow: hidden;
+}
+
+.heroPhoto {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
-  /* Sin esto, el trazo fino de la firma se pierde sobre las molduras oscuras de los marcos. */
-  filter: blur(3px) brightness(1.15) saturate(0.85);
-  opacity: 0.4;
+  /* A sangre y sin difuminar, como en su sitio. Se aclara un poco para que el trazo fino de
+     la firma y el texto marrón mantengan contraste sobre las molduras oscuras. */
+  filter: brightness(1.08);
+}
+
+.heroContent {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+  text-align: center;
 }
 
 .signature {
-  position: relative;
-  width: min(20rem, 70vw);
+  width: min(26rem, 82vw);
   height: auto;
+}
+
+/* Insignia verde con la taza: #1b4d3e, medido sobre su sitio. Es el único punto de ese
+   verde en toda la carta, y por eso ancla la pantalla. */
+.badge {
+  width: 5.5rem;
+  height: 5.5rem;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--manuela-green);
+  border: 3px solid rgba(255, 255, 255, 0.25);
+  font-size: 2.6rem;
+  line-height: 1;
+}
+
+.greeting {
+  margin: 0;
+  font-size: clamp(2.75rem, 13vw, 4.5rem);
+  /* 900 y -0.05em: los valores exactos de su titular. */
+  font-weight: 900;
+  letter-spacing: -0.05em;
+  line-height: 0.95;
+  text-transform: uppercase;
+  color: var(--manuela-text);
 }
 
 .inner {
@@ -60,7 +240,7 @@
 }
 
 .inner {
-  padding: 1.5rem 1.25rem 0;
+  padding: 0.75rem 0.75rem 2rem;
 }
 
 .header {
@@ -90,15 +270,17 @@
   color: var(--manuela-text);
 }
 
+/* En la BIENVENIDA la mesa va suelta sobre la foto: necesita fondo propio para leerse igual
+   sobre una moldura oscura que sobre el terrazo claro. En la carta, en cambio, vive dentro de
+   su pastilla (`.mesaPill`). */
 .mesa {
   display: inline-block;
-  margin: 0.9rem 0 0;
-  padding: 0.3rem 0.9rem;
+  margin: 0;
+  padding: 0.35rem 1rem;
   border-radius: 999px;
-  background: rgba(194, 135, 68, 0.14);
+  background: #ffffff;
   color: var(--manuela-accent);
   font-size: 0.75rem;
-  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.12em;
 }
@@ -116,13 +298,15 @@
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.65rem 1.3rem;
+  padding: 0.5rem 1.2rem;
   border-radius: 999px;
-  background: var(--manuela-accent);
-  color: #fff8e7;
+  background: #ffffff;
+  border: 1px solid var(--manuela-border);
+  color: var(--manuela-text);
   text-decoration: none;
+  font-family: var(--font-playfair), Georgia, serif;
   font-weight: 700;
-  font-size: 0.9rem;
+  font-size: 1.05rem;
 }
 
 .crumbs {
@@ -142,13 +326,28 @@
 }
 
 /* Tiles grandes de categoría, heredados del kiosko táctil. */
+/* Rejilla medida sobre su carta: 2 columnas en móvil y 3 a partir de tableta, con 12 px de
+   hueco. Antes era `auto-fill minmax(11rem)`, que en un móvil daba UNA columna y convertía su
+   carta de un vistazo en un desfile de tarjetas gigantes. */
 .grid {
   list-style: none;
-  margin: 0 0 2rem;
+  margin: 0 0 1.5rem;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
-  gap: 0.9rem;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+}
+
+@media (min-width: 40rem) {
+  .grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 64rem) {
+  .grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
 }
 
 .card {
@@ -157,14 +356,25 @@
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  min-height: 8.5rem;
-  padding: 1.5rem 1rem;
+  padding: 0.5rem;
+  min-height: 10rem;
   text-align: center;
   text-decoration: none;
   color: inherit;
   background: #ffffff;
-  border: 2px solid rgba(194, 135, 68, 0.4);
+  /* `border-2 border-[#c28744]/30` y `rounded-2xl`, literalmente los suyos. */
+  border: 2px solid rgba(194, 135, 68, 0.3);
   border-radius: 1rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.cardPhoto {
+  /* 80 px de alto y CONTAIN, como en su carta: sus fotos son productos recortados sobre
+     fondo claro, y recortarlas a un cuadrado les corta la taza por la mitad. */
+  height: 5rem;
+  width: auto;
+  max-width: 100%;
+  object-fit: contain;
 }
 
 .cardIcon {
@@ -173,49 +383,110 @@
 }
 
 .cardName {
-  font-size: 1.1rem;
+  font-size: 0.95rem;
   font-weight: 800;
-  line-height: 1.2;
+  line-height: 1.15;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   color: var(--manuela-text);
 }
 
 .cardCount {
-  font-size: 0.75rem;
+  font-size: 0.68rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: var(--manuela-accent);
 }
 
+/* Sus platos también van en rejilla, no en lista: es una carta para tocar, y una fila de
+   texto con una miniatura al lado no invita a nada. */
 .items {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
-  gap: 0.9rem;
+  grid-template-columns: repeat(1, 1fr);
+  gap: 0.75rem;
+}
+
+@media (min-width: 30rem) {
+  .items {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 48rem) {
+  .items {
+    grid-template-columns: repeat(3, 1fr);
+  }
 }
 
 .item {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  background: #ffffff;
-  border: 2px solid rgba(194, 135, 68, 0.4);
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--manuela-surface);
+  border: 2px solid rgba(194, 135, 68, 0.3);
   border-radius: 1rem;
-  padding: 1.1rem 1.25rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+/* Foto arriba, a todo el ancho, con el precio en una pastilla oscura encima -- como en su
+   carta. La franja existe aunque no haya foto para que la rejilla no quede dentada. */
+.itemMedia {
+  position: relative;
+  height: 9rem;
+  background: #ffffff;
+  /* Cinturón: aunque algo se salga, no puede desbordar sobre el nombre y el botón. */
+  overflow: hidden;
+}
+
+.itemBody {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.9rem;
+  flex: 1;
 }
 
 .itemName {
-  font-weight: 600;
-  line-height: 1.3;
+  font-family: var(--font-playfair), Georgia, serif;
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+/* El botón de pedir ocupa el ancho de la tarjeta y va en su marrón oscuro con letra dorada:
+   es la acción principal de cada plato, y el resto de la tarjeta es claro.
+   Se ata al `data-testid` del botón concreto y no a `button` a secas: dentro de la tarjeta
+   hay más botones -- el menos y el más del contador -- y ponerlos a todo el ancho reventaría
+   el contador. El testid es contrato compartido y estable; la estructura del componente, no. */
+.itemBody [data-testid="open-product-sheet"] {
+  width: 100%;
+  justify-content: center;
+  padding: 0.75rem 1rem;
+  border: 0;
+  border-radius: 0.7rem;
+  background: var(--manuela-text);
+  color: var(--manuela-accent);
+  font-weight: 700;
+}
+
+.itemBody > div {
+  align-items: stretch;
 }
 
 .price {
+  position: absolute;
+  right: 0.6rem;
+  bottom: 0.6rem;
+  padding: 0.35rem 0.8rem;
+  border-radius: 0.6rem;
+  background: var(--manuela-text);
+  color: var(--manuela-accent);
   font-weight: 800;
   font-variant-numeric: tabular-nums;
-  color: var(--manuela-accent);
 }
 
 .empty {
@@ -233,10 +504,50 @@
   min-width: 0;
 }
 
-.itemPhoto {
-  flex: none;
-  width: 72px;
-  height: 72px;
-  object-fit: cover;
-  border-radius: 1rem;
+/* La foto se posiciona ABSOLUTA dentro de la franja, no como hijo en flujo.
+   Con `max-height: 100%` en una rejilla, el porcentaje se resuelve contra la fila, la fila es
+   automática y crece hasta la altura natural de la imagen: el tope acababa valiendo la propia
+   altura de la foto y no limitaba nada. Con fotos verticales -- las de su pared de ladrillo --
+   la imagen salía a 246 px sobre una franja de 144 y tapaba el nombre y el botón de añadir.
+   En absoluto, la caja de referencia es la franja, que SÍ tiene altura fija. */
+.itemPhoto,
+/* Atado al MARCO y no solo a la clase: lo que tiene que ser imposible es que una foto se
+   salga de esa franja, venga de donde venga. Con la regla colgando de `.itemPhoto`, una
+   imagen puesta ahí sin esa clase volvía a taparlo todo. */
+.itemMedia img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* Selector de idioma. Enlaces normales, no un desplegable: en una mesa se toca una vez, y
+   un <select> obliga a abrir, elegir y confirmar. */
+.langs {
+  display: flex;
+  gap: 0.35rem;
+  justify-content: center;
+  padding: 0;
+}
+
+.lang {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: #fff8e7;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-decoration: none;
+  color: inherit;
+  opacity: 0.6;
+}
+
+.lang[aria-current="true"] {
+  background: var(--color-primary, #7b4f96);
+  color: var(--color-bg, #ffffff);
+  opacity: 1;
 }

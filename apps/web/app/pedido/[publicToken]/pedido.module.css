@@ -1,0 +1,107 @@
+/* Pantalla de estado del pedido, tras pagar. Se pinta con las variables de marca del cliente
+   (`--color-*`, inyectadas por el layout raíz según el host), así que hereda su color sin que
+   esta pantalla sepa de qué cliente es. */
+.page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 2rem 1.25rem;
+  background: var(--color-bg, #f5f1e8);
+  color: var(--color-fg, #0f0f0f);
+  font-family: var(--font-inter), system-ui, sans-serif;
+}
+
+.card {
+  width: min(26rem, 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 2.5rem 2rem;
+  text-align: center;
+  background: #ffffff;
+  border-radius: 1.5rem;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
+}
+
+.number {
+  margin: 0;
+  font-family: var(--font-playfair), Georgia, serif;
+  font-size: 1.6rem;
+  font-weight: 700;
+}
+
+/* Estado en una pastilla, con el color de marca. Es lo que el comensal mira de reojo desde
+   la mesa, así que va grande y con contraste. */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.7rem 1.4rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-primary, #a88445) 14%, transparent);
+  color: color-mix(in srgb, var(--color-primary, #a88445) 55%, #000);
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.badge.done {
+  background: #e6f4ea;
+  color: #1b7a3d;
+}
+
+.badge.cancelled {
+  background: #fdecec;
+  color: #b3261e;
+}
+
+/* Punto que late mientras el pedido está en marcha: da sensación de "vivo" sin recargar. */
+.pulse {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  background: currentColor;
+  animation: latido 1.4s ease-in-out infinite;
+}
+
+@keyframes latido {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse {
+    animation: none;
+  }
+}
+
+.total {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 1.5rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.totalLabel {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+
+.thanks {
+  margin: 0;
+  color: #1b7a3d;
+  font-weight: 600;
+}

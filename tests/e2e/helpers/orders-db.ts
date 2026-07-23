@@ -81,3 +81,112 @@ export async function markOrderPaidForTest(orderId: string): Promise<void> {
     .eq("status", "pending");
   if (error) throw error;
 }
+
+/**
+ * Id de un producto de un tenant, para componer una comanda desde un test.
+ *
+ * Se lee de la base y no rascando el HTML de la carta, como se hacía antes. La carta se
+ * navega por niveles: un producto solo se pinta si estás dentro de SU categoría, así que
+ * rascar la raíz devolvía cero y un test fallaba por dónde miraba, no por lo que probaba.
+ *
+ * `destination` filtra por la estación a la que va el producto (`cocina`/`barra`). Un test
+ * que compruebe en qué estación aparece la comanda TIENE que elegirlo: con un producto
+ * cualquiera, el resultado depende del orden en que la base devuelva las filas, y ese test
+ * pasa o falla por azar.
+ */
+export async function firstProductIdOfTenant(
+  tenantSlug: string,
+  destination?: "cocina" | "barra",
+): Promise<string> {
+  const { data: tenant, error: tenantError } = await admin
+    .from("tenants")
+    .select("id")
+    .eq("slug", tenantSlug)
+    .single();
+  if (tenantError) throw tenantError;
+
+  let query = admin
+    .from("products")
+    .select("id, categories!inner(destination)")
+    .eq("tenant_id", tenant.id as string);
+  if (destination) query = query.eq("categories.destination", destination);
+
+  const { data, error } = await query.limit(1).single();
+  if (error) throw error;
+
+  return data.id as string;
+}
+
+/** Notas de las líneas de un pedido, para comprobar que lo que escribió el comensal llega
+ *  a la comanda que se imprime en cocina -- y no se queda en el navegador. */
+export async function orderLineNotes(orderId: string): Promise<(string | null)[]> {
+  const { data, error } = await admin.from("order_items").select("notes").eq("order_id", orderId);
+  if (error) throw error;
+  return (data ?? []).map((row) => (row.notes as string | null) ?? null);
+}
+
+/**
+ * Pedido más reciente de un tenant, por su slug. Lo usan los tests que crean el pedido por
+ * la UI y ya no reciben el `publicToken` en una redirección: desde que el cobro ocurre en el
+ * panel, "Pagar" abre el formulario de tarjeta en vez de saltar a `/pedido`. El pedido, en
+ * cambio, existe (pending) en cuanto se pulsa Pagar -- `createPendingOrder` escribe las
+ * líneas antes del cobro -- así que se localiza por ser el último de ese cliente.
+ */
+export async function latestOrderForTenant(tenantSlug: string): Promise<CreatedOrder> {
+  const { data: tenant, error: tErr } = await admin
+    .from("tenants")
+    .select("id")
+    .eq("slug", tenantSlug)
+    .single();
+  if (tErr) throw tErr;
+
+  const { data, error } = await admin
+    .from("orders")
+    .select("id, order_number")
+    .eq("tenant_id", tenant.id as string)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .single();
+  if (error) throw error;
+  return { orderId: data.id as string, orderNumber: data.order_number as number };
+}
+
+/**
+ * Borra TODOS los pedidos de un tenant. Lo usa el test del rate-limit, que crea varios
+ * pedidos de golpe hasta chocar con el tope y no tiene un id concreto que limpiar.
+ */
+export async function deleteOrdersForTenant(tenantSlug: string): Promise<void> {
+  const { data: tenant, error: tErr } = await admin
+    .from("tenants")
+    .select("id")
+    .eq("slug", tenantSlug)
+    .single();
+  if (tErr) throw tErr;
+  const { error } = await admin
+    .from("orders")
+    .delete()
+    .eq("tenant_id", tenant.id as string);
+  if (error) throw error;
+}
+
+/** Vacía el contador de rate-limit de una clave (el id de una mesa), para que un test empiece
+ *  con cupo limpio sin depender de lo que hicieran los tests anteriores en su misma ventana. */
+export async function clearRateLimit(key: string): Promise<void> {
+  const { error } = await admin.from("rate_limit_hits").delete().eq("key", key);
+  if (error) throw error;
+}
+
+/** Id de la mesa que resuelve un token, para operar sobre su contador de rate-limit. */
+export async function tableIdForToken(token: string): Promise<string> {
+  const { data, error } = await admin.from("tables").select("id").eq("token", token).single();
+  if (error) throw error;
+  return data.id as string;
+}
+
+/** Vacía TODO el contador de rate-limit. Lo llama un `beforeEach` en los ficheros e2e que
+ *  crean pedidos: sin esto, varios tests que piden en la misma mesa dentro de la ventana de
+ *  2 min comparten cupo y el rate-limit (real en producción) haría fallar a los de después. */
+export async function clearAllRateLimits(): Promise<void> {
+  const { error } = await admin.from("rate_limit_hits").delete().neq("bucket", "__none__");
+  if (error) throw error;
+}

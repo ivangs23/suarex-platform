@@ -1,4 +1,4 @@
-import { uploadBrandingLogo } from "@suarex/db";
+import { uploadBrandingImage } from "@suarex/db";
 import { afterAll, describe, expect, it } from "vitest";
 import { admin } from "./helpers/tenants.js";
 
@@ -17,10 +17,10 @@ afterAll(async () => {
   if (error) throw error;
 });
 
-describe("uploadBrandingLogo", () => {
+describe("uploadBrandingImage", () => {
   it("sube un PNG bajo tenant/{id}/branding y devuelve una URL pública absoluta que responde 200", async () => {
     const tenantId = crypto.randomUUID();
-    const url = await uploadBrandingLogo(tenantId, { bytes: PNG_1x1, contentType: "image/png" });
+    const url = await uploadBrandingImage(tenantId, { bytes: PNG_1x1, contentType: "image/png" });
     // Guardar la ruta relativa para limpiar.
     const marker = "/storage/v1/object/public/catalog/";
     const path = url.slice(url.indexOf(marker) + marker.length);
@@ -34,20 +34,22 @@ describe("uploadBrandingLogo", () => {
 
   it("rechaza un tipo no permitido antes de tocar Storage", async () => {
     await expect(
-      uploadBrandingLogo(crypto.randomUUID(), { bytes: PNG_1x1, contentType: "application/pdf" }),
+      uploadBrandingImage(crypto.randomUUID(), { bytes: PNG_1x1, contentType: "application/pdf" }),
     ).rejects.toThrow(/tipo/i);
   });
 
   it("rechaza un fichero demasiado grande", async () => {
-    const big = new Uint8Array(6 * 1024 * 1024);
+    // 16 MB: por encima del tope de ENTRADA (15 MB). Ese tope ya no acota lo que se guarda
+    // -- de eso se encarga la optimización -- sino lo que se descomprime en memoria.
+    const big = new Uint8Array(16 * 1024 * 1024);
     await expect(
-      uploadBrandingLogo(crypto.randomUUID(), { bytes: big, contentType: "image/png" }),
+      uploadBrandingImage(crypto.randomUUID(), { bytes: big, contentType: "image/png" }),
     ).rejects.toThrow(/tama/i);
   });
 
   it("rechaza un tenantId con '../' antes de tocar Storage", async () => {
     await expect(
-      uploadBrandingLogo("../evil", { bytes: PNG_1x1, contentType: "image/png" }),
+      uploadBrandingImage("../evil", { bytes: PNG_1x1, contentType: "image/png" }),
     ).rejects.toThrow(/tenantId/i);
   });
 });

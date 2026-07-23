@@ -158,10 +158,10 @@ test("un owner crea una categoría y un producto (con imagen), y aparecen en la 
   await expect(adminProductRow.getByText("18,00")).toBeVisible();
   await expect(adminProductRow.getByTestId("admin-product-image")).toBeVisible();
 
-  // 3. La mesa 1 de garum (token sembrado por `supabase/seed.sql`) sirve la carta
-  // pública real -- comprueba que el producto recién creado aparece ahí, no solo en el
-  // panel de gestión.
-  await page.goto("http://garum.localhost:3000/m/11111111-1111-1111-1111-111111111111");
+  // 3. La carta pública real de la mesa 1 -- comprueba que el producto recién creado
+  // aparece ahí, no solo en el panel de gestión. Con su categoría: la carta se navega por
+  // niveles, y en la raíz un producto no se pinta.
+  await page.goto(`http://garum.localhost:3000/1?cat=${slug}`);
   await expect(page.getByTestId("product").filter({ hasText: productName })).toBeVisible({
     timeout: 15_000,
   });

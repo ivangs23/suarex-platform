@@ -1,3 +1,4 @@
+import { expirePendingOrders } from "@suarex/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   admin,
@@ -110,5 +111,19 @@ describe("expire_pending_orders", () => {
     // El trigger orders_auto_serve solo actúa sobre new.status in ('paid','preparing');
     // aquí new.status = 'cancelled', así que no dispara y el pedido no se "autosirve".
     expect(data?.status).toBe("cancelled");
+  });
+
+  it("el wrapper expirePendingOrders devuelve cuántos canceló (lo que informa el cron)", async () => {
+    // El endpoint de cron y su log dependen de ese número: barrer y no saber si barrió algo
+    // deja al operador a ciegas. Se comprueba que el wrapper cuenta lo que la RPC canceló.
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    await insertOrderAt(tenant.tenantId, venueId, "pending", 701, oneHourAgo);
+    await insertOrderAt(tenant.tenantId, venueId, "pending", 702, oneHourAgo);
+
+    const primero = await expirePendingOrders(30);
+    expect(primero).toBeGreaterThanOrEqual(2);
+
+    // Idempotente: una segunda pasada inmediata no cancela nada nuevo.
+    expect(await expirePendingOrders(30)).toBe(0);
   });
 });

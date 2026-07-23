@@ -9,14 +9,14 @@ import {
 } from "./helpers/tenants.js";
 
 /**
- * Cubre el call site real de `apps/web/app/m/[token]/page.tsx` -- que ya no hace el
+ * Cubre el call site real de la carta de la mesa -- que ya no hace el
  * encadenado token -> tenantId -> catálogo inline, sino a través de `loadTableMenu`
  * (`packages/db/src/menu.ts`) -- frente a un regresión concreta: que ese encadenado
  * reciba el `tenantId` EQUIVOCADO (argumentos intercambiados, un id fijo, un
  * copy-paste). Ni `db-repositories.test.ts` (prueba los repos dado CUALQUIER id) ni
  * `tenant-filter-structural.test.ts` (prueba que las queries pasen por `tenantScoped`)
  * cubren ese call site en concreto, y el e2e "no leak" (`qr-order.spec.ts`) es
- * estructuralmente vacuo aquí: `CartClient` solo pinta un producto cuyo `categoryId`
+ * estructuralmente vacuo aquí: la carta solo pinta un producto cuyo `categoryId`
  * coincide con una categoría YA del tenant, así que un producto ajeno de más nunca se
  * ve, pase lo que pase en el catálogo pedido.
  */

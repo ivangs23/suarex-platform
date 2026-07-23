@@ -1,3 +1,5 @@
+import { AddToCart } from "../cart/AddToCart";
+import { CartButton } from "../cart/CartButton";
 import styles from "./manuela.module.css";
 import type { MenuTheme } from "./types";
 
@@ -7,111 +9,213 @@ import type { MenuTheme } from "./types";
  * CSS; recibe el MISMO contrato de props que el resto y conserva los `data-testid`
  * compartidos.
  */
-export const ManuelaTheme: MenuTheme = ({ businessName, mesa, branding, view }) => (
-  <main className={styles.page} data-theme="manuela">
-    {/* Su cabecera real: la foto de la pared de casetes de su local con la firma
-        manuscrita encima. Assets versionados con la app (no el logo por tenant de
-        Storage), servidos estáticos: <img> a propósito, sin optimizar. */}
-    <header className={styles.topbar}>
-      <img
-        className={styles.topbarPhoto}
-        src="/brands/manuela-fondo.png"
-        alt=""
-        aria-hidden="true"
-      />
-      <img className={styles.signature} src="/brands/manuela-logo.png" alt={businessName} />
-    </header>
+/* Banderas del selector, como en su sitio. Son DECORACIÓN (`aria-hidden`): una bandera no
+   identifica un idioma -- el portugués de Brasil no lleva la de Portugal -- así que el que
+   manda es el código de al lado, que es lo que lee un lector de pantalla. */
+const LANG_FLAGS: Record<string, string> = { es: "🇪🇸", en: "🇬🇧", pt: "🇵🇹" };
 
-    <div className={styles.inner}>
-      <header className={styles.header}>
-        {/* Logo por tenant desde una URL absoluta de Storage, no un asset local
-            optimizable en build: <img> a propósito. */}
-        {branding.logoUrl ? (
-          <img className={styles.logo} src={branding.logoUrl} alt={businessName} />
+export const ManuelaTheme: MenuTheme = ({
+  businessName,
+  mesa,
+  branding,
+  view,
+  welcome,
+  langs,
+  strings: t,
+}) => {
+  /* PANTALLA DE BIENVENIDA: un paso propio, no una cabecera que se desplaza. Su carta real
+     arranca así y solo al tocar entra a los productos. */
+  if (welcome.active) {
+    return (
+      <main className={styles.page} data-theme="manuela">
+        <a className={styles.welcome} href={welcome.href} data-testid="welcome-enter">
+          {/* La foto de la bienvenida es un AJUSTE del cliente (`heroUrl`): puede cambiarla
+              desde su panel sin tocar código. La pared de casetes de su local queda de
+              respaldo mientras no suba otra. */}
+          <img
+            className={styles.heroPhoto}
+            src={branding.heroUrl ?? "/brands/manuela-fondo.png"}
+            alt=""
+            aria-hidden="true"
+          />
+          <span className={styles.heroContent}>
+            <img className={styles.signature} src="/brands/manuela-logo.png" alt={businessName} />
+            <span className={styles.badge} aria-hidden="true">
+              ☕
+            </span>
+            <span className={styles.greeting} data-testid="tenant-name">
+              {businessName}
+            </span>
+            <span className={styles.mesa} data-testid="mesa">
+              {t.table} {mesa}
+            </span>
+            <span className={styles.enter}>{t.enter}</span>
+          </span>
+        </a>
+        {langs.length > 1 ? (
+          <nav className={styles.langs} data-testid="lang-switch" aria-label="Idioma">
+            {langs.map((lang) => (
+              <a
+                key={lang.code}
+                className={styles.lang}
+                href={lang.href}
+                hrefLang={lang.code}
+                data-testid="lang-option"
+                data-lang={lang.code}
+                aria-current={lang.active ? "true" : undefined}
+              >
+                {lang.label}
+              </a>
+            ))}
+          </nav>
         ) : null}
-        <h1 className={styles.name} data-testid="tenant-name">
-          {businessName}
-        </h1>
-        <p className={styles.mesa} data-testid="mesa">
-          Mesa {mesa}
-        </p>
+      </main>
+    );
+  }
+
+  return (
+    <main className={styles.page} data-theme="manuela">
+      {/* Cabecera en TRES zonas: la mesa a un lado, la firma centrada y a la derecha los
+          idiomas con la bolsa del pedido. La firma va suelta y centrada -- es la marca, no un
+          dato de la mesa -- y hace de enlace de vuelta al inicio.
+
+          Asset versionado con la app (no el logo por tenant de Storage), servido estático:
+          <img> a propósito, sin optimizar. */}
+      <header className={styles.topbar}>
+        <span className={styles.mesaPill} data-testid="mesa">
+          {t.table} {mesa}
+        </span>
+
+        <a
+          className={styles.brand}
+          href={welcome.href.replace("?ver=carta", "")}
+          aria-label="Volver al inicio"
+        >
+          <img className={styles.topbarLogo} src="/brands/manuela-logo.png" alt={businessName} />
+        </a>
+
+        <div className={styles.topbarEnd}>
+          {langs.length > 1 ? (
+            <nav className={styles.langs} data-testid="lang-switch" aria-label="Idioma">
+              {langs.map((lang) => (
+                <a
+                  key={lang.code}
+                  className={styles.lang}
+                  href={lang.href}
+                  hrefLang={lang.code}
+                  data-testid="lang-option"
+                  data-lang={lang.code}
+                  aria-current={lang.active ? "true" : undefined}
+                >
+                  {LANG_FLAGS[lang.code] ? (
+                    <span aria-hidden="true">{LANG_FLAGS[lang.code]}</span>
+                  ) : null}
+                  {lang.label}
+                </a>
+              ))}
+            </nav>
+          ) : null}
+
+          <CartButton className={styles.cartButton} />
+        </div>
       </header>
 
-      <p data-testid="product-count" hidden>
-        {view.totalProducts}
-      </p>
+      <div className={styles.inner}>
+        <p data-testid="product-count" hidden>
+          {view.totalProducts}
+        </p>
 
-      {view.currentName ? (
-        <nav className={styles.nav}>
-          <a className={styles.back} href={view.rootHref}>
-            ← Explorar otras categorías
-          </a>
-          <p className={styles.crumbs}>
-            {view.breadcrumb.map((crumb) => (
-              <span key={crumb.href}>
-                <a href={crumb.href}>{crumb.name}</a> ›{" "}
-              </span>
-            ))}
-            <strong>{view.currentName}</strong>
-          </p>
+        <h1 className={styles.srOnly} data-testid="tenant-name">
+          {businessName}
+        </h1>
+
+        {/* Pastilla del nivel actual, como en su carta: "Menu" en la raíz y, dentro de una
+            categoría, su nombre precedido de la flecha de vuelta. */}
+        <nav className={styles.nav} data-testid="breadcrumb">
+          {view.currentName ? (
+            <a className={styles.back} href={view.rootHref}>
+              <span aria-hidden="true">‹</span> {view.currentName}
+            </a>
+          ) : (
+            <span className={styles.back}>{t.menuTitle}</span>
+          )}
+          {view.breadcrumb.length > 0 ? (
+            <p className={styles.crumbs}>
+              {view.breadcrumb.map((crumb) => (
+                <a key={crumb.href} href={crumb.href}>
+                  {crumb.name}
+                </a>
+              ))}
+            </p>
+          ) : null}
         </nav>
-      ) : (
-        <p className={styles.lead}>¿Qué te apetece hoy?</p>
-      )}
 
-      {view.children.length > 0 ? (
-        <ul className={styles.grid}>
-          {view.children.map((node) => (
-            <li key={node.id} data-testid="category">
-              <a className={styles.card} href={node.href}>
-                {/* aria-hidden: el emoji es apoyo visual, el nombre de al lado ya dice qué
-                    es. Sin esto, un lector de pantalla anuncia "copa de vino Vinos". */}
-                {node.icon ? (
-                  <span className={styles.cardIcon} aria-hidden="true">
-                    {node.icon}
+        {view.children.length > 0 ? (
+          <ul className={styles.grid}>
+            {view.children.map((node) => (
+              <li key={node.id} data-testid="category">
+                <a className={styles.card} href={node.href}>
+                  {/* Su carta usa una FOTO por categoría; el emoji queda de respaldo cuando no
+                    la hay. aria-hidden en ambos: el nombre de al lado ya dice qué es, y sin
+                    esto un lector de pantalla anunciaría "taza de café Cafés". */}
+                  {node.imageUrl ? (
+                    <img
+                      className={styles.cardPhoto}
+                      src={node.imageUrl}
+                      alt=""
+                      aria-hidden="true"
+                      loading="lazy"
+                    />
+                  ) : node.icon ? (
+                    <span className={styles.cardIcon} aria-hidden="true">
+                      {node.icon}
+                    </span>
+                  ) : null}
+                  <span className={styles.cardName}>{node.name}</span>
+                  <span className={styles.cardCount}>
+                    {node.productCount} {node.productCount === 1 ? t.dish : t.dishes}
                   </span>
-                ) : null}
-                <span className={styles.cardName}>{node.name}</span>
-                <span className={styles.cardCount}>
-                  {node.productCount} {node.productCount === 1 ? "plato" : "platos"}
-                </span>
-              </a>
-            </li>
-          ))}
-        </ul>
-      ) : null}
+                </a>
+              </li>
+            ))}
+          </ul>
+        ) : null}
 
-      {view.products.length > 0 ? (
-        <ul className={styles.items}>
-          {view.products.map((product) => (
-            <li key={product.id} className={styles.item} data-testid="product">
-              <div className={styles.itemText}>
-                <span className={styles.itemName}>{product.name}</span>
-                <span className={styles.price}>{product.priceLabel}</span>
-              </div>
-              {/* La foto es de Storage por tenant, una URL absoluta que next/image no puede
-                  optimizar sin configurar `remotePatterns` con un host que varía por
-                  despliegue: <img> a propósito. `loading="lazy"` porque una categoría puede
-                  traer decenas y casi ninguna entra en la primera pantalla. */}
-              {product.imageUrl ? (
-                <img
-                  className={styles.itemPhoto}
-                  data-testid="product-photo"
-                  src={product.imageUrl}
-                  alt=""
-                  loading="lazy"
-                  width={88}
-                  height={88}
-                />
-              ) : null}
-            </li>
-          ))}
-        </ul>
-      ) : null}
+        {view.products.length > 0 ? (
+          <ul className={styles.items}>
+            {view.products.map((product) => (
+              <li key={product.id} className={styles.item} data-testid="product">
+                {/* Su tarjeta real: la foto arriba con el precio en una pastilla encima, y
+                    debajo el nombre y el botón a todo el ancho. La foto es de Storage por
+                    tenant, una URL absoluta que next/image no puede optimizar sin configurar
+                    `remotePatterns` con un host que varía por despliegue: <img> a propósito.
+                    `loading="lazy"` porque una categoría puede traer decenas y casi ninguna
+                    entra en la primera pantalla. */}
+                <div className={styles.itemMedia}>
+                  {product.imageUrl ? (
+                    <img
+                      className={styles.itemPhoto}
+                      data-testid="product-photo"
+                      src={product.imageUrl}
+                      alt=""
+                      loading="lazy"
+                    />
+                  ) : null}
+                  <span className={styles.price}>{product.priceLabel}</span>
+                </div>
+                <div className={styles.itemBody}>
+                  <span className={styles.itemName}>{product.name}</span>
+                  <AddToCart product={product} />
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : null}
 
-      {view.children.length === 0 && view.products.length === 0 ? (
-        <p className={styles.empty}>La carta todavía no tiene productos.</p>
-      ) : null}
-    </div>
-  </main>
-);
+        {view.children.length === 0 && view.products.length === 0 ? (
+          <p className={styles.empty}>{t.emptyMenu}</p>
+        ) : null}
+      </div>
+    </main>
+  );
+};

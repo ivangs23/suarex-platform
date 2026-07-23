@@ -1,3 +1,5 @@
+import { AddToCart } from "../cart/AddToCart";
+import { CartButton } from "../cart/CartButton";
 import styles from "./garum.module.css";
 import type { MenuTheme } from "./types";
 
@@ -10,98 +12,177 @@ import type { MenuTheme } from "./types";
  * `branding` -- un tema a medida es precisamente eso. Aun así recibe el MISMO contrato de
  * props que el resto (`MenuThemeProps`) y conserva los `data-testid` compartidos.
  */
-export const GarumTheme: MenuTheme = ({ businessName, mesa, view }) => (
-  <main className={styles.page} data-theme="garum">
-    <header className={styles.topbar}>
-      {/* Asset de marca versionado con la app (no es el logo por tenant de Storage), pero
-          se sirve estático: <img> a propósito, sin optimizar. */}
-      <img className={styles.logo} src="/brands/garum-logo.png" alt={businessName} />
-    </header>
-
-    <div className={styles.inner}>
-      <section className={styles.hero}>
-        <h1 className={styles.heroTitle} data-testid="tenant-name">
-          {businessName}
-        </h1>
-        <p className={styles.heroLead}>Vinoteca &amp; cocina de producto</p>
-        <p className={styles.mesa} data-testid="mesa">
-          Mesa {mesa}
-        </p>
-      </section>
-
-      <p data-testid="product-count" hidden>
-        {view.totalProducts}
-      </p>
-
-      {view.currentName ? (
-        <nav className={styles.nav}>
-          <a className={styles.back} href={view.rootHref}>
-            ← Explorar otras categorías
-          </a>
-          <p className={styles.crumbs}>
-            {view.breadcrumb.map((crumb) => (
-              <span key={crumb.href}>
-                <a href={crumb.href}>{crumb.name}</a> ›{" "}
-              </span>
-            ))}
-            <strong>{view.currentName}</strong>
-          </p>
-        </nav>
-      ) : null}
-
-      {view.children.length > 0 ? (
-        <ul className={styles.grid}>
-          {view.children.map((node) => (
-            <li key={node.id} data-testid="category">
-              <a className={styles.card} href={node.href}>
-                {/* aria-hidden: el emoji es apoyo visual, el nombre de al lado ya dice qué
-                    es. Sin esto, un lector de pantalla anuncia "copa de vino Vinos". */}
-                {node.icon ? (
-                  <span className={styles.cardIcon} aria-hidden="true">
-                    {node.icon}
-                  </span>
-                ) : null}
-                <span className={styles.cardName}>{node.name}</span>
-                <span className={styles.cardCount}>
-                  {node.productCount} {node.productCount === 1 ? "plato" : "platos"}
-                </span>
+export const GarumTheme: MenuTheme = ({
+  businessName,
+  mesa,
+  branding,
+  view,
+  welcome,
+  langs,
+  strings: t,
+}) => {
+  /* PANTALLA DE BIENVENIDA: el paso previo a la carta, igual que en cualquier otro tema. Lo
+     que cambia aquí es cómo se ve -- su verde, su patrón, su logo -- y la foto, que sale del
+     ajuste `heroUrl` del cliente. */
+  if (welcome.active) {
+    return (
+      <main className={styles.page} data-theme="garum">
+        <a className={styles.welcome} href={welcome.href} data-testid="welcome-enter">
+          {branding.heroUrl ? (
+            <img className={styles.welcomePhoto} src={branding.heroUrl} alt="" aria-hidden="true" />
+          ) : null}
+          <span className={styles.welcomeContent}>
+            <img className={styles.welcomeLogo} src="/brands/garum-logo.png" alt="" aria-hidden />
+            <span className={styles.heroTitle} data-testid="tenant-name">
+              {businessName}
+            </span>
+            <span className={styles.heroLead}>Vinoteca &amp; cocina de producto</span>
+            <span className={styles.mesa} data-testid="mesa">
+              {t.table} {mesa}
+            </span>
+            <span className={styles.enter}>{t.enter}</span>
+          </span>
+        </a>
+        {langs.length > 1 ? (
+          <nav className={styles.langs} data-testid="lang-switch" aria-label="Idioma">
+            {langs.map((lang) => (
+              <a
+                key={lang.code}
+                className={styles.lang}
+                href={lang.href}
+                hrefLang={lang.code}
+                data-testid="lang-option"
+                data-lang={lang.code}
+                aria-current={lang.active ? "true" : undefined}
+              >
+                {lang.label}
               </a>
-            </li>
-          ))}
-        </ul>
-      ) : null}
+            ))}
+          </nav>
+        ) : null}
+      </main>
+    );
+  }
 
-      {view.products.length > 0 ? (
-        <ul className={styles.items}>
-          {view.products.map((product) => (
-            <li key={product.id} className={styles.item} data-testid="product">
-              <div className={styles.itemText}>
-                <span className={styles.itemName}>{product.name}</span>
-                <span className={styles.price}>{product.priceLabel}</span>
-              </div>
-              {/* La foto es de Storage por tenant, una URL absoluta que next/image no puede
+  return (
+    <main className={styles.page} data-theme="garum">
+      {/* Cabecera en TRES zonas, igual que en el resto de temas: la mesa a un lado, la marca
+          centrada, y a la derecha los idiomas con la bolsa del pedido. Que estos controles
+          estén en el MISMO sitio en todos los temas es parte de la regla: cambia el aspecto,
+          no dónde encuentra el comensal cada cosa. Asset de marca versionado con la app (no
+          el logo por tenant de Storage), servido estático: <img> a propósito. */}
+      <header className={styles.topbar}>
+        <span className={styles.mesa} data-testid="mesa">
+          {t.table} {mesa}
+        </span>
+
+        <img className={styles.logo} src="/brands/garum-logo.png" alt={businessName} />
+
+        <div className={styles.topbarEnd}>
+          {langs.length > 1 ? (
+            <nav className={styles.langs} data-testid="lang-switch" aria-label="Idioma">
+              {langs.map((lang) => (
+                <a
+                  key={lang.code}
+                  className={styles.lang}
+                  href={lang.href}
+                  hrefLang={lang.code}
+                  data-testid="lang-option"
+                  data-lang={lang.code}
+                  aria-current={lang.active ? "true" : undefined}
+                >
+                  {lang.label}
+                </a>
+              ))}
+            </nav>
+          ) : null}
+          <CartButton className={styles.cartButton} />
+        </div>
+      </header>
+
+      <div className={styles.inner}>
+        <section className={styles.hero}>
+          <h1 className={styles.heroTitle} data-testid="tenant-name">
+            {businessName}
+          </h1>
+          <p className={styles.heroLead}>Vinoteca &amp; cocina de producto</p>
+        </section>
+
+        <p data-testid="product-count" hidden>
+          {view.totalProducts}
+        </p>
+
+        {view.currentName ? (
+          <nav className={styles.nav} data-testid="breadcrumb">
+            <a className={styles.back} href={view.rootHref}>
+              {t.backToCategories}
+            </a>
+            <p className={styles.crumbs}>
+              {view.breadcrumb.map((crumb) => (
+                <span key={crumb.href}>
+                  <a href={crumb.href}>{crumb.name}</a> ›{" "}
+                </span>
+              ))}
+              <strong>{view.currentName}</strong>
+            </p>
+          </nav>
+        ) : null}
+
+        {view.children.length > 0 ? (
+          <ul className={styles.grid}>
+            {view.children.map((node) => (
+              <li key={node.id} data-testid="category">
+                <a className={styles.card} href={node.href}>
+                  {/* aria-hidden: el emoji es apoyo visual, el nombre de al lado ya dice qué
+                    es. Sin esto, un lector de pantalla anuncia "copa de vino Vinos". */}
+                  {node.icon ? (
+                    <span className={styles.cardIcon} aria-hidden="true">
+                      {node.icon}
+                    </span>
+                  ) : null}
+                  <span className={styles.cardName}>{node.name}</span>
+                  <span className={styles.cardCount}>
+                    {node.productCount} {node.productCount === 1 ? t.dish : t.dishes}
+                  </span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+
+        {view.products.length > 0 ? (
+          <ul className={styles.items}>
+            {view.products.map((product) => (
+              <li key={product.id} className={styles.item} data-testid="product">
+                <div className={styles.itemText}>
+                  <span className={styles.itemName}>{product.name}</span>
+                  <span className={styles.price}>{product.priceLabel}</span>
+                </div>
+                {/* La foto es de Storage por tenant, una URL absoluta que next/image no puede
                   optimizar sin configurar `remotePatterns` con un host que varía por
                   despliegue: <img> a propósito. `loading="lazy"` porque una categoría puede
                   traer decenas y casi ninguna entra en la primera pantalla. */}
-              {product.imageUrl ? (
-                <img
-                  className={styles.itemPhoto}
-                  data-testid="product-photo"
-                  src={product.imageUrl}
-                  alt=""
-                  loading="lazy"
-                  width={88}
-                  height={88}
-                />
-              ) : null}
-            </li>
-          ))}
-        </ul>
-      ) : null}
+                {product.imageUrl ? (
+                  <img
+                    className={styles.itemPhoto}
+                    data-testid="product-photo"
+                    src={product.imageUrl}
+                    alt=""
+                    loading="lazy"
+                    width={88}
+                    height={88}
+                  />
+                ) : null}
+                <AddToCart product={product} />
+              </li>
+            ))}
+          </ul>
+        ) : null}
 
-      {view.children.length === 0 && view.products.length === 0 ? (
-        <p className={styles.empty}>La carta todavía no tiene productos.</p>
-      ) : null}
-    </div>
-  </main>
-);
+        {view.children.length === 0 && view.products.length === 0 ? (
+          <p className={styles.empty}>{t.emptyMenu}</p>
+        ) : null}
+      </div>
+    </main>
+  );
+};

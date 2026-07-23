@@ -9,7 +9,7 @@ type ProductExtraRow = {
 
 export async function getCategories(tenantId: string): Promise<Category[]> {
   const { data, error } = await tenantScoped("categories", tenantId)
-    .select("id, slug, name_i18n, icon, sort_order, parent_id")
+    .select("id, slug, name_i18n, icon, image_url, sort_order, parent_id")
     .order("sort_order", { ascending: true });
 
   if (error) throw error;
@@ -19,6 +19,7 @@ export async function getCategories(tenantId: string): Promise<Category[]> {
     slug: row.slug as string,
     nameI18n: row.name_i18n as Record<string, string>,
     icon: (row.icon as string | null) ?? null,
+    imagePath: (row.image_url as string | null) ?? null,
     sortOrder: row.sort_order as number,
     // `categories.parent_id` (FK auto-referenciada, ver 20260721000002_catalog.sql)
     // permite cartas en ÁRBOL: una carta grande se navega por niveles en vez de volcar
@@ -37,7 +38,7 @@ export async function getCategories(tenantId: string): Promise<Category[]> {
 export async function getProducts(tenantId: string): Promise<Product[]> {
   const { data, error } = await tenantScoped("products", tenantId)
     .select(
-      "id, category_id, name_i18n, description_i18n, price, image_url, is_available, sort_order, product_extras(id, name_i18n, price)",
+      "id, category_id, name_i18n, description_i18n, price, image_url, allergen_ids, is_available, sort_order, product_extras(id, name_i18n, price)",
     )
     .eq("is_available", true)
     .order("sort_order", { ascending: true });
@@ -59,6 +60,7 @@ export async function getProducts(tenantId: string): Promise<Product[]> {
       descriptionI18n: row.description_i18n as Record<string, string>,
       price: Number(row.price),
       imagePath: (row.image_url as string | null) ?? null,
+      allergenIds: (row.allergen_ids as number[] | null) ?? [],
       isAvailable: row.is_available as boolean,
       sortOrder: row.sort_order as number,
       extras,

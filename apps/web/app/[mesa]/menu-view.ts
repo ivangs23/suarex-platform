@@ -1,5 +1,6 @@
 import type { Category, Product } from "@suarex/db";
 import { eurosToCents, formatCents } from "@suarex/domain";
+import { type Lang, pickI18n } from "@/lib/i18n";
 
 /** Una categoría navegable del nivel actual, con el total de productos de TODO su subárbol. */
 export type MenuNode = {
@@ -8,20 +9,47 @@ export type MenuNode = {
   name: string;
   /** Emoji de la categoría, o `null`. Los temas lo pintan si viene; ninguno depende de él. */
   icon: string | null;
+  /** URL pública de la foto de la categoría, o `null`. Manuela usa una por categoría en sus
+   * tiles; garum solo emoji. Un tema la pinta si viene y cae al emoji si no. */
+  imageUrl: string | null;
   productCount: number;
   href: string;
 };
 
+/** Una extra elegible del producto, con su precio ya formateado y en céntimos. */
+export type MenuExtra = {
+  id: string;
+  name: string;
+  priceCents: number;
+  priceLabel: string;
+};
+
+/** Alérgeno declarado de un producto, ya resuelto a nombre e icono. */
+export type MenuAllergen = { id: number; name: string; icon: string | null };
+
 export type MenuProduct = {
   id: string;
   name: string;
+  /** Descripción del producto, o cadena vacía. */
+  description: string;
   price: number;
+  /** Precio en céntimos, que es como suma el carrito: en euros, `0.1 + 0.2` no da `0.3`. */
+  priceCents: number;
   /** Precio ya formateado en la moneda y el idioma del tenant, p. ej. `18,00 €`. Lo
    * calcula la vista para que ningún tema tenga que saber de locales ni de monedas. */
   priceLabel: string;
   /** URL pública completa de la foto, o `null`. Se compone aquí para que ningún tema
    * tenga que conocer el endpoint de Storage ni el nombre del bucket. */
   imageUrl: string | null;
+  /** Extras que el comensal puede añadir a este producto. */
+  extras: MenuExtra[];
+  /**
+   * Alérgenos DECLARADOS por el gestor. Nunca se infieren del nombre ni de la categoría:
+   * equivocarse con un alérgeno es un riesgo para el comensal, no un fallo cosmético. Una
+   * lista vacía significa "no hay ninguno declarado", que es lo que la ficha dice
+   * literalmente -- no "no tiene".
+   */
+  allergens: MenuAllergen[];
 };
 
 export type MenuCrumb = { name: string; href: string };
@@ -35,7 +63,12 @@ export type MenuView = {
   currentName: string | null;
   /** Ancestros del nodo actual, de la raíz hacia abajo, SIN incluir el actual. */
   breadcrumb: MenuCrumb[];
-  /** Enlace de vuelta al primer nivel. */
+  /**
+   * Enlace de vuelta al primer nivel de categorías.
+   *
+   * Lleva `?ver=carta` porque la raíz pelada es la pantalla de BIENVENIDA: sin él, "explorar
+   * otras categorías" echaba al comensal fuera de la carta y le hacía volver a entrar.
+   */
   rootHref: string;
   /** Subcategorías del nivel actual (vacío si es una hoja). */
   children: MenuNode[];
@@ -50,8 +83,8 @@ export type MenuView = {
   totalProducts: number;
 };
 
-function categoryName(category: Category): string {
-  return category.nameI18n.es ?? category.slug;
+function categoryName(category: Category, lang: Lang): string {
+  return pickI18n(category.nameI18n, lang) || category.slug;
 }
 
 /**
@@ -75,12 +108,18 @@ export function buildMenuView(params: {
   /** Ruta de la mesa, p. ej. `/5`; los enlaces cuelgan de aquí. */
   basePath: string;
   /** `tenant_settings.locale` / `.currency`, con los mismos valores por defecto que usa la
-   * carta de pedido (`apps/web/app/m/[token]/page.tsx`). */
+   * carta pública (`apps/web/app/[mesa]/page.tsx`). */
   locale?: string;
   currency?: string;
   /** Endpoint público de Storage (`NEXT_PUBLIC_SUPABASE_URL`). Sin él las fotos no se
    * pintan, en vez de componer una URL rota. */
   storageOrigin?: string;
+  /** Catálogo de alérgenos del tenant (globales de la UE + propios), para resolver los ids
+   * que trae cada producto. Sin él, la ficha no declara ninguno. */
+  allergens?: { id: number; nameI18n: Record<string, string>; icon: string | null }[];
+  /** Idioma en el que se pinta la carta. Los enlaces lo arrastran para no perderlo al
+   * navegar de nivel. */
+  lang?: Lang;
 }): MenuView {
   const {
     categories,
@@ -90,7 +129,17 @@ export function buildMenuView(params: {
     locale = "es",
     currency = "EUR",
     storageOrigin = "",
+    allergens = [],
+    lang = "es",
   } = params;
+
+  /* El idioma viaja en TODOS los enlaces de la carta. Sin esto, entrar en una categoría
+     devolvía al comensal al español a mitad de camino: el nivel es una carga de página nueva
+     y la URL es lo único que lo recuerda. Se omite en el idioma de partida para no ensuciar
+     los enlaces del caso normal. */
+  const langQuery = lang === "es" ? "" : `&lang=${lang}`;
+
+  const allergensById = new Map(allergens.map((allergen) => [allergen.id, allergen]));
 
   const childrenByParent = new Map<string | null, Category[]>();
   for (const category of categories) {
@@ -134,7 +183,8 @@ export function buildMenuView(params: {
     ? (categories.find((category) => category.slug === currentSlug) ?? null)
     : null;
 
-  const hrefFor = (slug: string): string => `${basePath}?cat=${encodeURIComponent(slug)}`;
+  const hrefFor = (slug: string): string =>
+    `${basePath}?cat=${encodeURIComponent(slug)}${langQuery}`;
 
   const breadcrumb: MenuCrumb[] = [];
   if (current) {
@@ -145,7 +195,7 @@ export function buildMenuView(params: {
       const ancestor = byId.get(ancestorId);
       if (!ancestor) break;
       seen.add(ancestor.id);
-      breadcrumb.unshift({ name: categoryName(ancestor), href: hrefFor(ancestor.slug) });
+      breadcrumb.unshift({ name: categoryName(ancestor, lang), href: hrefFor(ancestor.slug) });
       ancestorId = ancestor.parentId;
     }
   }
@@ -153,8 +203,12 @@ export function buildMenuView(params: {
   const children = (childrenByParent.get(current?.id ?? null) ?? []).map((category) => ({
     id: category.id,
     slug: category.slug,
-    name: categoryName(category),
+    name: categoryName(category, lang),
     icon: category.icon,
+    imageUrl:
+      storageOrigin && category.imagePath
+        ? `${storageOrigin}/storage/v1/object/public/catalog/${category.imagePath}`
+        : null,
     productCount: countSubtree(category.id),
     href: hrefFor(category.slug),
   }));
@@ -162,15 +216,31 @@ export function buildMenuView(params: {
   const ownProducts = current ? (productsByCategory.get(current.id) ?? []) : [];
 
   return {
-    currentName: current ? categoryName(current) : null,
+    currentName: current ? categoryName(current, lang) : null,
     breadcrumb,
-    rootHref: basePath,
+    rootHref: `${basePath}?ver=carta${langQuery}`,
     children,
     products: ownProducts.map((product) => ({
       id: product.id,
-      name: product.nameI18n.es ?? "",
+      name: pickI18n(product.nameI18n, lang),
       price: product.price,
+      priceCents: eurosToCents(product.price),
       priceLabel: formatCents(eurosToCents(product.price), locale, currency),
+      description: pickI18n(product.descriptionI18n, lang),
+      // Un id que no resuelve se descarta en vez de pintarse en crudo: un número suelto en
+      // la ficha no le dice nada al comensal.
+      allergens: product.allergenIds.flatMap((id) => {
+        const allergen = allergensById.get(id);
+        return allergen
+          ? [{ id, name: pickI18n(allergen.nameI18n, lang), icon: allergen.icon }]
+          : [];
+      }),
+      extras: product.extras.map((extra) => ({
+        id: extra.id,
+        name: pickI18n(extra.nameI18n, lang),
+        priceCents: eurosToCents(extra.price),
+        priceLabel: formatCents(eurosToCents(extra.price), locale, currency),
+      })),
       // Sin origen de Storage no se compone nada: mejor sin foto que con una URL rota.
       imageUrl:
         storageOrigin && product.imagePath

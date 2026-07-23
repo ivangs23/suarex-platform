@@ -35,15 +35,30 @@
   z-index: 10;
   background: var(--garum-surface);
   border-bottom: 1px solid var(--garum-border);
-  padding: 0.9rem 1.25rem;
-  display: flex;
+  padding: 0.7rem 0.85rem;
+  /* Tres zonas: mesa | logo | idiomas + pedido. En rejilla y no en flex, para que el logo
+     quede centrado respecto a la BARRA y no respecto al hueco que le dejen sus vecinos: con
+     la mesa a un lado y dos controles al otro, un flex lo descentraría en cuanto uno cambie
+     de tamaño (al pasar a EN, al aparecer el contador del pedido). Mismo esquema que el resto
+     de temas: cambia el aspecto, no dónde encuentra el comensal cada cosa. */
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: center;
+  gap: 0.75rem;
 }
 
 .logo {
-  height: 3rem;
+  justify-self: center;
+  height: 2.6rem;
   width: auto;
+}
+
+/* Idiomas y pedido, juntos al final. */
+.topbarEnd {
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
 }
 
 .brandName {
@@ -83,12 +98,22 @@
   color: var(--garum-text-muted);
 }
 
+/* Pastilla de la mesa, a la izquierda de la cabecera. `justify-self: start` para que no se
+   estire con su columna de la rejilla. */
 .mesa {
-  margin: 0.9rem 0 0;
-  font-size: 0.72rem;
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  padding: 0.4rem 0.85rem;
+  border: 1px solid var(--garum-border);
+  border-radius: 999px;
+  background: var(--garum-surface);
+  font-size: 0.68rem;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.24em;
+  letter-spacing: 0.14em;
   color: var(--garum-text-muted);
+  white-space: nowrap;
 }
 
 /* Barra de navegación: píldora morada de vuelta + rastro, como en su carta. */
@@ -237,4 +262,99 @@
   text-align: center;
   color: var(--garum-text-muted);
   padding: 3rem 0;
+}
+
+/* PANTALLA DE BIENVENIDA. El paso es el mismo que en cualquier otro tema; lo que cambia es
+   que aquí se ve con su verde y su patrón. La foto sale del ajuste `heroUrl` del cliente:
+   sin ella queda el patrón de fondo, que ya es su marca. */
+.welcome {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: 2rem 1.25rem;
+  overflow: hidden;
+  text-decoration: none;
+  color: inherit;
+}
+
+.welcomePhoto {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.welcomeContent {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.1rem;
+  text-align: center;
+  background: color-mix(in srgb, var(--garum-surface) 92%, transparent);
+  border: 1px solid var(--garum-border);
+  border-radius: 1.5rem;
+  box-shadow: var(--garum-shadow);
+  padding: 2.75rem 2rem;
+}
+
+.welcomeLogo {
+  height: 4.5rem;
+  width: auto;
+}
+
+.enter {
+  margin-top: 0.5rem;
+  padding: 0.7rem 1.6rem;
+  border-radius: 999px;
+  background: var(--garum-primary);
+  color: #ffffff;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* Selector de idioma. Enlaces normales, no un desplegable: en una mesa se toca una vez, y
+   un <select> obliga a abrir, elegir y confirmar. */
+.langs {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.lang {
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-decoration: none;
+  color: inherit;
+  opacity: 0.6;
+}
+
+.lang[aria-current="true"] {
+  background: var(--color-primary, #7b4f96);
+  color: var(--color-bg, #ffffff);
+  opacity: 1;
+}
+
+/* Puerta al pedido. Cada tema la coloca donde encaje -- aquí, en la cabecera. */
+.cartButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  white-space: nowrap;
+  padding: 0.55rem 1.1rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--garum-primary);
+  color: #ffffff;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
 }

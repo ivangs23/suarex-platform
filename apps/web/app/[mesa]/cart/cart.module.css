@@ -1,0 +1,429 @@
+/* Estilos del carrito. Se pintan con las variables de marca que inyecta el layout raíz
+   (`--color-*`), así que el carrito se ve del color de cada cliente sin que ningún tema
+   tenga que redefinirlo. Un tema a medida puede sobrescribir estas clases desde su propio
+   CSS si su diseño lo pide. */
+
+.add {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  align-items: flex-start;
+}
+
+.extras {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.extra {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  opacity: 0.85;
+}
+
+.addButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 45%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  color: inherit;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Contador: quitar tiene que estar donde se puso. Bajar a la barra del total para
+   corregir un plato añadido de más es donde el comensal se rinde y llama al camarero. */
+.stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 45%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  padding: 0.15rem;
+}
+
+.step {
+  /* 2.25rem: objetivo táctil cómodo con el dedo en una mesa, no un icono de escritorio. */
+  width: 2.25rem;
+  height: 2.25rem;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 1.15rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.step:hover {
+  background: color-mix(in srgb, var(--color-primary) 22%, transparent);
+}
+
+.units {
+  min-width: 1.5rem;
+  text-align: center;
+  font-size: 0.9rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Barra fija abajo: el resumen tiene que seguir a la vista mientras se navega la carta,
+   porque los platos de un pedido caen en categorías distintas. */
+.bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.9rem 1.25rem;
+  background: var(--color-bg);
+  border-top: 1px solid color-mix(in srgb, var(--color-primary) 30%, transparent);
+  box-shadow: 0 -2px 18px rgba(0, 0, 0, 0.12);
+}
+
+.total {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.error {
+  margin: 0;
+  flex: 1;
+  font-size: 0.8rem;
+  color: #b3261e;
+}
+
+.pay {
+  margin-left: auto;
+  padding: 0.7rem 1.8rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--color-primary);
+  color: var(--color-bg);
+  font: inherit;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.pay:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+/* FICHA DEL PRODUCTO. Hoja que sube desde abajo en móvil -- que es donde se usa la carta --
+   y queda centrada con holgura en pantallas grandes. Se pinta con las variables de marca,
+   así que se ve del color de cada cliente sin que ningún tema la redefina. */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0;
+}
+
+/* Cubre toda la pantalla por detrás de la hoja: es el botón de cerrar tocando fuera. */
+.backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  padding: 0;
+  background: rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+}
+
+.sheet {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(32rem, 100%);
+  /* Nunca más alta que la pantalla: el pie con el total y el botón tiene que verse siempre,
+     también con el teclado abierto escribiendo una nota. */
+  max-height: min(88vh, 44rem);
+  background: var(--color-bg);
+  color: var(--color-fg);
+  border-radius: 1.25rem 1.25rem 0 0;
+  overflow: hidden;
+}
+
+@media (min-width: 40rem) {
+  .overlay {
+    align-items: center;
+    padding: 1.5rem;
+  }
+
+  .sheet {
+    border-radius: 1.25rem;
+  }
+}
+
+.sheetHead {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.1rem 1.25rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-primary) 22%, transparent);
+}
+
+.sheetTitle {
+  margin: 0;
+  flex: 1;
+  font-family: var(--font-playfair), Georgia, serif;
+  font-size: 1.35rem;
+  line-height: 1.2;
+}
+
+.sheetClose {
+  width: 2.4rem;
+  height: 2.4rem;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-primary) 14%, transparent);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.sheetBody {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.1rem 1.25rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+}
+
+.sheetDescription {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.sheetSection {
+  margin: 0 0 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-primary);
+}
+
+.sheetNote {
+  margin: 0.5rem 0 0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  opacity: 0.75;
+}
+
+.allergens {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.allergen {
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-primary) 14%, transparent);
+  font-size: 0.82rem;
+}
+
+.options {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 22%, transparent);
+  border-radius: 0.9rem;
+  background: color-mix(in srgb, var(--color-bg) 60%, #ffffff);
+  cursor: pointer;
+}
+
+.optionName {
+  flex: 1;
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.optionPrice {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--color-primary);
+}
+
+.notes {
+  width: 100%;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 22%, transparent);
+  border-radius: 0.9rem;
+  background: color-mix(in srgb, var(--color-bg) 60%, #ffffff);
+  color: inherit;
+  font: inherit;
+  font-size: 0.92rem;
+  resize: vertical;
+}
+
+.sheetFoot {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.9rem 1.25rem;
+  border-top: 1px solid color-mix(in srgb, var(--color-primary) 22%, transparent);
+}
+
+.sheetTotal {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.sheetTotalLabel {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+/* Distintivo de unidades en la barra del pedido. */
+.badge {
+  min-width: 1.35rem;
+  margin-left: 0.6rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  background: var(--color-bg);
+  color: var(--color-primary);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* LÍNEAS DEL PEDIDO. Cada una se lee entera de un vistazo -- plato, extras, nota y lo que
+   suma -- porque para eso existe el panel: revisar antes de pagar. */
+.lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.line {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding-bottom: 0.9rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-primary) 18%, transparent);
+}
+
+.line:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.lineText {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.lineName {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.lineDetail {
+  font-size: 0.82rem;
+  opacity: 0.75;
+}
+
+.linePrice {
+  margin-top: 0.2rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Aspecto por defecto de la puerta al pedido, para un tema que no le pase el suyo: se pinta
+   con las variables de marca, así que un cliente nuevo la tiene digna sin escribir CSS. */
+.cartButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.2rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--color-primary);
+  color: var(--color-bg);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* PASO DE PAGO. El formulario de tarjeta (Stripe Elements) reusa el cuerpo de la hoja; solo
+   añade su fila de acciones -- volver / pagar -- al pie. */
+.paymentActions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+
+.paymentActions .pay {
+  flex: 1;
+}
+
+.payBack {
+  padding: 0.7rem 1.2rem;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.payBack:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

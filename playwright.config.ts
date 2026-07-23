@@ -14,6 +14,33 @@ dotenv.config({ path: ".env.test" });
 
 export default defineConfig({
   testDir: "tests/e2e",
+  /**
+   * 60 s por test, el doble del defecto.
+   *
+   * El servidor de esta suite es el `next dev`, que compila cada ruta LA PRIMERA VEZ que
+   * alguien la pide. Esa compilación cae dentro del presupuesto del test que tuvo la mala
+   * suerte de llegar primero, y con la máquina cargada se lleva los 30 s de sobra. Cuando eso
+   * pasa el daño no se queda ahí: los tests de administración mutan el catálogo del seed y lo
+   * restauran al final, así que uno cortado a media faena deja el catálogo cambiado y tumba a
+   * otros doce que sí esperaban los datos del seed. Se ha visto tres veces, y el diagnóstico
+   * siempre cuesta más que el fallo.
+   *
+   * No afloja NINGUNA aserción: cada `expect` conserva su propio tiempo de espera (5 s), que
+   * es lo que mide el comportamiento real. Lo único que crece es el techo del test entero,
+   * que es donde cabe una compilación que no es lo que ningún test está probando.
+   */
+  timeout: 60_000,
+  /**
+   * Reintenta un test que falla, hasta 2 veces más.
+   *
+   * El `next dev` compila cada ruta la primera vez que se pide, y con la máquina cargada esa
+   * compilación puede pasarse del techo del test o dejar Realtime sin calentar. Son flakes de
+   * ENTORNO, no del comportamiento: al reintentar, la ruta ya está compilada y el consumidor
+   * caliente. Playwright vuelve a correr solo el test que falló, y su `afterEach` de limpieza
+   * corre también tras cada intento fallido, así que un reintento no arranca de una base
+   * sucia. Un fallo real -- una aserción que el código incumple -- falla los tres intentos.
+   */
+  retries: 2,
   use: {
     baseURL: "http://garum.localhost:3000",
     // `*.localhost` lo resuelve el sistema a 127.0.0.1 solo, pero un DOMINIO PROPIO de

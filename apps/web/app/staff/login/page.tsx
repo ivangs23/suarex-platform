@@ -4,6 +4,7 @@ import { createBrowserClient } from "@suarex/realtime";
 import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
 import { useState } from "react";
+import styles from "../staff.module.css";
 
 // Construido una sola vez por montaje del módulo: NEXT_PUBLIC_* se inlinea en
 // build time, así que estos valores están disponibles en el navegador sin
@@ -36,35 +37,45 @@ export default function StaffLoginPage() {
   }
 
   return (
-    <main>
-      <h1>Acceso del personal</h1>
-      <form onSubmit={handleSubmit}>
-        <label htmlFor="email">Email</label>
-        <input
-          id="email"
-          name="email"
-          type="email"
-          autoComplete="username"
-          required
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-        />
+    <main className={styles.login}>
+      <form className={styles.loginCard} onSubmit={handleSubmit}>
+        <h1 className={styles.loginTitle}>Acceso del personal</h1>
+        <label className={styles.field} htmlFor="email">
+          Email
+          <input
+            id="email"
+            name="email"
+            type="email"
+            autoComplete="username"
+            required
+            className={styles.input}
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+          />
+        </label>
 
-        <label htmlFor="password">Contraseña</label>
-        <input
-          id="password"
-          name="password"
-          type="password"
-          autoComplete="current-password"
-          required
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-        />
+        <label className={styles.field} htmlFor="password">
+          Contraseña
+          <input
+            id="password"
+            name="password"
+            type="password"
+            autoComplete="current-password"
+            required
+            className={styles.input}
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+          />
+        </label>
 
-        <button type="submit" disabled={submitting}>
+        <button type="submit" className={styles.submit} disabled={submitting}>
           Entrar
         </button>
-        {error ? <p role="alert">{error}</p> : null}
+        {error ? (
+          <p className={styles.alert} role="alert">
+            {error}
+          </p>
+        ) : null}
       </form>
     </main>
   );

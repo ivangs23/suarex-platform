@@ -15,6 +15,10 @@ test("garum sirve su catálogo, su marca y su tema", async ({ page }) => {
   );
   expect(bg).toBe("#d6e8d2");
 
+  // La bienvenida es un paso del FLUJO, así que la tienen todos los clientes; lo que cambia
+  // por cliente es cómo se ve y qué foto lleva.
+  await page.getByTestId("welcome-enter").click();
+
   // La carta se navega por NIVELES: la raíz enseña categorías, no productos.
   await expect(page.getByTestId("product")).toHaveCount(0);
   const vinos = page.getByTestId("category").filter({ hasText: "Vinos" });
@@ -29,7 +33,7 @@ test("garum sirve su catálogo, su marca y su tema", async ({ page }) => {
   await tintos.getByRole("link").click();
   await expect(page.getByTestId("product").filter({ hasText: "Ribera del Duero" })).toHaveCount(1);
   // El rastro de vuelta cubre el nivel intermedio del que venimos.
-  await expect(page.locator("nav")).toContainText("Vinos");
+  await expect(page.getByTestId("breadcrumb")).toContainText("Vinos");
 });
 
 test("manuela sirve un catálogo, una marca y un tema distintos", async ({ page }) => {
@@ -42,6 +46,15 @@ test("manuela sirve un catálogo, una marca y un tema distintos", async ({ page 
     getComputedStyle(document.documentElement).getPropertyValue("--color-bg").trim(),
   );
   expect(bg).toBe("#f9f7f2");
+
+  // La bienvenida es un PASO PROPIO, no una cabecera: hasta tocarla no hay carta. Comprobar
+  // la ausencia de categorías es lo que distingue el paso real de un simple héroe encima
+  // del menú, que es como estaba antes.
+  await expect(page.getByTestId("welcome-enter")).toBeVisible();
+  await expect(page.getByTestId("category")).toHaveCount(0);
+
+  await page.getByTestId("welcome-enter").click();
+  await expect(page.getByTestId("welcome-enter")).toHaveCount(0);
 
   // Carta plana (un solo nivel): al entrar en una categoría raíz ya salen sus productos.
   await page.getByTestId("category").filter({ hasText: "Tostas" }).getByRole("link").click();
@@ -57,12 +70,15 @@ test("ningún producto de un tenant aparece en el otro", async ({ page }) => {
   // crudo sí depende únicamente del scoping de getProducts, independiente de si
   // getCategories está bien acotado.
   //
-  // 8 productos por tenant en el seed.
-  await page.goto("http://garum.localhost:3000/1");
+  // 8 productos por tenant en el seed. `?ver=carta` porque la raíz de cualquier cliente es
+  // ahora su pantalla de bienvenida, que no pinta catálogo ninguno.
+  await page.goto("http://garum.localhost:3000/1?ver=carta");
   await expect(page.getByTestId("product-count")).toHaveText("8");
   await expect(page.getByText("Tosta de jamón")).toHaveCount(0);
 
-  await page.goto("http://manuela.localhost:3000/1");
+  // `?ver=carta` porque la raíz de manuela es su pantalla de bienvenida, que no pinta
+  // catálogo ninguno; el conteo solo existe una vez dentro.
+  await page.goto("http://manuela.localhost:3000/1?ver=carta");
   await expect(page.getByTestId("product-count")).toHaveText("8");
   await expect(page.getByText("Ribera del Duero")).toHaveCount(0);
 });
@@ -84,6 +100,7 @@ test("un cliente con dominio propio sirve su carta por ese dominio", async ({ pa
   await expect(page.locator("[data-theme]")).toHaveAttribute("data-theme", "garum");
 
   // Y la navegación por niveles funciona igual que por el subdominio.
+  await page.getByTestId("welcome-enter").click();
   await page.getByTestId("category").filter({ hasText: "Vinos" }).getByRole("link").click();
   await expect(page.getByTestId("category").filter({ hasText: "Tintos" })).toBeVisible();
 });

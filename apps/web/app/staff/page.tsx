@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getStaffSession } from "@/lib/supabase-server";
 import { requireTenant } from "@/lib/tenant-context";
 import { OrdersBoard } from "./OrdersBoard";
+import styles from "./staff.module.css";
 
 /**
  * Panel de comandas: exige una sesión de personal válida PARA EL TENANT RESUELTO POR
@@ -38,9 +39,13 @@ export default async function StaffHome() {
   const orders = await listActiveOrders(session.tenantId);
 
   return (
-    <main>
-      <h1>Personal de {tenant.slug}</h1>
-      <p data-testid="staff-tenant">{tenant.slug}</p>
+    <main className={styles.page}>
+      <header className={styles.top}>
+        <h1 className={styles.title}>Comandas</h1>
+        <p className={styles.tenant} data-testid="staff-tenant">
+          {tenant.slug}
+        </p>
+      </header>
       <OrdersBoard tenantId={session.tenantId} orders={orders} />
     </main>
   );

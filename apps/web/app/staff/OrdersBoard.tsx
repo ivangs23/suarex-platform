@@ -5,6 +5,7 @@ import { createBrowserClient, subscribeToOrders } from "@suarex/realtime";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { markStationDone } from "./actions";
+import styles from "./staff.module.css";
 
 // Construido una sola vez por montaje del módulo, igual que en `staff/login/page.tsx`:
 // NEXT_PUBLIC_* se inlinea en build time y no expone ninguna clave de servicio.
@@ -60,36 +61,46 @@ export function OrdersBoard({ tenantId, orders }: { tenantId: string; orders: St
   }
 
   return (
-    <div>
-      {error ? <p role="alert">{error}</p> : null}
-      <section aria-label="Cocina">
-        <h2>Cocina</h2>
-        {cocina.length === 0 ? <p>Sin comandas pendientes</p> : null}
-        {cocina.map((order) => (
-          <OrderCard
-            key={`cocina-${order.id}`}
-            order={order}
-            station="cocina"
-            onDone={handleDone}
-            disabled={isPending}
-          />
-        ))}
-      </section>
+    <>
+      {error ? (
+        <p className={styles.alert} role="alert">
+          {error}
+        </p>
+      ) : null}
+      <div className={styles.board}>
+        <section className={styles.column} aria-label="Cocina">
+          <h2 className={styles.columnTitle}>Cocina</h2>
+          {cocina.length === 0 ? <p className={styles.empty}>Sin comandas pendientes</p> : null}
+          <div className={styles.cards}>
+            {cocina.map((order) => (
+              <OrderCard
+                key={`cocina-${order.id}`}
+                order={order}
+                station="cocina"
+                onDone={handleDone}
+                disabled={isPending}
+              />
+            ))}
+          </div>
+        </section>
 
-      <section aria-label="Barra">
-        <h2>Barra</h2>
-        {barra.length === 0 ? <p>Sin comandas pendientes</p> : null}
-        {barra.map((order) => (
-          <OrderCard
-            key={`barra-${order.id}`}
-            order={order}
-            station="barra"
-            onDone={handleDone}
-            disabled={isPending}
-          />
-        ))}
-      </section>
-    </div>
+        <section className={styles.column} aria-label="Barra">
+          <h2 className={styles.columnTitle}>Barra</h2>
+          {barra.length === 0 ? <p className={styles.empty}>Sin comandas pendientes</p> : null}
+          <div className={styles.cards}>
+            {barra.map((order) => (
+              <OrderCard
+                key={`barra-${order.id}`}
+                order={order}
+                station="barra"
+                onDone={handleDone}
+                disabled={isPending}
+              />
+            ))}
+          </div>
+        </section>
+      </div>
+    </>
   );
 }
 
@@ -109,20 +120,32 @@ function OrderCard({
   const done = stationStatus === "done";
 
   return (
-    <article data-testid="order-card" data-order-id={order.id}>
-      <h3>
-        Pedido #{order.orderNumber}
-        {order.tableLabel ? ` — Mesa ${order.tableLabel}` : null}
+    <article
+      className={`${styles.card} ${done ? styles.done : ""}`}
+      data-testid="order-card"
+      data-order-id={order.id}
+    >
+      <h3 className={styles.cardHead}>
+        <span>#{order.orderNumber}</span>
+        {order.tableLabel ? <span className={styles.mesa}>Mesa {order.tableLabel}</span> : null}
       </h3>
-      <ul>
+      <ul className={styles.items}>
         {items.map((item) => (
-          <li key={`${item.name}-${item.quantity}-${item.notes ?? ""}`}>
-            {item.quantity}× {item.name}
-            {item.notes ? ` (${item.notes})` : null}
+          <li className={styles.item} key={`${item.name}-${item.quantity}-${item.notes ?? ""}`}>
+            <span className={styles.qty}>{item.quantity}×</span>
+            <span>
+              {item.name}
+              {item.notes ? <span className={styles.note}>{item.notes}</span> : null}
+            </span>
           </li>
         ))}
       </ul>
-      <button type="button" onClick={() => onDone(order.id, station)} disabled={disabled || done}>
+      <button
+        type="button"
+        className={styles.doneBtn}
+        onClick={() => onDone(order.id, station)}
+        disabled={disabled || done}
+      >
         {done ? "Hecho" : "Marcar hecho"}
       </button>
     </article>

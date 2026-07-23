@@ -320,6 +320,30 @@ export function pairRateLimitRpc(ip: string, windowSeconds: number, max: number)
 }
 
 /**
+ * MISMA EXENCIÓN QUE `pairRateLimitRpc`, con la tabla genérica `rate_limit_hits`:
+ * `check_rate_limit` es SECURITY DEFINER, no depende de ningún tenant y se concede solo a
+ * `service_role`. Acotado por firma a `checkRateLimit` (`src/rate-limit.ts`), que es la
+ * única vía de este paquete hacia esa función.
+ */
+export function rateLimitRpc(bucket: string, key: string, windowSeconds: number, max: number) {
+  return serviceClient().rpc("check_rate_limit", {
+    p_bucket: bucket,
+    p_key: key,
+    p_window_seconds: windowSeconds,
+    p_max: max,
+  });
+}
+
+/**
+ * MISMA EXENCIÓN. `expire_pending_orders` es SECURITY DEFINER, es una tarea de mantenimiento
+ * (no una operación de negocio de ningún tenant) y se concede solo a `service_role`. Acotado
+ * por firma a `expirePendingOrders` (`src/orders.ts`), que lo llama el endpoint de cron.
+ */
+export function expirePendingOrdersRpc(timeoutMinutes: number) {
+  return serviceClient().rpc("expire_pending_orders", { p_timeout_minutes: timeoutMinutes });
+}
+
+/**
  * DUODÉCIMA EXENCIÓN DELIBERADA, mismo razonamiento que `authAdminForDevicePairing` pero
  * para el reset: `resetDevice` (`src/admin-devices.ts`) borra la cuenta de Auth del
  * dispositivo (`deleteUser`) para revocar sus refresh tokens y su membership al dar de baja

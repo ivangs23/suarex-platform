@@ -1,7 +1,17 @@
 import { parseBranding } from "@suarex/config";
-import { getCategories, getProducts, getTenantSettings } from "@suarex/db";
+import {
+  findTableByToken,
+  getCategories,
+  getProducts,
+  getTenantSettings,
+  listAssignableAllergens,
+} from "@suarex/db";
 import { notFound } from "next/navigation";
+import { availableLangs, LANG_LABELS, resolveLang, strings } from "@/lib/i18n";
+import { readMesaToken } from "@/lib/mesa-cookie";
 import { requireTenant } from "@/lib/tenant-context";
+import { CartPanelHost } from "./cart/CartPanelHost";
+import { CartProvider } from "./cart/CartProvider";
 import { buildMenuView } from "./menu-view";
 import { resolveTheme } from "./themes";
 
@@ -54,10 +64,14 @@ export default async function MenuPage({
     notFound();
   }
 
-  const [categories, products, settings] = await Promise.all([
+  const [categories, products, settings, allergens] = await Promise.all([
     getCategories(tenant.id),
     getProducts(tenant.id),
     getTenantSettings(tenant.id).catch(() => null),
+    // Los 14 de la UE más los propios del cliente. Si esta lectura fallara, la ficha diría
+    // que no hay ninguno declarado, que es MENTIRA y no un fallo cosmético: mejor que
+    // reviente la carta a que un celíaco lea "sin alérgenos" sobre un plato con gluten.
+    listAssignableAllergens(tenant.id),
   ]);
 
   const branding = parseBranding(settings?.branding);
@@ -67,6 +81,19 @@ export default async function MenuPage({
   // desconocido no es un error: `buildMenuView` degrada a la raíz.
   const rawCat = query.cat;
   const currentSlug = (Array.isArray(rawCat) ? rawCat[0] : rawCat) ?? null;
+
+  // IDIOMA. Sale de la URL, con el del cliente como partida; uno desconocido o manipulado
+  // cae a ese mismo en vez de romper la carta.
+  const rawLang = Array.isArray(query.lang) ? query.lang[0] : query.lang;
+  const porDefecto = resolveLang(undefined, settings?.locale);
+  const lang = resolveLang(rawLang, settings?.locale);
+
+  // Los idiomas OFRECIDOS salen de los datos del cliente, no de un ajuste: enseñar "EN" para
+  // acabar sirviendo la carta en español sería peor que no ofrecerlo.
+  const idiomas = availableLangs(
+    [...categories.map((c) => c.nameI18n), ...products.map((p) => p.nameI18n)],
+    porDefecto,
+  );
 
   const view = buildMenuView({
     categories,
@@ -79,17 +106,71 @@ export default async function MenuPage({
     // que basta el endpoint público; NEXT_PUBLIC_* se inlinea en build y no expone ninguna
     // clave de servicio.
     storageOrigin: process.env.NEXT_PUBLIC_SUPABASE_URL,
+    allergens,
+    lang,
   });
+
+  // Paso de bienvenida: activo solo en la raíz de la carta y mientras no se haya entrado.
+  // Es la página quien lo calcula y el tema quien decide si lo usa (ver `MenuThemeProps`).
+  const entrado = (Array.isArray(query.ver) ? query.ver[0] : query.ver) === "carta";
+  const langQuery = lang === porDefecto ? "" : `&lang=${lang}`;
+  const welcome = {
+    active: !entrado && currentSlug === null,
+    href: `/${mesa}?ver=carta${langQuery}`,
+  };
+
+  /* Cambiar de idioma conserva DÓNDE estabas: se reconstruye la misma URL con otro `lang`.
+     Mandar a la raíz al cambiar obligaría a rehacer toda la navegación, que es justo lo que
+     hace que nadie use el selector. */
+  const langs = idiomas.map((code) => {
+    const partes = [
+      currentSlug ? `cat=${encodeURIComponent(currentSlug)}` : null,
+      entrado || currentSlug ? "ver=carta" : null,
+      code === porDefecto ? null : `lang=${code}`,
+    ].filter(Boolean);
+    return {
+      code,
+      label: LANG_LABELS[code],
+      href: partes.length > 0 ? `/${mesa}?${partes.join("&")}` : `/${mesa}`,
+      active: code === lang,
+    };
+  });
+
+  // PEDIR EXIGE HABER ESCANEADO EL QR DE ESTA MESA. La cookie la fija `/m/{token}` (ver
+  // `lib/mesa-cookie.ts`) y aquí se comprueba que la mesa que designa es de ESTE cliente y
+  // es ESTA mesa: sin las dos comprobaciones, una cookie de otro restaurante -- o de la mesa
+  // 3 mientras se mira la carta de la 7 -- serviría para mandar comandas a donde no toca.
+  // Quien llega a `/{mesa}` sin escanear ve la carta igual, pero en consulta.
+  const mesaToken = await readMesaToken();
+  const mesaEscaneada = mesaToken ? await findTableByToken(mesaToken).catch(() => null) : null;
+  const canOrder =
+    mesaEscaneada?.isActive === true &&
+    mesaEscaneada.tenantId === tenant.id &&
+    mesaEscaneada.label === mesa;
 
   const Theme = resolveTheme(settings?.theme);
 
+  /* El carrito envuelve al tema. El PANEL lo monta la página (es el paso del dinero, y un
+     tema que se lo saltara dejaría a ese cliente sin forma de pagar); el BOTÓN que lo abre lo
+     coloca cada tema donde encaje en su diseño. */
   return (
-    <Theme
-      tenantSlug={tenant.slug}
-      businessName={businessName}
-      mesa={mesa}
-      branding={branding}
-      view={view}
-    />
+    <CartProvider
+      locale={settings?.locale ?? "es"}
+      currency={settings?.currency ?? "EUR"}
+      canOrder={canOrder}
+      strings={strings(lang)}
+    >
+      <Theme
+        tenantSlug={tenant.slug}
+        businessName={businessName}
+        mesa={mesa}
+        branding={branding}
+        view={view}
+        welcome={welcome}
+        langs={langs}
+        strings={strings(lang)}
+      />
+      <CartPanelHost />
+    </CartProvider>
   );
 }

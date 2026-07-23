@@ -306,6 +306,66 @@ se ha restaurado nunca es una suposición, no una copia de seguridad.
 
 ---
 
+## 9. Expirar pedidos pendientes (cron del sistema)
+
+Un comensal puede crear un pedido y no llegar a pagar (cierra la pestaña, se queda sin
+batería). Ese pedido queda `pending` para siempre si nadie lo barre: ensucia el tablero del
+personal y las métricas.
+
+La base trae una función que los cancela (`expire_pending_orders`), y la migración intenta
+programarla con **pg_cron**. Pero el Supabase autoalojado no siempre trae pg_cron en
+`shared_preload_libraries`; cuando falta, verás en los logs del `db reset`/`db push` un
+`pg_cron scheduling skipped: ...` y **nadie los barre**. Compruébalo:
+
+```bash
+docker compose -p supabase exec db \
+  psql -U postgres -c "select jobname from cron.job;" 2>/dev/null || echo "pg_cron no disponible"
+```
+
+Si no hay job, prográmalo desde el **cron del sistema**, que existe en cualquier servidor:
+
+```bash
+crontab -e
+```
+
+```
+*/5 * * * * CRON_SECRET=<el de .env.app> APP_URL=https://<tu-dominio> /opt/suarex/deploy/scripts/expire-orders.sh >> /var/log/suarex-expire.log 2>&1
+```
+
+El endpoint (`/api/internal/expire-orders`) exige ese `CRON_SECRET` en la cabecera y **falla
+cerrado**: sin secreto configurado responde 503 y no barre nada, para que un despliegue a
+medio hacer no lo deje abierto. Genera el secreto con `openssl rand -hex 32` y ponlo tanto en
+`.env.app` como en la línea del cron.
+
+---
+
+## Limpiar fotos huérfanas del bucket
+
+Reimportar el catálogo de un cliente (`import-catalog --reemplazar`) borra sus filas y resube
+las fotos a rutas nuevas, dejando las viejas sin dueño en Storage. También pasa al editar
+fotos desde el panel. Nadie las mira y nadie las borra: el bucket crece sin techo (un solo
+cliente reimportado dejó ~10 MB muertos).
+
+El script las localiza y las borra. **Borrar es irreversible, así que por defecto SIMULA** y
+no toca nada:
+
+```bash
+# Ver qué sobra y cuánto pesa, SIN borrar:
+node scripts/limpiar-storage.mjs <slug>
+
+# Borrar de verdad los huérfanos de ese cliente:
+node scripts/limpiar-storage.mjs <slug> --confirmar
+
+# Simular sobre todos los clientes:
+node scripts/limpiar-storage.mjs --todos
+```
+
+Una foto es huérfana si su objeto no lo referencia ninguna fila del cliente (producto,
+categoría, logo o foto de bienvenida). El borrado está acotado al prefijo del cliente: una
+sola ruta fuera de `tenant/{id}/` aborta el lote entero, para no tocar la foto de otro.
+
+---
+
 ## Operación diaria
 
 Desplegar una versión nueva:
@@ -331,10 +391,26 @@ docker stats --no-stream
 
 ## Dar de alta un cliente
 
-1. Crear el tenant desde el panel (su `slug` decide el subdominio).
-2. El comodín de DNS y el certificado ya lo cubren: **no hay que tocar ni DNS ni Caddy**.
-3. Configurar su marca y su tema en Ajustes.
-4. Si lleva impresora: generar su instalador del agente con `PLATFORM_WEB_ORIGIN=https://<slug>.suarex.app`.
+El primer owner de un cliente no puede salir del panel (el panel solo deja crear personal a
+un owner que ya exista). Ese arranque lo hace un script:
+
+```bash
+node scripts/create-tenant.mjs --slug bar-paco --nombre "Bar Paco" --email dueno@barpaco.com
+```
+
+Crea su fila de cliente, sus ajustes, su sede por defecto y su **primer owner** (con una
+contraseña que imprime al final para entregársela). Es **idempotente**: reejecutar no
+duplica nada. Opcionales: `--dominio` (dominio propio), `--tema` (por defecto `generic`),
+`--idioma`, `--moneda`, `--password` (si no, se genera).
+
+Luego:
+
+1. El comodín de DNS y el certificado ya cubren su subdominio: **no hay que tocar ni DNS ni Caddy**.
+2. El owner entra en `https://<slug>.<tu-dominio>/admin` con las credenciales impresas y
+   configura su marca y su tema en Ajustes.
+3. Su carta se importa con `node scripts/import-catalog.mjs <volcado> <slug> --reemplazar`
+   (ver `docs/migrar-un-cliente.md`).
+4. Si lleva impresora: generar su instalador del agente con `PLATFORM_WEB_ORIGIN=https://<slug>.<tu-dominio>`.
 
 ---
 

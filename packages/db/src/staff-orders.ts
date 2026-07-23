@@ -38,7 +38,7 @@ type StaffOrderRow = {
  * `name_snapshot` es el nombre del producto EN EL MOMENTO del pedido (copiado, no una FK
  * viva al catálogo -- ver `order_items` en `20260721000005_orders.sql`), guardado como
  * i18n igual que `products.name_i18n`. Mismo criterio de resolución que
- * `apps/web/app/m/[token]/page.tsx` (`p.nameI18n.es ?? ...`): `es` primero porque es el
+ * la carta pública (`p.nameI18n.es ?? ...`): `es` primero porque es el
  * único locale que el seed y el flujo actual garantizan, con un fallback al primer valor
  * presente en vez de una cadena vacía si algún día se siembra un tenant sin `es`.
  */

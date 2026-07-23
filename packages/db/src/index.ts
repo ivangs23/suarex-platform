@@ -70,7 +70,9 @@ export {
   attachPaymentIntent,
   cancelOrphanedPendingOrder,
   createPendingOrder,
+  expirePendingOrders,
   getOrderByPublicToken,
+  getOrderLocale,
   markOrderPaid,
   OrderCartError,
 } from "./orders.js";
@@ -83,9 +85,10 @@ export type {
 } from "./print-jobs.js";
 export { reservePrinted, selectUnprintedOrders, unprintedPaidOrders } from "./print-jobs.js";
 export { destinationsMissingPrinter, usbPrintersWithoutDevice } from "./printer-coverage.js";
+export { checkOrderRateLimit, checkRateLimit } from "./rate-limit.js";
 export type { StaffOrder, StaffOrderItem, StationStatus } from "./staff-orders.js";
 export { listActiveOrders, markStationDone } from "./staff-orders.js";
-export { removeProductImage, uploadBrandingLogo, uploadProductImage } from "./storage.js";
+export { removeProductImage, uploadBrandingImage, uploadProductImage } from "./storage.js";
 export { findTableByToken } from "./tables.js";
 export type { UpdateTenantSettingsInput } from "./tenants.js";
 export {

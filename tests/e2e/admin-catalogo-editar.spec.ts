@@ -139,7 +139,7 @@ test.describe("renombrar categoría", () => {
       timeout: 15_000,
     });
 
-    await page.goto("http://garum.localhost:3000/5");
+    await page.goto("http://garum.localhost:3000/5?ver=carta");
     await expect(page.getByTestId("category").filter({ hasText: "Dulces de la casa" })).toBeVisible(
       { timeout: 15_000 },
     );
@@ -372,7 +372,7 @@ test.describe("mover por el árbol", () => {
     await expect(page.getByTestId("catalog-crumbs")).toHaveText("Blancos", { timeout: 15_000 });
 
     // Y aparece como categoría raíz en la carta pública.
-    await page.goto("http://garum.localhost:3000/5");
+    await page.goto("http://garum.localhost:3000/5?ver=carta");
     await expect(page.getByTestId("category").filter({ hasText: "Blancos" })).toBeVisible();
   });
 });
