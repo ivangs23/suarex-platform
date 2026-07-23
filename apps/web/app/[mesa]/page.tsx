@@ -7,6 +7,7 @@ import {
   listAssignableAllergens,
 } from "@suarex/db";
 import { notFound } from "next/navigation";
+import { availableLangs, LANG_LABELS, resolveLang, strings } from "@/lib/i18n";
 import { readMesaToken } from "@/lib/mesa-cookie";
 import { requireTenant } from "@/lib/tenant-context";
 import { CartBar } from "./cart/CartBar";
@@ -81,6 +82,19 @@ export default async function MenuPage({
   const rawCat = query.cat;
   const currentSlug = (Array.isArray(rawCat) ? rawCat[0] : rawCat) ?? null;
 
+  // IDIOMA. Sale de la URL, con el del cliente como partida; uno desconocido o manipulado
+  // cae a ese mismo en vez de romper la carta.
+  const rawLang = Array.isArray(query.lang) ? query.lang[0] : query.lang;
+  const porDefecto = resolveLang(undefined, settings?.locale);
+  const lang = resolveLang(rawLang, settings?.locale);
+
+  // Los idiomas OFRECIDOS salen de los datos del cliente, no de un ajuste: enseñar "EN" para
+  // acabar sirviendo la carta en español sería peor que no ofrecerlo.
+  const idiomas = availableLangs(
+    [...categories.map((c) => c.nameI18n), ...products.map((p) => p.nameI18n)],
+    porDefecto,
+  );
+
   const view = buildMenuView({
     categories,
     products,
@@ -93,15 +107,34 @@ export default async function MenuPage({
     // clave de servicio.
     storageOrigin: process.env.NEXT_PUBLIC_SUPABASE_URL,
     allergens,
+    lang,
   });
 
   // Paso de bienvenida: activo solo en la raíz de la carta y mientras no se haya entrado.
   // Es la página quien lo calcula y el tema quien decide si lo usa (ver `MenuThemeProps`).
   const entrado = (Array.isArray(query.ver) ? query.ver[0] : query.ver) === "carta";
+  const langQuery = lang === porDefecto ? "" : `&lang=${lang}`;
   const welcome = {
     active: !entrado && currentSlug === null,
-    href: `/${mesa}?ver=carta`,
+    href: `/${mesa}?ver=carta${langQuery}`,
   };
+
+  /* Cambiar de idioma conserva DÓNDE estabas: se reconstruye la misma URL con otro `lang`.
+     Mandar a la raíz al cambiar obligaría a rehacer toda la navegación, que es justo lo que
+     hace que nadie use el selector. */
+  const langs = idiomas.map((code) => {
+    const partes = [
+      currentSlug ? `cat=${encodeURIComponent(currentSlug)}` : null,
+      entrado || currentSlug ? "ver=carta" : null,
+      code === porDefecto ? null : `lang=${code}`,
+    ].filter(Boolean);
+    return {
+      code,
+      label: LANG_LABELS[code],
+      href: partes.length > 0 ? `/${mesa}?${partes.join("&")}` : `/${mesa}`,
+      active: code === lang,
+    };
+  });
 
   // PEDIR EXIGE HABER ESCANEADO EL QR DE ESTA MESA. La cookie la fija `/m/{token}` (ver
   // `lib/mesa-cookie.ts`) y aquí se comprueba que la mesa que designa es de ESTE cliente y
@@ -125,6 +158,7 @@ export default async function MenuPage({
       locale={settings?.locale ?? "es"}
       currency={settings?.currency ?? "EUR"}
       canOrder={canOrder}
+      strings={strings(lang)}
     >
       <Theme
         tenantSlug={tenant.slug}
@@ -133,6 +167,8 @@ export default async function MenuPage({
         branding={branding}
         view={view}
         welcome={welcome}
+        langs={langs}
+        strings={strings(lang)}
       />
       <CartBar />
     </CartProvider>

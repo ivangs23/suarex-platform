@@ -8,7 +8,15 @@ import type { MenuTheme } from "./types";
  * CSS; recibe el MISMO contrato de props que el resto y conserva los `data-testid`
  * compartidos.
  */
-export const ManuelaTheme: MenuTheme = ({ businessName, mesa, branding, view, welcome }) => {
+export const ManuelaTheme: MenuTheme = ({
+  businessName,
+  mesa,
+  branding,
+  view,
+  welcome,
+  langs,
+  strings: t,
+}) => {
   /* PANTALLA DE BIENVENIDA: un paso propio, no una cabecera que se desplaza. Su carta real
      arranca así y solo al tocar entra a los productos. */
   if (welcome.active) {
@@ -33,11 +41,28 @@ export const ManuelaTheme: MenuTheme = ({ businessName, mesa, branding, view, we
               {businessName}
             </span>
             <span className={styles.mesa} data-testid="mesa">
-              Mesa {mesa}
+              {t.table} {mesa}
             </span>
-            <span className={styles.enter}>Toca para empezar</span>
+            <span className={styles.enter}>{t.enter}</span>
           </span>
         </a>
+        {langs.length > 1 ? (
+          <nav className={styles.langs} data-testid="lang-switch" aria-label="Idioma">
+            {langs.map((lang) => (
+              <a
+                key={lang.code}
+                className={styles.lang}
+                href={lang.href}
+                hrefLang={lang.code}
+                data-testid="lang-option"
+                data-lang={lang.code}
+                aria-current={lang.active ? "true" : undefined}
+              >
+                {lang.label}
+              </a>
+            ))}
+          </nav>
+        ) : null}
       </main>
     );
   }
@@ -53,9 +78,26 @@ export const ManuelaTheme: MenuTheme = ({ businessName, mesa, branding, view, we
           <img className={styles.topbarLogo} src="/brands/manuela-logo.png" alt={businessName} />
         </a>
         <span className={styles.mesa} data-testid="mesa">
-          Mesa {mesa}
+          {t.table} {mesa}
         </span>
       </header>
+      {langs.length > 1 ? (
+        <nav className={styles.langs} data-testid="lang-switch" aria-label="Idioma">
+          {langs.map((lang) => (
+            <a
+              key={lang.code}
+              className={styles.lang}
+              href={lang.href}
+              hrefLang={lang.code}
+              data-testid="lang-option"
+              data-lang={lang.code}
+              aria-current={lang.active ? "true" : undefined}
+            >
+              {lang.label}
+            </a>
+          ))}
+        </nav>
+      ) : null}
 
       <div className={styles.inner}>
         <p data-testid="product-count" hidden>
@@ -67,9 +109,9 @@ export const ManuelaTheme: MenuTheme = ({ businessName, mesa, branding, view, we
         </h1>
 
         {view.currentName ? (
-          <nav className={styles.nav}>
+          <nav className={styles.nav} data-testid="breadcrumb">
             <a className={styles.back} href={view.rootHref}>
-              ← Explorar otras categorías
+              {t.backToCategories}
             </a>
             <p className={styles.crumbs}>
               {view.breadcrumb.map((crumb) => (
@@ -81,7 +123,7 @@ export const ManuelaTheme: MenuTheme = ({ businessName, mesa, branding, view, we
             </p>
           </nav>
         ) : (
-          <p className={styles.lead}>¿Qué te apetece hoy?</p>
+          <p className={styles.lead}>{t.explore}</p>
         )}
 
         {view.children.length > 0 ? (
@@ -107,7 +149,7 @@ export const ManuelaTheme: MenuTheme = ({ businessName, mesa, branding, view, we
                   ) : null}
                   <span className={styles.cardName}>{node.name}</span>
                   <span className={styles.cardCount}>
-                    {node.productCount} {node.productCount === 1 ? "plato" : "platos"}
+                    {node.productCount} {node.productCount === 1 ? t.dish : t.dishes}
                   </span>
                 </a>
               </li>
@@ -145,7 +187,7 @@ export const ManuelaTheme: MenuTheme = ({ businessName, mesa, branding, view, we
         ) : null}
 
         {view.children.length === 0 && view.products.length === 0 ? (
-          <p className={styles.empty}>La carta todavía no tiene productos.</p>
+          <p className={styles.empty}>{t.emptyMenu}</p>
         ) : null}
       </div>
     </main>

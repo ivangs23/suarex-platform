@@ -32,6 +32,7 @@ export function CartPanel({ onClose }: { onClose: () => void }) {
   }, [onClose]);
 
   if (!cart) return null;
+  const t = cart.strings;
 
   return (
     <div className={styles.overlay} data-testid="cart-panel">
@@ -39,7 +40,7 @@ export function CartPanel({ onClose }: { onClose: () => void }) {
         type="button"
         className={styles.backdrop}
         data-testid="cart-panel-backdrop"
-        aria-label="Cerrar"
+        aria-label={t.close}
         onClick={onClose}
       />
       <div
@@ -52,13 +53,13 @@ export function CartPanel({ onClose }: { onClose: () => void }) {
       >
         <header className={styles.sheetHead}>
           <h2 className={styles.sheetTitle} id={tituloId}>
-            Tu pedido
+            {t.yourOrder}
           </h2>
           <button
             type="button"
             className={styles.sheetClose}
             data-testid="cart-panel-close"
-            aria-label="Cerrar"
+            aria-label={t.close}
             onClick={onClose}
           >
             ✕
@@ -68,7 +69,7 @@ export function CartPanel({ onClose }: { onClose: () => void }) {
         <div className={styles.sheetBody}>
           {cart.lines.length === 0 ? (
             <p className={styles.sheetNote} data-testid="cart-empty">
-              Todavía no has añadido nada.
+              {t.cartEmpty}
             </p>
           ) : (
             <ul className={styles.lines}>
@@ -130,7 +131,7 @@ export function CartPanel({ onClose }: { onClose: () => void }) {
 
         <footer className={styles.sheetFoot}>
           <p className={styles.sheetTotal}>
-            <span className={styles.sheetTotalLabel}>Total</span>
+            <span className={styles.sheetTotalLabel}>{t.total}</span>
             <span data-testid="cart-panel-total">{cart.totalLabel}</span>
           </p>
           {cart.error ? (
@@ -145,7 +146,7 @@ export function CartPanel({ onClose }: { onClose: () => void }) {
             disabled={cart.enviando || cart.totalCents === 0}
             onClick={cart.checkout}
           >
-            {cart.enviando ? "Enviando…" : "Pagar"}
+            {cart.enviando ? t.sending : t.pay}
           </button>
         </footer>
       </div>

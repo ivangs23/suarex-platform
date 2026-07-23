@@ -1,7 +1,13 @@
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {},
+  // El mismo alias `@/` que usa Next (ver tsconfig): sin esto, cualquier módulo bajo prueba
+  // que importe `@/lib/...` -- la vista de la carta importa el idioma -- no resuelve en vitest.
+  resolve: {
+    alias: { "@": fileURLToPath(new URL("./", import.meta.url)) },
+  },
   /* El tsconfig de Next usa `jsx: "preserve"` (lo transforma el compilador de Next, no
      TypeScript), y el transformador de Vite lo respeta: sin esto, un test que importe un
      `.tsx` falla con "the content contains invalid JS syntax". Se fija aquí y no en el

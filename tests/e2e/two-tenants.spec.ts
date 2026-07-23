@@ -33,7 +33,7 @@ test("garum sirve su catálogo, su marca y su tema", async ({ page }) => {
   await tintos.getByRole("link").click();
   await expect(page.getByTestId("product").filter({ hasText: "Ribera del Duero" })).toHaveCount(1);
   // El rastro de vuelta cubre el nivel intermedio del que venimos.
-  await expect(page.locator("nav")).toContainText("Vinos");
+  await expect(page.getByTestId("breadcrumb")).toContainText("Vinos");
 });
 
 test("manuela sirve un catálogo, una marca y un tema distintos", async ({ page }) => {

@@ -343,3 +343,29 @@
   object-fit: cover;
   border-radius: 1rem;
 }
+
+/* Selector de idioma. Enlaces normales, no un desplegable: en una mesa se toca una vez, y
+   un <select> obliga a abrir, elegir y confirmar. */
+.langs {
+  display: flex;
+  gap: 0.35rem;
+  justify-content: center;
+  padding: 0.6rem 0 0;
+}
+
+.lang {
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-decoration: none;
+  color: inherit;
+  opacity: 0.6;
+}
+
+.lang[aria-current="true"] {
+  background: var(--color-primary, #7b4f96);
+  color: var(--color-bg, #ffffff);
+  opacity: 1;
+}

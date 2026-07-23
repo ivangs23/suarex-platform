@@ -37,6 +37,7 @@ export function ProductSheet({ product, onClose }: { product: MenuProduct; onClo
   }, [onClose]);
 
   if (!cart) return null;
+  const t = cart.strings;
 
   const extrasCents = extraIds.reduce((suma, id) => {
     const extra = product.extras.find((e) => e.id === id);
@@ -59,7 +60,7 @@ export function ProductSheet({ product, onClose }: { product: MenuProduct; onClo
         type="button"
         className={styles.backdrop}
         data-testid="sheet-backdrop"
-        aria-label="Cerrar"
+        aria-label={t.close}
         onClick={onClose}
       />
       <div
@@ -78,7 +79,7 @@ export function ProductSheet({ product, onClose }: { product: MenuProduct; onClo
             type="button"
             className={styles.sheetClose}
             data-testid="sheet-close"
-            aria-label="Cerrar"
+            aria-label={t.close}
             onClick={onClose}
           >
             ✕
@@ -91,7 +92,7 @@ export function ProductSheet({ product, onClose }: { product: MenuProduct; onClo
           ) : null}
 
           <section>
-            <h3 className={styles.sheetSection}>Alérgenos e información</h3>
+            <h3 className={styles.sheetSection}>{t.allergensTitle}</h3>
             {product.allergens.length > 0 ? (
               <ul className={styles.allergens} data-testid="sheet-allergens">
                 {product.allergens.map((allergen) => (
@@ -102,14 +103,14 @@ export function ProductSheet({ product, onClose }: { product: MenuProduct; onClo
               </ul>
             ) : (
               <p className={styles.sheetNote} data-testid="sheet-allergens-empty">
-                No hay alérgenos declarados para este plato.
+                {t.allergensEmpty}
               </p>
             )}
           </section>
 
           {product.extras.length > 0 ? (
             <section>
-              <h3 className={styles.sheetSection}>Personaliza tu pedido</h3>
+              <h3 className={styles.sheetSection}>{t.optionsTitle}</h3>
               <ul className={styles.options}>
                 {product.extras.map((extra) => (
                   <li key={extra.id}>
@@ -133,7 +134,7 @@ export function ProductSheet({ product, onClose }: { product: MenuProduct; onClo
           ) : null}
 
           <section>
-            <h3 className={styles.sheetSection}>Notas especiales</h3>
+            <h3 className={styles.sheetSection}>{t.notesTitle}</h3>
             <textarea
               className={styles.notes}
               data-testid="sheet-notes"
@@ -141,13 +142,11 @@ export function ProductSheet({ product, onClose }: { product: MenuProduct; onClo
               maxLength={280}
               value={notes}
               onChange={(evento) => setNotes(evento.target.value)}
-              aria-label="Notas para la cocina"
+              aria-label={t.notesLabel}
             />
             {/* La carta no puede responder de una alergia grave: lo dice y remite a alguien
                 que sí puede. */}
-            <p className={styles.sheetNote}>
-              Si tienes alguna alergia severa no listada, contacta con el personal antes de pedir.
-            </p>
+            <p className={styles.sheetNote}>{t.allergensWarning}</p>
           </section>
         </div>
 
@@ -177,7 +176,7 @@ export function ProductSheet({ product, onClose }: { product: MenuProduct; onClo
           </div>
 
           <p className={styles.sheetTotal}>
-            <span className={styles.sheetTotalLabel}>Precio total</span>
+            <span className={styles.sheetTotalLabel}>{t.totalPrice}</span>
             <span data-testid="sheet-total">{cart.formatCents(totalCents)}</span>
           </p>
 
@@ -190,7 +189,7 @@ export function ProductSheet({ product, onClose }: { product: MenuProduct; onClo
               onClose();
             }}
           >
-            Añadir al pedido
+            {t.addToOrder}
           </button>
         </footer>
       </div>

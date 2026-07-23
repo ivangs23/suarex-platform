@@ -1,5 +1,6 @@
 import type { Category, Product } from "@suarex/db";
 import { eurosToCents, formatCents } from "@suarex/domain";
+import { type Lang, pickI18n } from "@/lib/i18n";
 
 /** Una categoría navegable del nivel actual, con el total de productos de TODO su subárbol. */
 export type MenuNode = {
@@ -82,8 +83,8 @@ export type MenuView = {
   totalProducts: number;
 };
 
-function categoryName(category: Category): string {
-  return category.nameI18n.es ?? category.slug;
+function categoryName(category: Category, lang: Lang): string {
+  return pickI18n(category.nameI18n, lang) || category.slug;
 }
 
 /**
@@ -116,6 +117,9 @@ export function buildMenuView(params: {
   /** Catálogo de alérgenos del tenant (globales de la UE + propios), para resolver los ids
    * que trae cada producto. Sin él, la ficha no declara ninguno. */
   allergens?: { id: number; nameI18n: Record<string, string>; icon: string | null }[];
+  /** Idioma en el que se pinta la carta. Los enlaces lo arrastran para no perderlo al
+   * navegar de nivel. */
+  lang?: Lang;
 }): MenuView {
   const {
     categories,
@@ -126,7 +130,14 @@ export function buildMenuView(params: {
     currency = "EUR",
     storageOrigin = "",
     allergens = [],
+    lang = "es",
   } = params;
+
+  /* El idioma viaja en TODOS los enlaces de la carta. Sin esto, entrar en una categoría
+     devolvía al comensal al español a mitad de camino: el nivel es una carga de página nueva
+     y la URL es lo único que lo recuerda. Se omite en el idioma de partida para no ensuciar
+     los enlaces del caso normal. */
+  const langQuery = lang === "es" ? "" : `&lang=${lang}`;
 
   const allergensById = new Map(allergens.map((allergen) => [allergen.id, allergen]));
 
@@ -172,7 +183,8 @@ export function buildMenuView(params: {
     ? (categories.find((category) => category.slug === currentSlug) ?? null)
     : null;
 
-  const hrefFor = (slug: string): string => `${basePath}?cat=${encodeURIComponent(slug)}`;
+  const hrefFor = (slug: string): string =>
+    `${basePath}?cat=${encodeURIComponent(slug)}${langQuery}`;
 
   const breadcrumb: MenuCrumb[] = [];
   if (current) {
@@ -183,7 +195,7 @@ export function buildMenuView(params: {
       const ancestor = byId.get(ancestorId);
       if (!ancestor) break;
       seen.add(ancestor.id);
-      breadcrumb.unshift({ name: categoryName(ancestor), href: hrefFor(ancestor.slug) });
+      breadcrumb.unshift({ name: categoryName(ancestor, lang), href: hrefFor(ancestor.slug) });
       ancestorId = ancestor.parentId;
     }
   }
@@ -191,7 +203,7 @@ export function buildMenuView(params: {
   const children = (childrenByParent.get(current?.id ?? null) ?? []).map((category) => ({
     id: category.id,
     slug: category.slug,
-    name: categoryName(category),
+    name: categoryName(category, lang),
     icon: category.icon,
     imageUrl:
       storageOrigin && category.imagePath
@@ -204,26 +216,28 @@ export function buildMenuView(params: {
   const ownProducts = current ? (productsByCategory.get(current.id) ?? []) : [];
 
   return {
-    currentName: current ? categoryName(current) : null,
+    currentName: current ? categoryName(current, lang) : null,
     breadcrumb,
-    rootHref: `${basePath}?ver=carta`,
+    rootHref: `${basePath}?ver=carta${langQuery}`,
     children,
     products: ownProducts.map((product) => ({
       id: product.id,
-      name: product.nameI18n.es ?? "",
+      name: pickI18n(product.nameI18n, lang),
       price: product.price,
       priceCents: eurosToCents(product.price),
       priceLabel: formatCents(eurosToCents(product.price), locale, currency),
-      description: product.descriptionI18n.es ?? "",
+      description: pickI18n(product.descriptionI18n, lang),
       // Un id que no resuelve se descarta en vez de pintarse en crudo: un número suelto en
       // la ficha no le dice nada al comensal.
       allergens: product.allergenIds.flatMap((id) => {
         const allergen = allergensById.get(id);
-        return allergen ? [{ id, name: allergen.nameI18n.es ?? "", icon: allergen.icon }] : [];
+        return allergen
+          ? [{ id, name: pickI18n(allergen.nameI18n, lang), icon: allergen.icon }]
+          : [];
       }),
       extras: product.extras.map((extra) => ({
         id: extra.id,
-        name: extra.nameI18n.es ?? "",
+        name: pickI18n(extra.nameI18n, lang),
         priceCents: eurosToCents(extra.price),
         priceLabel: formatCents(eurosToCents(extra.price), locale, currency),
       })),

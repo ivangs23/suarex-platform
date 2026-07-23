@@ -31,6 +31,7 @@ export function AddToCart({ product }: { product: MenuProduct }) {
   if (!cart?.canOrder) return null;
 
   const unidades = cart.unitsOf(product.id);
+  const t = cart.strings;
 
   return (
     <div className={styles.add}>
@@ -69,7 +70,7 @@ export function AddToCart({ product }: { product: MenuProduct }) {
         data-product-id={product.id}
         onClick={() => setFichaAbierta(true)}
       >
-        {unidades > 0 ? "Personalizar" : "Añadir / Personalizar"}
+        {unidades > 0 ? t.customize : t.addCustomize}
       </button>
 
       {fichaAbierta ? (

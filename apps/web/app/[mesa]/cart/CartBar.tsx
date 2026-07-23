@@ -41,7 +41,7 @@ export function CartBar() {
             data-testid="cart-open"
             onClick={() => setPanelAbierto(true)}
           >
-            Ver pedido
+            {cart.strings.viewOrder}
             <span className={styles.badge} data-testid="cart-units-total">
               {cart.totalUnits}
             </span>

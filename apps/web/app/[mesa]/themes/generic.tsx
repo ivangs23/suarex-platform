@@ -16,7 +16,15 @@ import type { MenuTheme } from "./types";
  * contrato compartido por TODOS los temas -- la suite e2e los usa para verificar el
  * aislamiento entre tenants, así que un tema nuevo debe conservarlos.
  */
-export const GenericTheme: MenuTheme = ({ businessName, mesa, branding, view, welcome }) => {
+export const GenericTheme: MenuTheme = ({
+  businessName,
+  mesa,
+  branding,
+  view,
+  welcome,
+  langs,
+  strings: t,
+}) => {
   /* PANTALLA DE BIENVENIDA: un paso del flujo, así que la tienen TODOS los clientes, también
      los que no quieren tema propio. Aquí se pinta sola con la marca: la foto de `heroUrl` si
      la han subido, y si no el color de fondo del cliente. */
@@ -35,11 +43,28 @@ export const GenericTheme: MenuTheme = ({ businessName, mesa, branding, view, we
               {businessName}
             </span>
             <span className={styles.mesa} data-testid="mesa">
-              Mesa {mesa}
+              {t.table} {mesa}
             </span>
-            <span className={styles.enter}>Toca para empezar</span>
+            <span className={styles.enter}>{t.enter}</span>
           </span>
         </a>
+        {langs.length > 1 ? (
+          <nav className={styles.langs} data-testid="lang-switch" aria-label="Idioma">
+            {langs.map((lang) => (
+              <a
+                key={lang.code}
+                className={styles.lang}
+                href={lang.href}
+                hrefLang={lang.code}
+                data-testid="lang-option"
+                data-lang={lang.code}
+                aria-current={lang.active ? "true" : undefined}
+              >
+                {lang.label}
+              </a>
+            ))}
+          </nav>
+        ) : null}
       </main>
     );
   }
@@ -57,18 +82,35 @@ export const GenericTheme: MenuTheme = ({ businessName, mesa, branding, view, we
             {businessName}
           </h1>
           <p className={styles.mesa} data-testid="mesa">
-            Mesa {mesa}
+            {t.table} {mesa}
           </p>
         </header>
+        {langs.length > 1 ? (
+          <nav className={styles.langs} data-testid="lang-switch" aria-label="Idioma">
+            {langs.map((lang) => (
+              <a
+                key={lang.code}
+                className={styles.lang}
+                href={lang.href}
+                hrefLang={lang.code}
+                data-testid="lang-option"
+                data-lang={lang.code}
+                aria-current={lang.active ? "true" : undefined}
+              >
+                {lang.label}
+              </a>
+            ))}
+          </nav>
+        ) : null}
 
         <p data-testid="product-count" hidden>
           {view.totalProducts}
         </p>
 
         {view.currentName ? (
-          <nav className={styles.nav}>
+          <nav className={styles.nav} data-testid="breadcrumb">
             <a className={styles.back} href={view.rootHref}>
-              ← Explorar otras categorías
+              {t.backToCategories}
             </a>
             <p className={styles.crumbs}>
               {view.breadcrumb.map((crumb) => (
@@ -80,7 +122,7 @@ export const GenericTheme: MenuTheme = ({ businessName, mesa, branding, view, we
             </p>
           </nav>
         ) : (
-          <p className={styles.lead}>Selecciona una categoría para empezar</p>
+          <p className={styles.lead}>{t.explore}</p>
         )}
 
         {view.children.length > 0 ? (
@@ -97,7 +139,7 @@ export const GenericTheme: MenuTheme = ({ businessName, mesa, branding, view, we
                   ) : null}
                   <span className={styles.cardName}>{node.name}</span>
                   <span className={styles.cardCount}>
-                    {node.productCount} {node.productCount === 1 ? "plato" : "platos"}
+                    {node.productCount} {node.productCount === 1 ? t.dish : t.dishes}
                   </span>
                 </a>
               </li>
@@ -135,7 +177,7 @@ export const GenericTheme: MenuTheme = ({ businessName, mesa, branding, view, we
         ) : null}
 
         {view.children.length === 0 && view.products.length === 0 ? (
-          <p className={styles.empty}>La carta todavía no tiene productos.</p>
+          <p className={styles.empty}>{t.emptyMenu}</p>
         ) : null}
       </div>
     </main>

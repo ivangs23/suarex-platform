@@ -11,7 +11,15 @@ import type { MenuTheme } from "./types";
  * `branding` -- un tema a medida es precisamente eso. Aun así recibe el MISMO contrato de
  * props que el resto (`MenuThemeProps`) y conserva los `data-testid` compartidos.
  */
-export const GarumTheme: MenuTheme = ({ businessName, mesa, branding, view, welcome }) => {
+export const GarumTheme: MenuTheme = ({
+  businessName,
+  mesa,
+  branding,
+  view,
+  welcome,
+  langs,
+  strings: t,
+}) => {
   /* PANTALLA DE BIENVENIDA: el paso previo a la carta, igual que en cualquier otro tema. Lo
      que cambia aquí es cómo se ve -- su verde, su patrón, su logo -- y la foto, que sale del
      ajuste `heroUrl` del cliente. */
@@ -29,11 +37,28 @@ export const GarumTheme: MenuTheme = ({ businessName, mesa, branding, view, welc
             </span>
             <span className={styles.heroLead}>Vinoteca &amp; cocina de producto</span>
             <span className={styles.mesa} data-testid="mesa">
-              Mesa {mesa}
+              {t.table} {mesa}
             </span>
-            <span className={styles.enter}>Toca para empezar</span>
+            <span className={styles.enter}>{t.enter}</span>
           </span>
         </a>
+        {langs.length > 1 ? (
+          <nav className={styles.langs} data-testid="lang-switch" aria-label="Idioma">
+            {langs.map((lang) => (
+              <a
+                key={lang.code}
+                className={styles.lang}
+                href={lang.href}
+                hrefLang={lang.code}
+                data-testid="lang-option"
+                data-lang={lang.code}
+                aria-current={lang.active ? "true" : undefined}
+              >
+                {lang.label}
+              </a>
+            ))}
+          </nav>
+        ) : null}
       </main>
     );
   }
@@ -45,6 +70,23 @@ export const GarumTheme: MenuTheme = ({ businessName, mesa, branding, view, welc
           se sirve estático: <img> a propósito, sin optimizar. */}
         <img className={styles.logo} src="/brands/garum-logo.png" alt={businessName} />
       </header>
+      {langs.length > 1 ? (
+        <nav className={styles.langs} data-testid="lang-switch" aria-label="Idioma">
+          {langs.map((lang) => (
+            <a
+              key={lang.code}
+              className={styles.lang}
+              href={lang.href}
+              hrefLang={lang.code}
+              data-testid="lang-option"
+              data-lang={lang.code}
+              aria-current={lang.active ? "true" : undefined}
+            >
+              {lang.label}
+            </a>
+          ))}
+        </nav>
+      ) : null}
 
       <div className={styles.inner}>
         <section className={styles.hero}>
@@ -53,7 +95,7 @@ export const GarumTheme: MenuTheme = ({ businessName, mesa, branding, view, welc
           </h1>
           <p className={styles.heroLead}>Vinoteca &amp; cocina de producto</p>
           <p className={styles.mesa} data-testid="mesa">
-            Mesa {mesa}
+            {t.table} {mesa}
           </p>
         </section>
 
@@ -62,9 +104,9 @@ export const GarumTheme: MenuTheme = ({ businessName, mesa, branding, view, welc
         </p>
 
         {view.currentName ? (
-          <nav className={styles.nav}>
+          <nav className={styles.nav} data-testid="breadcrumb">
             <a className={styles.back} href={view.rootHref}>
-              ← Explorar otras categorías
+              {t.backToCategories}
             </a>
             <p className={styles.crumbs}>
               {view.breadcrumb.map((crumb) => (
@@ -91,7 +133,7 @@ export const GarumTheme: MenuTheme = ({ businessName, mesa, branding, view, welc
                   ) : null}
                   <span className={styles.cardName}>{node.name}</span>
                   <span className={styles.cardCount}>
-                    {node.productCount} {node.productCount === 1 ? "plato" : "platos"}
+                    {node.productCount} {node.productCount === 1 ? t.dish : t.dishes}
                   </span>
                 </a>
               </li>
@@ -129,7 +171,7 @@ export const GarumTheme: MenuTheme = ({ businessName, mesa, branding, view, welc
         ) : null}
 
         {view.children.length === 0 && view.products.length === 0 ? (
-          <p className={styles.empty}>La carta todavía no tiene productos.</p>
+          <p className={styles.empty}>{t.emptyMenu}</p>
         ) : null}
       </div>
     </main>

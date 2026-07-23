@@ -10,6 +10,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import type { Strings } from "@/lib/i18n";
 
 /** Una extra elegible de un producto, ya en céntimos. */
 export type CartExtra = { id: string; name: string; priceLabel: string; priceCents: number };
@@ -58,6 +59,9 @@ type CartState = {
   removeOne: (productId: string) => void;
   setLineQuantity: (lineId: string, quantity: number) => void;
   formatCents: (cents: number) => string;
+  /** Textos de la plataforma en el idioma elegido. El carrito es compartido, así que sus
+   *  cadenas tampoco pueden quedarse escritas en español a pelo. */
+  strings: Strings;
   checkout: () => void;
 };
 
@@ -95,12 +99,14 @@ export function CartProvider({
   locale,
   currency,
   canOrder,
+  strings,
 }: {
   children: ReactNode;
   locale: string;
   currency: string;
   /** Solo se puede pedir habiendo escaneado el QR de la mesa (ver `lib/mesa-cookie.ts`). */
   canOrder: boolean;
+  strings: Strings;
 }) {
   const [lines, setLines] = useState<CartLine[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -260,17 +266,17 @@ export function CartProvider({
 
       const payload = (await response.json()) as { error?: string; publicToken?: string };
       if (!response.ok || !payload.publicToken) {
-        setError(payload.error ?? "No se pudo crear el pedido");
+        setError(payload.error ?? strings.orderError);
         setEnviando(false);
         return;
       }
 
       window.location.href = `/pedido/${payload.publicToken}`;
     } catch {
-      setError("No se pudo crear el pedido");
+      setError(strings.orderError);
       setEnviando(false);
     }
-  }, [lines]);
+  }, [lines, strings]);
 
   const value = useMemo<CartState>(
     () => ({
@@ -287,6 +293,7 @@ export function CartProvider({
       removeOne,
       setLineQuantity,
       formatCents: (cents: number) => formatCents(cents, locale, currency),
+      strings,
       checkout,
     }),
     [
@@ -303,6 +310,7 @@ export function CartProvider({
       addOne,
       removeOne,
       setLineQuantity,
+      strings,
       checkout,
     ],
   );

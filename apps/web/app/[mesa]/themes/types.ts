@@ -1,6 +1,10 @@
 import type { Branding } from "@suarex/config";
 import type { ReactNode } from "react";
+import type { Strings } from "@/lib/i18n";
 import type { MenuView } from "../menu-view";
+
+/** Una opción del selector de idioma, ya resuelta a enlace. */
+export type MenuLang = { code: string; label: string; href: string; active: boolean };
 
 /**
  * Contrato ÚNICO que reciben todos los temas de la carta.
@@ -44,6 +48,26 @@ export type MenuThemeProps = {
    * `active` es `false` en cuanto hay categoría elegida o el comensal ya entró.
    */
   welcome: { active: boolean; href: string };
+  /**
+   * Idiomas en los que ESTE cliente tiene carta, con el enlace para cambiar a cada uno.
+   *
+   * Se deducen de sus datos (ver `availableLangs`), no de un ajuste: ofrecer "EN" para acabar
+   * enseñando la carta en español es peor que no ofrecerlo. Un cliente con un solo idioma
+   * recibe un único elemento, y el tema no pinta selector.
+   *
+   * Cambiar de idioma es un paso de URL, como el nivel o la bienvenida: funciona sin
+   * JavaScript y un enlace compartido enseña lo mismo a quien lo abra.
+   */
+  langs: MenuLang[];
+  /**
+   * Textos que pone la PLATAFORMA, ya en el idioma elegido ("Toca para empezar", "platos",
+   * "Explorar otras categorías"...). Un tema nunca escribe estas cadenas a pelo: si lo
+   * hiciera, su carta se quedaría en español al cambiar de idioma -- y sería otra vez una
+   * diferencia de funcionalidad entre clientes según quién escribió su tema.
+   *
+   * Lo que describe la COMIDA no está aquí: sale del catálogo del cliente.
+   */
+  strings: Strings;
 };
 
 export type MenuTheme = (props: MenuThemeProps) => ReactNode;

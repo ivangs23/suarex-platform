@@ -1,6 +1,7 @@
 import { DEFAULT_BRANDING } from "@suarex/config";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { strings } from "@/lib/i18n";
 import { CartProvider } from "../cart/CartProvider";
 import { THEMES } from "./index";
 import type { MenuThemeProps, MenuView } from "./types";
@@ -72,6 +73,11 @@ function props(overrides: Partial<MenuThemeProps>): MenuThemeProps {
     branding: DEFAULT_BRANDING,
     view: VIEW_RAIZ,
     welcome: { active: false, href: "/5?ver=carta" },
+    langs: [
+      { code: "es", label: "ES", href: "/5?ver=carta", active: true },
+      { code: "en", label: "EN", href: "/5?ver=carta&lang=en", active: false },
+    ],
+    strings: strings("es"),
     ...overrides,
   };
 }
@@ -91,7 +97,7 @@ describe.each(nombres)("tema %s", (nombre) => {
   // proveedor, igual que hace la página, o el botón de añadir no tendría de dónde salir.
   const render = (overrides: Partial<MenuThemeProps>, canOrder = true) =>
     renderToStaticMarkup(
-      <CartProvider locale="es" currency="EUR" canOrder={canOrder}>
+      <CartProvider locale="es" currency="EUR" canOrder={canOrder} strings={strings("es")}>
         {Theme(props(overrides))}
       </CartProvider>,
     );
@@ -173,6 +179,49 @@ describe.each(nombres)("tema %s", (nombre) => {
 
     expect(html).toContain('data-testid="product"');
     expect(html).not.toContain('data-testid="open-product-sheet"');
+  });
+
+  it("ofrece cambiar de idioma cuando el cliente tiene carta en más de uno", () => {
+    // Un guiri en la terraza no puede depender de qué tema le tocó: si el suyo se olvidó del
+    // selector, su cliente pierde la traducción que ya pagó al migrar el catálogo.
+    const html = render({ view: VIEW_HOJA });
+
+    expect(html).toContain('data-testid="lang-switch"');
+    expect(html).toContain("/5?ver=carta&amp;lang=en");
+  });
+
+  it("también deja cambiar de idioma en la bienvenida", () => {
+    // Es la PRIMERA pantalla: sin selector aquí, quien no lee español tiene que entrar a
+    // ciegas para poder cambiarlo.
+    const html = render({ welcome: { active: true, href: "/5?ver=carta" } });
+
+    expect(html).toContain('data-testid="lang-switch"');
+  });
+
+  it("con un solo idioma no pinta selector", () => {
+    // Un botón "ES" solitario que no lleva a ninguna parte es ruido en la carta.
+    const html = render({
+      view: VIEW_HOJA,
+      langs: [{ code: "es", label: "ES", href: "/5?ver=carta", active: true }],
+    });
+
+    expect(html).not.toContain('data-testid="lang-switch"');
+  });
+
+  it("no escribe en español los textos de la plataforma", () => {
+    // Un tema que escriba "Explorar otras categorías" a pelo se queda en español al cambiar
+    // de idioma, y eso vuelve a ser una diferencia de funcionalidad según quién lo escribió.
+    const html = render({ view: VIEW_HOJA, strings: strings("en") });
+
+    expect(html).toContain("Browse other categories");
+    expect(html).not.toContain("Explorar otras categorías");
+  });
+
+  it("traduce también la bienvenida y el recuento de platos", () => {
+    expect(render({ view: VIEW_RAIZ, strings: strings("en") })).toContain("dishes");
+    expect(
+      render({ welcome: { active: true, href: "/5?ver=carta" }, strings: strings("en") }),
+    ).toContain("Tap to start");
   });
 
   it("ofrece la vuelta al primer nivel desde dentro de una categoría", () => {
