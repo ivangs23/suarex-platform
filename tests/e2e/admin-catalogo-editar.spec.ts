@@ -195,3 +195,82 @@ test("una búsqueda sin resultados lo dice, en vez de dejar la página vacía", 
   // El árbol sigue ahí para poder cambiar de filtro sin volver atrás.
   await expect(page.getByTestId("tree-category").first()).toBeVisible();
 });
+
+/** PNG de 1x1 válido y mínimo: ejerce el camino real de subida, no un campo vacío. */
+const PIXEL_PNG_BASE64 =
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+
+test.describe("foto de producto", () => {
+  /**
+   * Deja el producto SIN foto. Se usa antes y después del test.
+   *
+   * Después, para no contaminar al resto de la suite. Y ANTES, porque una ejecución que
+   * reventara a mitad dejaría la foto puesta y la siguiente empezaría comprobando justo lo
+   * contrario -- ya pasó al escribir este test. Un test que solo limpia al final asume que
+   * el anterior terminó bien.
+   */
+  async function quitarFoto(page: Page): Promise<void> {
+    await page.goto("http://garum.localhost:3000/admin/catalogo?cat=tintos");
+    const fila = filaProducto(page, "Ribera del Duero");
+    if ((await fila.getByTestId("admin-product-image").count()) === 0) return;
+
+    await fila.getByText("Editar producto").click();
+    const f = fila.getByTestId("product-edit-form");
+    await f.getByTestId("remove-image").check();
+    await f.getByRole("button", { name: "Guardar cambios" }).click();
+    await expect(
+      filaProducto(page, "Ribera del Duero").getByTestId("admin-product-image"),
+    ).toHaveCount(0, { timeout: 15_000 });
+  }
+
+  test.beforeEach(async ({ page }) => {
+    await loginComoOwner(page);
+    await quitarFoto(page);
+  });
+
+  test.afterEach(async ({ page }) => {
+    await quitarFoto(page);
+  });
+
+  test("un owner sube la foto de un producto y luego la quita", async ({ page }) => {
+    // Subir ya funcionaba; QUITAR no existía: una foto puesta por error era para siempre,
+    // porque el formulario solo sabía sustituirla por otra.
+    await page.goto("http://garum.localhost:3000/admin/catalogo?cat=tintos");
+
+    const fila = filaProducto(page, "Ribera del Duero");
+    await fila.getByText("Editar producto").click();
+    const formulario = fila.getByTestId("product-edit-form");
+
+    // Sin foto todavía: ni vista previa ni casilla de quitar.
+    await expect(formulario.getByTestId("product-edit-current-image")).toHaveCount(0);
+    await expect(formulario.getByTestId("remove-image")).toHaveCount(0);
+
+    await formulario.getByLabel("Sustituir foto").setInputFiles({
+      name: "vino.png",
+      mimeType: "image/png",
+      buffer: Buffer.from(PIXEL_PNG_BASE64, "base64"),
+    });
+    await formulario.getByRole("button", { name: "Guardar cambios" }).click();
+
+    // La miniatura aparece en el listado: confirma que la subida no falló en silencio.
+    await expect(
+      filaProducto(page, "Ribera del Duero").getByTestId("admin-product-image"),
+    ).toBeVisible({ timeout: 15_000 });
+
+    // Y ahora se quita. Se recarga primero: tras guardar, el panel se revalida y el
+    // `<details>` vuelve a cerrarse, así que operar sobre el DOM anterior compite contra
+    // ese re-render.
+    await page.goto("http://garum.localhost:3000/admin/catalogo?cat=tintos");
+    const conFoto = filaProducto(page, "Ribera del Duero");
+    await conFoto.getByText("Editar producto").click();
+    const form2 = conFoto.getByTestId("product-edit-form");
+    // Con foto, la vista previa está: sustituirla a ciegas sería decidir sin mirar.
+    await expect(form2.getByTestId("product-edit-current-image")).toBeVisible();
+    await form2.getByTestId("remove-image").check();
+    await form2.getByRole("button", { name: "Guardar cambios" }).click();
+
+    await expect(
+      filaProducto(page, "Ribera del Duero").getByTestId("admin-product-image"),
+    ).toHaveCount(0, { timeout: 15_000 });
+  });
+});

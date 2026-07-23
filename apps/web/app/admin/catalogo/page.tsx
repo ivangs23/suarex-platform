@@ -188,6 +188,8 @@ export default async function AdminCatalogoPage({
                         price={product.price}
                         allergenIds={product.allergenIds}
                         allergens={allergenOptions}
+                        imagePath={product.imageUrl}
+                        imageUrl={product.imageUrl ? catalogImageUrl(product.imageUrl) : null}
                       />
                     </details>
 

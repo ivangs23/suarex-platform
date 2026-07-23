@@ -9,6 +9,7 @@ import {
   deleteExtra,
   deleteProduct,
   deleteTenantAllergen,
+  removeProductImage,
   setProductAvailability,
   updateCategory,
   updateProduct,
@@ -125,6 +126,34 @@ async function extractImagePath(tenantId: string, formData: FormData): Promise<s
   return uploadProductImage(tenantId, { bytes, contentType: file.type });
 }
 
+/**
+ * Foto de un producto en una EDICIÓN, con tres estados y no dos:
+ *
+ *   sin fichero y sin marcar "quitar" -> `undefined`, se conserva la actual
+ *   fichero nuevo                     -> se sube y se sustituye
+ *   marcada la casilla "quitar"       -> `null`, se borra
+ *
+ * Sin el tercero, una foto puesta por error era para siempre: el formulario solo sabía
+ * sustituirla por otra. Se borra ADEMÁS el objeto de Storage, porque una fila sin
+ * referencia deja el fichero huérfano ahí para siempre.
+ *
+ * Si llegan las dos cosas -- fichero nuevo y "quitar" marcada -- manda el fichero: el
+ * gesto de elegir una foto es más explícito que una casilla que quizá quedó marcada de
+ * antes.
+ */
+async function extractImagePatch(
+  tenantId: string,
+  formData: FormData,
+  actual: string | null,
+): Promise<string | null | undefined> {
+  const subida = await extractImagePath(tenantId, formData);
+  if (subida !== undefined) return subida;
+
+  if (formData.get("remove_image") !== "on") return undefined;
+  if (actual) await removeProductImage(tenantId, actual);
+  return null;
+}
+
 // ---------------------------------------------------------------- categorías
 
 export const createCategoryAction = managerAction(async (session, formData: FormData) => {
@@ -181,7 +210,15 @@ export const createProductAction = managerAction(async (session, formData: FormD
 export const updateProductAction = managerAction(async (session, formData: FormData) => {
   const productId = requiredString(formData, "product_id");
   const nameEs = optionalString(formData, "name_es");
-  const imagePath = await extractImagePath(session.tenantId, formData);
+  // La ruta actual viaja en un campo oculto para poder borrar el objeto de Storage al
+  // quitar la foto. Es solo una RUTA dentro del bucket, no un secreto -- el bucket es
+  // público en lectura -- y `removeProductImage` comprueba igualmente que cuelgue del
+  // prefijo de ESTE cliente antes de borrar nada.
+  const imagePath = await extractImagePatch(
+    session.tenantId,
+    formData,
+    optionalString(formData, "current_image") ?? null,
+  );
 
   await updateProduct(session.tenantId, productId, {
     categoryId: optionalString(formData, "category_id"),

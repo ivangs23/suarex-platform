@@ -99,3 +99,32 @@ export async function uploadBrandingLogo(
 
   return `${supabaseUrl}/storage/v1/object/public/catalog/${path}`;
 }
+
+/**
+ * Borra una imagen de producto del bucket `catalog`.
+ *
+ * Sin esto, quitar la foto de un producto dejaría el objeto huérfano en Storage para
+ * siempre: nadie lo referencia, nadie lo ve y nadie lo borra nunca. Con un cliente que
+ * corrija fotos a menudo, el bucket crece sin techo y sin forma de saber qué sobra.
+ *
+ * La ruta DEBE colgar de `tenant/{tenantId}/`, y se comprueba aquí. Es la única defensa
+ * real: `catalogBucket()` usa service role, así que un `path` manipulado que apuntara a
+ * otro prefijo borraría la imagen de OTRO cliente. Quien llama pasa el `tenantId` de la
+ * sesión, nunca uno del formulario.
+ *
+ * Un objeto que ya no está no es un error: el fin es que deje de existir, y si otra
+ * ejecución se adelantó, el resultado es el mismo.
+ */
+export async function removeProductImage(tenantId: string, path: string): Promise<void> {
+  if (!UUID_RE.test(tenantId)) {
+    throw new Error(`tenantId inválido: se esperaba un UUID, se recibió "${tenantId}"`);
+  }
+
+  const prefijo = `tenant/${tenantId}/`;
+  if (!path.startsWith(prefijo)) {
+    throw new Error("La imagen no pertenece a este cliente: se rechaza el borrado.");
+  }
+
+  const { error } = await catalogBucket().remove([path]);
+  if (error) throw error;
+}
