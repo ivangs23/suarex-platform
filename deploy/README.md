@@ -339,6 +339,33 @@ medio hacer no lo deje abierto. Genera el secreto con `openssl rand -hex 32` y p
 
 ---
 
+## Limpiar fotos huérfanas del bucket
+
+Reimportar el catálogo de un cliente (`import-catalog --reemplazar`) borra sus filas y resube
+las fotos a rutas nuevas, dejando las viejas sin dueño en Storage. También pasa al editar
+fotos desde el panel. Nadie las mira y nadie las borra: el bucket crece sin techo (un solo
+cliente reimportado dejó ~10 MB muertos).
+
+El script las localiza y las borra. **Borrar es irreversible, así que por defecto SIMULA** y
+no toca nada:
+
+```bash
+# Ver qué sobra y cuánto pesa, SIN borrar:
+node scripts/limpiar-storage.mjs <slug>
+
+# Borrar de verdad los huérfanos de ese cliente:
+node scripts/limpiar-storage.mjs <slug> --confirmar
+
+# Simular sobre todos los clientes:
+node scripts/limpiar-storage.mjs --todos
+```
+
+Una foto es huérfana si su objeto no lo referencia ninguna fila del cliente (producto,
+categoría, logo o foto de bienvenida). El borrado está acotado al prefijo del cliente: una
+sola ruta fuera de `tenant/{id}/` aborta el lote entero, para no tocar la foto de otro.
+
+---
+
 ## Operación diaria
 
 Desplegar una versión nueva:
