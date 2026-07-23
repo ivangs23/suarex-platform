@@ -12,6 +12,7 @@ import { readMesaToken } from "@/lib/mesa-cookie";
 import { requireTenant } from "@/lib/tenant-context";
 import { CartPanelHost } from "./cart/CartPanelHost";
 import { CartProvider } from "./cart/CartProvider";
+import { ScanToOrderHint } from "./cart/ScanToOrderHint";
 import { buildMenuView } from "./menu-view";
 import { resolveTheme } from "./themes";
 
@@ -171,6 +172,7 @@ export default async function MenuPage({
         strings={strings(lang)}
       />
       <CartPanelHost />
+      <ScanToOrderHint />
     </CartProvider>
   );
 }

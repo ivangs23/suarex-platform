@@ -91,6 +91,7 @@ export type Strings = {
   dishes: string;
   emptyMenu: string;
   addCustomize: string;
+  scanToOrder: string;
   allergensTitle: string;
   allergensEmpty: string;
   allergensWarning: string;
@@ -135,6 +136,7 @@ const ES: Strings = {
   dishes: "platos",
   emptyMenu: "La carta todavía no tiene productos.",
   addCustomize: "Añadir / Personalizar",
+  scanToOrder: "Escanea el QR de tu mesa para pedir",
   allergensTitle: "Alérgenos e información",
   allergensEmpty: "No hay alérgenos declarados para este plato.",
   allergensWarning:
@@ -180,6 +182,7 @@ const EN: Strings = {
   dishes: "dishes",
   emptyMenu: "This menu has no items yet.",
   addCustomize: "Add / Customise",
+  scanToOrder: "Scan your table's QR code to order",
   allergensTitle: "Allergens and information",
   allergensEmpty: "No allergens declared for this dish.",
   allergensWarning:
@@ -225,6 +228,7 @@ const PT: Strings = {
   dishes: "pratos",
   emptyMenu: "A carta ainda não tem produtos.",
   addCustomize: "Adicionar / Personalizar",
+  scanToOrder: "Digitalize o QR da sua mesa para pedir",
   allergensTitle: "Alergénios e informação",
   allergensEmpty: "Não há alergénios declarados para este prato.",
   allergensWarning:
