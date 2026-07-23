@@ -427,3 +427,27 @@
   opacity: 0.5;
   cursor: default;
 }
+
+/* Aviso al pie cuando no se puede pedir (cookie de mesa ausente o caducada). Fija, discreta y
+   con las variables de marca, así que cada cliente la ve con su paleta sin escribir CSS. Es
+   plataforma: la monta la página, no el tema. */
+.scanHint {
+  position: fixed;
+  left: 50%;
+  bottom: 1rem;
+  transform: translateX(-50%);
+  z-index: 30;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: calc(100% - 2rem);
+  padding: 0.7rem 1.1rem;
+  border-radius: 999px;
+  background: var(--color-primary);
+  color: var(--color-bg);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-align: center;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.22);
+}
