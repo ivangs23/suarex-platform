@@ -113,6 +113,14 @@ export type Strings = {
   payProcessing: string;
   payError: string;
   payBack: string;
+  orderTitle: string;
+  orderThanks: string;
+  orderTotal: string;
+  statusPending: string;
+  statusPaid: string;
+  statusPreparing: string;
+  statusServed: string;
+  statusCancelled: string;
 };
 
 const ES: Strings = {
@@ -147,6 +155,14 @@ const ES: Strings = {
   payProcessing: "Procesando…",
   payError: "No se pudo completar el pago. Revisa los datos de la tarjeta.",
   payBack: "Volver al pedido",
+  orderTitle: "Pedido",
+  orderThanks: "¡Gracias por tu pedido!",
+  orderTotal: "Total",
+  statusPending: "Pendiente de pago",
+  statusPaid: "Pagado — preparándose",
+  statusPreparing: "Preparándose",
+  statusServed: "¡Servido! Que aproveche",
+  statusCancelled: "Cancelado",
 };
 
 const EN: Strings = {
@@ -181,6 +197,14 @@ const EN: Strings = {
   payProcessing: "Processing…",
   payError: "The payment could not be completed. Please check your card details.",
   payBack: "Back to order",
+  orderTitle: "Order",
+  orderThanks: "Thanks for your order!",
+  orderTotal: "Total",
+  statusPending: "Payment pending",
+  statusPaid: "Paid — being prepared",
+  statusPreparing: "Being prepared",
+  statusServed: "Served! Enjoy",
+  statusCancelled: "Cancelled",
 };
 
 const PT: Strings = {
@@ -215,10 +239,31 @@ const PT: Strings = {
   payProcessing: "A processar…",
   payError: "Não foi possível concluir o pagamento. Verifique os dados do cartão.",
   payBack: "Voltar ao pedido",
+  orderTitle: "Pedido",
+  orderThanks: "Obrigado pelo seu pedido!",
+  orderTotal: "Total",
+  statusPending: "Pagamento pendente",
+  statusPaid: "Pago — a preparar",
+  statusPreparing: "A preparar",
+  statusServed: "Servido! Bom apetite",
+  statusCancelled: "Cancelado",
 };
 
 const STRINGS: Record<Lang, Strings> = { es: ES, en: EN, pt: PT };
 
 export function strings(lang: Lang): Strings {
   return STRINGS[lang];
+}
+
+/** Etiqueta legible de un estado de pedido, en el idioma dado. Un estado desconocido cae al
+ *  propio código en crudo, que es preferible a una pantalla en blanco. */
+export function orderStatusLabel(status: string, t: Strings): string {
+  const mapa: Record<string, string> = {
+    pending: t.statusPending,
+    paid: t.statusPaid,
+    preparing: t.statusPreparing,
+    served: t.statusServed,
+    cancelled: t.statusCancelled,
+  };
+  return mapa[status] ?? status;
 }
