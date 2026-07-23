@@ -24,9 +24,13 @@ const TERMINAL_STATUSES = new Set(["served", "cancelled"]);
 export function StatusPoller({
   publicToken,
   initialOrder,
+  locale,
 }: {
   publicToken: string;
   initialOrder: OrderStatus;
+  /** Locale del cliente, para formatear el total. Lo resuelve el servidor (`getOrderLocale`)
+   *  y no cambia entre sondeos, así que llega como prop en vez de en la respuesta del API. */
+  locale: string;
 }) {
   const [order, setOrder] = useState(initialOrder);
 
@@ -56,7 +60,7 @@ export function StatusPoller({
   return (
     <>
       <p data-testid="order-status">{order.status}</p>
-      <p>{formatCents(order.totalCents, "es-ES", order.currency)}</p>
+      <p>{formatCents(order.totalCents, locale, order.currency)}</p>
     </>
   );
 }

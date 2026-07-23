@@ -11,6 +11,7 @@ import {
   ordersTableForPaymentResolution,
   tenantScoped,
 } from "./client.js";
+import { getTenantSettings } from "./tenants.js";
 import type { CartLineInput, OrderStatus } from "./types.js";
 
 type ProductRow = {
@@ -336,6 +337,26 @@ export async function getOrderByPublicToken(publicToken: string): Promise<OrderS
     totalCents: eurosToCents(Number(data.total)),
     currency: data.currency as string,
   };
+}
+
+/**
+ * Locale del cliente dueño de un pedido, para formatear su total en la pantalla de estado.
+ *
+ * Va aparte de `getOrderByPublicToken` a propósito: ese devuelve la forma EXACTA que sirve el
+ * endpoint público del comensal (`/api/pedido/[token]`, con un test que fija sus claves), y
+ * meterle el locale cambiaría ese contrato. El locale no cambia entre sondeos, así que se lee
+ * una vez en el render del servidor y se pasa como prop. Sin cliente resuelto, "es".
+ */
+export async function getOrderLocale(publicToken: string): Promise<string> {
+  const { data, error } = await ordersTableForPaymentResolution()
+    .select("tenant_id")
+    .eq("public_token", publicToken)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return "es";
+
+  const settings = await getTenantSettings(data.tenant_id as string);
+  return settings?.locale ?? "es";
 }
 
 /**

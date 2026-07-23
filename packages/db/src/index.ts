@@ -72,6 +72,7 @@ export {
   createPendingOrder,
   expirePendingOrders,
   getOrderByPublicToken,
+  getOrderLocale,
   markOrderPaid,
   OrderCartError,
 } from "./orders.js";
