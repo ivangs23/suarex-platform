@@ -51,7 +51,8 @@
         "scripts/seed-staff.mjs",
         "scripts/import-catalog.mjs",
         "scripts/limpiar-storage.mjs",
-        "scripts/create-tenant.mjs"
+        "scripts/create-tenant.mjs",
+        "scripts/traducir-manuela.mjs"
       ],
       "linter": { "rules": { "style": { "noRestrictedImports": "off" } } }
     },

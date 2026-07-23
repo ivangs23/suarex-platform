@@ -1,10 +1,12 @@
 /**
  * IDIOMA DE LA CARTA.
  *
- * El catálogo ya se guarda por idioma (`name_i18n`, `description_i18n`: `{es, en, pt}`) y en
- * la migración de Manuela entraron sus traducciones al inglés y al portugués. Hasta ahora la
- * carta enseñaba `es` a pelo, así que esos datos estaban pagados y sin usar -- y un guiri en
- * la terraza leía la carta en español.
+ * El catálogo se guarda por idioma (`name_i18n`, `description_i18n`: `{es, en, pt}`). La carta
+ * enseña el idioma elegido y cae al del cliente cuando un campo no está traducido. El catálogo
+ * de Manuela entró solo en español; sus traducciones al inglés y al portugués las rellena
+ * `scripts/traducir-manuela.mjs` (nombres de categoría, descripciones y extras -- los nombres
+ * de plato son de marca y se dejan igual). Sin más de un idioma con contenido, el selector no
+ * aparece: ofrecer "EN" para acabar enseñando la carta en español es peor que no ofrecerlo.
  *
  * El idioma va en la URL (`?lang=en`) y no en una cookie: es el mismo modelo que el resto de
  * la navegación de la carta (nivel, paso de bienvenida), funciona sin JavaScript, y un enlace
