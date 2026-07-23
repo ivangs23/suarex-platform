@@ -47,16 +47,10 @@ type CartState = {
   enviando: boolean;
   /** `false` cuando este navegador no ha escaneado el QR de ninguna mesa. */
   canOrder: boolean;
-  /** Unidades que hay de un producto, sumando todas sus líneas. */
-  unitsOf: (productId: string) => number;
   addLine: (
     product: CartProduct,
     opciones?: { extraIds?: string[]; notes?: string | null; quantity?: number },
   ) => void;
-  /** Suma una unidad a la última línea de ese producto, o la crea sin personalizar. */
-  addOne: (product: CartProduct) => void;
-  /** Quita una unidad de la última línea de ese producto; a cero, la línea desaparece. */
-  removeOne: (productId: string) => void;
   setLineQuantity: (lineId: string, quantity: number) => void;
   formatCents: (cents: number) => string;
   /** Textos de la plataforma en el idioma elegido. El carrito es compartido, así que sus
@@ -164,14 +158,6 @@ export function CartProvider({
 
   const totalUnits = useMemo(() => lines.reduce((suma, line) => suma + line.quantity, 0), [lines]);
 
-  const unitsOf = useCallback(
-    (productId: string) =>
-      lines
-        .filter((line) => line.product.id === productId)
-        .reduce((suma, line) => suma + line.quantity, 0),
-    [lines],
-  );
-
   const addLine = useCallback<CartState["addLine"]>((product, opciones) => {
     const extraIds = opciones?.extraIds ?? [];
     const notes = opciones?.notes?.trim() ? opciones.notes.trim() : null;
@@ -207,39 +193,6 @@ export function CartProvider({
           unitCents: unitCentsDe(product, extraIds),
         },
       ];
-    });
-  }, []);
-
-  const addOne = useCallback(
-    (product: CartProduct) => {
-      // Sin personalizar: suma a la ÚLTIMA línea de ese producto para no crear una línea
-      // nueva idéntica cada vez que se pulsa el más.
-      const ultima = [...lines].reverse().find((line) => line.product.id === product.id);
-      if (!ultima) {
-        addLine(product);
-        return;
-      }
-      setLines((actual) =>
-        actual.map((line) =>
-          line.id === ultima.id ? { ...line, quantity: line.quantity + 1 } : line,
-        ),
-      );
-    },
-    [lines, addLine],
-  );
-
-  const removeOne = useCallback((productId: string) => {
-    setLines((actual) => {
-      const ultima = [...actual].reverse().find((line) => line.product.id === productId);
-      if (!ultima) return actual;
-      if (ultima.quantity > 1) {
-        return actual.map((line) =>
-          line.id === ultima.id ? { ...line, quantity: line.quantity - 1 } : line,
-        );
-      }
-      // A cero la línea desaparece ENTERA, con sus extras y su nota: dejarla a cero haría
-      // que volver a añadir el producto trajera de vuelta una elección ya deshecha.
-      return actual.filter((line) => line.id !== ultima.id);
     });
   }, []);
 
@@ -297,10 +250,7 @@ export function CartProvider({
       error,
       enviando,
       canOrder,
-      unitsOf,
       addLine,
-      addOne,
-      removeOne,
       setLineQuantity,
       formatCents: (cents: number) => formatCents(cents, locale, currency),
       strings,
@@ -318,10 +268,7 @@ export function CartProvider({
       error,
       enviando,
       canOrder,
-      unitsOf,
       addLine,
-      addOne,
-      removeOne,
       setLineQuantity,
       strings,
       panelOpen,

@@ -7,19 +7,14 @@ import styles from "./cart.module.css";
 import { ProductSheet } from "./ProductSheet";
 
 /**
- * Control de pedido de una tarjeta de producto. Lo pinta CADA tema dentro de su tarjeta:
- * dónde cae y qué aspecto tiene es cosa del tema, pero que exista no lo es -- lo comprueba
- * `themes/contract.test.tsx`.
+ * Puerta a la ficha del producto, dentro de la tarjeta. La coloca CADA tema donde encaje en
+ * su diseño, pero que exista no es opcional -- lo comprueba `themes/contract.test.tsx`.
  *
- * Dos caminos a propósito:
- *
- *   "Añadir / personalizar" abre la FICHA, que es donde están los alérgenos, las opciones
- *   y las notas. Es el camino principal: un café con leche de avena no se puede pedir
- *   desde un botón suelto.
- *
- *   El contador aparece cuando ya hay unidades de ese producto, para subir y bajar sin
- *   volver a abrir nada. Corregir un plato añadido de más tiene que poder hacerse donde se
- *   añadió; obligar a abrir la ficha para quitar uno es donde el comensal se rinde.
+ * NO lleva contador. Cada vez que se pide un plato se crea una LÍNEA propia, porque el mismo
+ * croissant puede ir una vez con york y otra sin nada: un "2" en la tarjeta no diría cuál de
+ * las dos formas se está sumando, y el botón menos no sabría a cuál quitarle. Las cantidades
+ * se ajustan donde cada línea existe por separado y se ve lo que la distingue: el panel del
+ * pedido.
  *
  * Sin haber escaneado el QR no pinta nada: la carta sigue consultable, pero no se pide desde
  * una mesa en la que no estás sentado.
@@ -30,39 +25,8 @@ export function AddToCart({ product }: { product: MenuProduct }) {
 
   if (!cart?.canOrder) return null;
 
-  const unidades = cart.unitsOf(product.id);
-  const t = cart.strings;
-
   return (
     <div className={styles.add}>
-      {unidades > 0 ? (
-        <div className={styles.stepper}>
-          <button
-            type="button"
-            className={styles.step}
-            data-testid="remove-from-cart"
-            data-product-id={product.id}
-            aria-label={`Quitar una unidad de ${product.name}`}
-            onClick={() => cart.removeOne(product.id)}
-          >
-            −
-          </button>
-          <span className={styles.units} data-testid="cart-units" data-product-id={product.id}>
-            {unidades}
-          </span>
-          <button
-            type="button"
-            className={styles.step}
-            data-testid="add-to-cart"
-            data-product-id={product.id}
-            aria-label={`Añadir una unidad de ${product.name}`}
-            onClick={() => cart.addOne(product)}
-          >
-            +
-          </button>
-        </div>
-      ) : null}
-
       <button
         type="button"
         className={styles.addButton}
@@ -70,7 +34,7 @@ export function AddToCart({ product }: { product: MenuProduct }) {
         data-product-id={product.id}
         onClick={() => setFichaAbierta(true)}
       >
-        {unidades > 0 ? t.customize : t.addCustomize}
+        {cart.strings.addCustomize}
       </button>
 
       {fichaAbierta ? (

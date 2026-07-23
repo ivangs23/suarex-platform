@@ -155,6 +155,25 @@ test("el panel del pedido enseña cada línea como se pidió, y deja corregirla"
   await expect(panel.getByTestId("cart-empty")).toBeVisible();
 });
 
+test("dos veces EXACTAMENTE lo mismo se agrupan en una línea", async ({ page }) => {
+  // La otra mitad de la regla: en la comanda de cocina son el mismo plato, y separarlas solo
+  // alargaría el ticket con dos entradas idénticas que el camarero tiene que leer dos veces.
+  await page.goto(QR_MESA_1);
+  await page.goto(TINTOS);
+
+  const tarjeta = page.getByTestId("product").filter({ hasText: "Ribera del Duero" });
+  for (let i = 0; i < 2; i++) {
+    await tarjeta.getByTestId("open-product-sheet").click();
+    await page.getByTestId("product-sheet").getByTestId("sheet-add").click();
+  }
+
+  await page.getByTestId("cart-open").click();
+  const panel = page.getByTestId("cart-panel");
+  await expect(panel.getByTestId("cart-line")).toHaveCount(1);
+  await expect(panel.getByTestId("cart-line-units")).toHaveText("2");
+  await expect(panel.getByTestId("cart-panel-total")).toHaveText("36,00 €");
+});
+
 test("el mismo plato pedido de dos formas son dos líneas distintas", async ({ page }) => {
   // Un café con avena y otro sin nada no son el mismo pedido: si se agruparan, una de las
   // dos elecciones se perdería por el camino y llegaría mal a la barra.
@@ -177,35 +196,26 @@ test("el mismo plato pedido de dos formas son dos líneas distintas", async ({ p
   );
 });
 
-test("desde la tarjeta se quitan unidades, y a cero el producto sale del carrito", async ({
-  page,
-}) => {
-  // Sin el menos, un plato añadido de más obligaba a llamar al camarero: la barra del total
-  // solo sumaba.
+test("la tarjeta NO lleva contador: cada vez que se pide es una línea propia", async ({ page }) => {
+  // El mismo croissant puede ir una vez con york y otra sin nada. Un "2" en la tarjeta no
+  // diría cuál de las dos formas está sumando, y el menos no sabría a cuál quitarle: las
+  // cantidades se ajustan en el panel, donde cada línea existe por separado.
   await page.goto(QR_MESA_1);
   await page.goto(TINTOS);
 
   const tarjeta = page.getByTestId("product").filter({ hasText: "Ribera del Duero" });
   await tarjeta.getByTestId("open-product-sheet").click();
   await page.getByTestId("product-sheet").getByTestId("sheet-add").click();
-  await tarjeta.getByTestId("add-to-cart").click();
-  await expect(tarjeta.getByTestId("cart-units")).toHaveText("2");
-  await esperaTotal(page, "36,00 €");
 
-  await tarjeta.getByTestId("remove-from-cart").click();
-  await expect(tarjeta.getByTestId("cart-units")).toHaveText("1");
-  await esperaTotal(page, "18,00 €");
-
-  // A cero desaparece el contador de la tarjeta y el pedido se queda vacío.
-  await tarjeta.getByTestId("remove-from-cart").click();
   await expect(tarjeta.getByTestId("cart-units")).toHaveCount(0);
-  await page.getByTestId("cart-open").click();
-  await expect(page.getByTestId("cart-panel").getByTestId("cart-empty")).toBeVisible();
+  await expect(tarjeta.getByTestId("remove-from-cart")).toHaveCount(0);
+  // Y el botón sigue diciendo lo mismo: se puede volver a pedir, de otra forma.
+  await expect(tarjeta.getByTestId("open-product-sheet")).toHaveText(/Añadir/);
 });
 
-test("quitar un producto olvida también sus extras", async ({ page }) => {
-  // Si las extras sobrevivieran a sacarlo del carrito, volver a añadirlo traería de vuelta
-  // una elección que el comensal ya había deshecho -- y la cobraría.
+test("quitar una línea del pedido se lleva también sus extras", async ({ page }) => {
+  // Si las extras sobrevivieran a sacarla, volver a añadir el plato traería de vuelta una
+  // elección que el comensal ya había deshecho -- y la cobraría.
   await page.goto(QR_MESA_1);
   await page.goto(TINTOS);
 
@@ -216,9 +226,14 @@ test("quitar un producto olvida también sus extras", async ({ page }) => {
   await ficha.getByTestId("sheet-add").click();
   await esperaTotal(page, "21,00 €");
 
-  // Quitarlo se lleva la línea entera, con su extra: volver a añadirlo sin personalizar
-  // vuelve al precio base y no arrastra una elección ya deshecha.
-  await tarjeta.getByTestId("remove-from-cart").click();
+  // Se quita desde el panel, que es donde vive la línea.
+  await page.getByTestId("cart-open").click();
+  const panel = page.getByTestId("cart-panel");
+  await panel.getByTestId("cart-line-less").click();
+  await expect(panel.getByTestId("cart-empty")).toBeVisible();
+  await panel.getByTestId("cart-panel-close").click();
+
+  // Volver a pedirlo sin personalizar vuelve al precio base.
   await tarjeta.getByTestId("open-product-sheet").click();
   await page.getByTestId("product-sheet").getByTestId("sheet-add").click();
   await esperaTotal(page, "18,00 €");
