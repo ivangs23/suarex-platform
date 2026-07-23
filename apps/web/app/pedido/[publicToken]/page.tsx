@@ -1,6 +1,13 @@
-import { getOrderByPublicToken, getOrderLocale, getOrderReceipt } from "@suarex/db";
+import { parseBranding } from "@suarex/config";
+import {
+  getOrderByPublicToken,
+  getOrderLocale,
+  getOrderReceipt,
+  getTenantSettings,
+} from "@suarex/db";
 import { notFound } from "next/navigation";
 import { resolveLang, strings } from "@/lib/i18n";
+import { requireTenant } from "@/lib/tenant-context";
 import styles from "./pedido.module.css";
 import { Receipt } from "./Receipt";
 import { StatusPoller } from "./StatusPoller";
@@ -17,13 +24,20 @@ export default async function PedidoPage({ params }: { params: Promise<{ publicT
   if (!order) notFound();
 
   const t = strings(resolveLang(locale, locale));
-  const receipt = await getOrderReceipt(publicToken, locale);
+  // El recibo y el nombre del negocio (para la cabecera del PDF descargable) se resuelven en
+  // paralelo. El nombre sale de la marca del tenant, con el slug como respaldo.
+  const tenant = await requireTenant().catch(() => null);
+  const [receipt, settings] = await Promise.all([
+    getOrderReceipt(publicToken, locale),
+    tenant ? getTenantSettings(tenant.id).catch(() => null) : Promise.resolve(null),
+  ]);
+  const businessName = parseBranding(settings?.branding).name ?? tenant?.slug ?? "";
 
   return (
     <main className={styles.page}>
       <StatusPoller publicToken={publicToken} initialOrder={order} locale={locale} strings={t} />
       {receipt && receipt.lines.length > 0 ? (
-        <Receipt receipt={receipt} locale={locale} strings={t} />
+        <Receipt receipt={receipt} businessName={businessName} locale={locale} strings={t} />
       ) : null}
     </main>
   );

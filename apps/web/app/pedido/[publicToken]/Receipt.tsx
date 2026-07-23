@@ -2,26 +2,47 @@
 
 import type { OrderReceipt } from "@suarex/db";
 import { formatCents } from "@suarex/domain";
+import { useState } from "react";
 import type { Strings } from "@/lib/i18n";
 import styles from "./pedido.module.css";
+import { descargarReciboPdf } from "./receipt-pdf";
 
 /**
  * RECIBO DEL COMENSAL: el desglose de su pedido, para guardarlo o imprimirlo. Todo sale de los
  * snapshots congelados en la compra (ver `getOrderReceipt`), no del catálogo de hoy: un recibo
  * refleja lo que se pidió y se pagó, pase lo que pase después con los precios.
  *
- * Client component solo por el botón de imprimir (`window.print`); los datos vienen ya
- * resueltos del servidor y no cambian.
+ * Client component por el botón de descarga: arma un PDF del recibo en el navegador (jsPDF,
+ * cargado solo al pulsar). Antes hacía `window.print()`, que en el móvil del comensal a menudo
+ * no abría nada; un PDF que se descarga funciona en cualquier dispositivo y se imprime luego.
  */
 export function Receipt({
   receipt,
+  businessName,
   locale,
   strings: t,
 }: {
   receipt: OrderReceipt;
+  businessName: string;
   locale: string;
   strings: Strings;
 }) {
+  const [descargando, setDescargando] = useState(false);
+
+  const descargar = async () => {
+    setDescargando(true);
+    try {
+      await descargarReciboPdf(receipt, {
+        businessName,
+        fecha: new Date(receipt.createdAt).toLocaleDateString(locale),
+        strings: t,
+        formatearDinero: (cents) => formatCents(cents, locale, receipt.currency),
+      });
+    } finally {
+      setDescargando(false);
+    }
+  };
+
   return (
     <section className={styles.receipt} data-testid="receipt" aria-label={t.receiptTitle}>
       <div className={styles.receiptHead}>
@@ -58,13 +79,15 @@ export function Receipt({
         <span>{formatCents(receipt.totalCents, locale, receipt.currency)}</span>
       </p>
 
-      {/* `noPrint`: el botón no sale en el papel al imprimir. */}
+      {/* `noPrint`: el botón no sale en el recibo descargado. */}
       <button
         type="button"
         className={`${styles.receiptPrint} ${styles.noPrint}`}
-        onClick={() => window.print()}
+        onClick={descargar}
+        disabled={descargando}
+        data-testid="receipt-download"
       >
-        {t.receiptPrint}
+        {t.receiptDownload}
       </button>
     </section>
   );

@@ -127,6 +127,7 @@ export type Strings = {
   receiptTitle: string;
   receiptTable: string;
   receiptPrint: string;
+  receiptDownload: string;
 };
 
 const ES: Strings = {
@@ -173,6 +174,7 @@ const ES: Strings = {
   receiptTitle: "Recibo",
   receiptTable: "Mesa",
   receiptPrint: "Imprimir",
+  receiptDownload: "Descargar recibo",
 };
 
 const EN: Strings = {
@@ -219,6 +221,7 @@ const EN: Strings = {
   receiptTitle: "Receipt",
   receiptTable: "Table",
   receiptPrint: "Print",
+  receiptDownload: "Download receipt",
 };
 
 const PT: Strings = {
@@ -265,6 +268,7 @@ const PT: Strings = {
   receiptTitle: "Recibo",
   receiptTable: "Mesa",
   receiptPrint: "Imprimir",
+  receiptDownload: "Baixar recibo",
 };
 
 const STRINGS: Record<Lang, Strings> = { es: ES, en: EN, pt: PT };
