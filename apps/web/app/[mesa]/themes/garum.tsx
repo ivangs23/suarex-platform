@@ -66,29 +66,39 @@ export const GarumTheme: MenuTheme = ({
 
   return (
     <main className={styles.page} data-theme="garum">
+      {/* Cabecera en TRES zonas, igual que en el resto de temas: la mesa a un lado, la marca
+          centrada, y a la derecha los idiomas con la bolsa del pedido. Que estos controles
+          estén en el MISMO sitio en todos los temas es parte de la regla: cambia el aspecto,
+          no dónde encuentra el comensal cada cosa. Asset de marca versionado con la app (no
+          el logo por tenant de Storage), servido estático: <img> a propósito. */}
       <header className={styles.topbar}>
-        {/* Asset de marca versionado con la app (no es el logo por tenant de Storage), pero
-          se sirve estático: <img> a propósito, sin optimizar. */}
+        <span className={styles.mesa} data-testid="mesa">
+          {t.table} {mesa}
+        </span>
+
         <img className={styles.logo} src="/brands/garum-logo.png" alt={businessName} />
-        <CartButton className={styles.cartButton} />
+
+        <div className={styles.topbarEnd}>
+          {langs.length > 1 ? (
+            <nav className={styles.langs} data-testid="lang-switch" aria-label="Idioma">
+              {langs.map((lang) => (
+                <a
+                  key={lang.code}
+                  className={styles.lang}
+                  href={lang.href}
+                  hrefLang={lang.code}
+                  data-testid="lang-option"
+                  data-lang={lang.code}
+                  aria-current={lang.active ? "true" : undefined}
+                >
+                  {lang.label}
+                </a>
+              ))}
+            </nav>
+          ) : null}
+          <CartButton className={styles.cartButton} />
+        </div>
       </header>
-      {langs.length > 1 ? (
-        <nav className={styles.langs} data-testid="lang-switch" aria-label="Idioma">
-          {langs.map((lang) => (
-            <a
-              key={lang.code}
-              className={styles.lang}
-              href={lang.href}
-              hrefLang={lang.code}
-              data-testid="lang-option"
-              data-lang={lang.code}
-              aria-current={lang.active ? "true" : undefined}
-            >
-              {lang.label}
-            </a>
-          ))}
-        </nav>
-      ) : null}
 
       <div className={styles.inner}>
         <section className={styles.hero}>
@@ -96,9 +106,6 @@ export const GarumTheme: MenuTheme = ({
             {businessName}
           </h1>
           <p className={styles.heroLead}>Vinoteca &amp; cocina de producto</p>
-          <p className={styles.mesa} data-testid="mesa">
-            {t.table} {mesa}
-          </p>
         </section>
 
         <p data-testid="product-count" hidden>
