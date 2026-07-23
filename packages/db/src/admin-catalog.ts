@@ -64,6 +64,12 @@ export type AdminCategory = {
   id: string;
   slug: string;
   nameI18n: Record<string, string>;
+  /** Categoría padre, o `null` si es raíz. El panel necesita el árbol igual que la carta
+   * pública: con 59 categorías en 4 niveles, una lista plana no dice de dónde cuelga cada
+   * una y el gestor no encuentra nada. */
+  parentId: string | null;
+  /** Emoji de la categoría, o `null`. Ayuda a reconocerla de un vistazo en el árbol. */
+  icon: string | null;
   destination: CategoryDestination;
   sortOrder: number;
   products: AdminProduct[];
@@ -272,6 +278,8 @@ type AdminCategoryRow = {
   id: string;
   slug: string;
   name_i18n: Record<string, string>;
+  parent_id: string | null;
+  icon: string | null;
   destination: CategoryDestination;
   sort_order: number;
   products: AdminProductRow[];
@@ -298,7 +306,7 @@ export async function listAdminCatalog(tenantId: string): Promise<AdminCatalog> 
   const [categoriesResult, allergensResult] = await Promise.all([
     tenantScoped("categories", tenantId)
       .select(
-        "id, slug, name_i18n, destination, sort_order, " +
+        "id, slug, name_i18n, parent_id, icon, destination, sort_order, " +
           "products(id, category_id, name_i18n, description_i18n, price, image_url, " +
           "allergen_ids, is_available, sort_order, product_extras(id, name_i18n, price))",
       )
@@ -335,6 +343,8 @@ export async function listAdminCatalog(tenantId: string): Promise<AdminCatalog> 
       id: category.id,
       slug: category.slug,
       nameI18n: category.name_i18n,
+      parentId: category.parent_id ?? null,
+      icon: category.icon ?? null,
       destination: category.destination,
       sortOrder: category.sort_order,
       products,

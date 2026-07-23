@@ -1,0 +1,248 @@
+/* Panel de catálogo: árbol de categorías a la izquierda, productos a la derecha.
+ *
+ * La disposición responde a un problema medido: con la carta real de garum (184 productos,
+ * 59 categorías, 4 niveles) la versión anterior daba una página de 24.000 píxeles, sin
+ * buscador ni jerarquía. Encontrar un producto era desplazarse a ojo.
+ */
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.head h1 {
+  font-size: 1.4rem;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  margin: 0;
+}
+
+.count {
+  color: var(--admin-muted);
+  font-size: 0.85rem;
+}
+
+/* --- Buscador ------------------------------------------------------------------------- */
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.search {
+  flex: 1 1 18rem;
+  min-width: 0;
+}
+
+/* --- Disposición ---------------------------------------------------------------------- */
+
+.layout {
+  display: grid;
+  grid-template-columns: 17rem minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+/* En ventana estrecha (la app de escritorio puede quedarse justa) el árbol pasa arriba en
+   vez de exprimir las dos columnas hasta hacerlas ilegibles. */
+@media (width < 60rem) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* --- Árbol de categorías -------------------------------------------------------------- */
+
+.tree {
+  position: sticky;
+  top: 4rem;
+  max-height: calc(100vh - 6rem);
+  overflow: auto;
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius);
+  box-shadow: var(--admin-shadow);
+  padding: 0.5rem;
+}
+
+@media (width < 60rem) {
+  .tree {
+    position: static;
+    max-height: 22rem;
+  }
+}
+
+.treeList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.treeLink {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 7px;
+  color: var(--admin-text);
+  text-decoration: none;
+  font-size: 0.86rem;
+}
+
+.treeLink:hover {
+  background: var(--admin-surface-alt);
+}
+
+.treeLink[aria-current="true"] {
+  background: color-mix(in srgb, var(--admin-accent) 12%, transparent);
+  color: var(--admin-accent);
+  font-weight: 600;
+}
+
+/* Una categoría en el camino hacia la actual se resalta sin llegar a parecer la actual:
+   con 4 niveles, saber de dónde cuelga lo que estás viendo importa tanto como dónde estás. */
+.treeLink[data-on-path="true"]:not([aria-current="true"]) {
+  color: var(--admin-text);
+  font-weight: 600;
+}
+
+.treeName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.treeCount {
+  flex: none;
+  font-size: 0.72rem;
+  color: var(--admin-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Lista de productos --------------------------------------------------------------- */
+
+.crumbs {
+  font-size: 0.82rem;
+  color: var(--admin-muted);
+  margin: 0 0 0.75rem;
+}
+
+.crumbs a {
+  color: inherit;
+}
+
+.items {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0 0 1.5rem;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius);
+  box-shadow: var(--admin-shadow);
+  padding: 0.85rem 1rem;
+}
+
+.itemHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem 0.75rem;
+}
+
+.itemName {
+  font-weight: 600;
+}
+
+.itemPrice {
+  font-variant-numeric: tabular-nums;
+  color: var(--admin-muted);
+}
+
+/* Ruta de la categoría. Al buscar es lo que distingue dos productos con el MISMO nombre
+   (p. ej. las muchas "COPA" de bodegas distintas). */
+.itemPath {
+  flex: 1 1 100%;
+  font-size: 0.76rem;
+  color: var(--admin-muted);
+}
+
+.badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: var(--admin-surface-alt);
+  color: var(--admin-muted);
+}
+
+.badgeHidden {
+  background: color-mix(in srgb, var(--admin-danger) 12%, transparent);
+  color: var(--admin-danger);
+}
+
+.thumb {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--admin-border);
+}
+
+.empty {
+  background: var(--admin-surface);
+  border: 1px dashed var(--admin-border);
+  border-radius: var(--admin-radius);
+  padding: 2rem 1rem;
+  text-align: center;
+  color: var(--admin-muted);
+}
+
+/* --- Formularios y controles ---------------------------------------------------------- */
+
+.card {
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius);
+  box-shadow: var(--admin-shadow);
+  padding: 1rem 1.125rem;
+  margin-bottom: 1rem;
+}
+
+.card h2 {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--admin-muted);
+  margin: 0 0 0.75rem;
+}
+
+.details {
+  margin-top: 0.6rem;
+  font-size: 0.85rem;
+}
+
+.details > summary {
+  cursor: pointer;
+  color: var(--admin-accent);
+  width: fit-content;
+}
+
+.details[open] > summary {
+  margin-bottom: 0.6rem;
+}

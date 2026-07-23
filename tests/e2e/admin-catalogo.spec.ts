@@ -78,7 +78,7 @@ test("un staff no ve el panel de gestión", async ({ page }) => {
   // autenticado (sesión real, no ausente) es redirigido a /staff/login igual que
   // alguien sin sesión, ver `apps/web/lib/require-manager.ts`.
   await expect(page).toHaveURL(/\/staff\/login/);
-  await expect(page.locator("h1")).not.toHaveText("Gestión de catálogo");
+  await expect(page.locator("h1")).not.toHaveText("Catálogo");
 });
 
 test("un owner crea una categoría y un producto (con imagen), y aparecen en la carta", async ({
@@ -88,7 +88,7 @@ test("un owner crea una categoría y un producto (con imagen), y aparecen en la 
 
   await page.goto("http://garum.localhost:3000/admin/catalogo");
   await expect(page).toHaveURL("http://garum.localhost:3000/admin/catalogo");
-  await expect(page.locator("h1")).toHaveText("Gestión de catálogo");
+  await expect(page.locator("h1")).toHaveText("Catálogo");
 
   // 1. Crea la categoría "Vinos E2E" (destino barra). El slug lleva un sufijo con
   // timestamp para que el test sea repetible sin chocar contra `unique (tenant_id,
@@ -99,13 +99,27 @@ test("un owner crea una categoría y un producto (con imagen), y aparecen en la 
   const testRunId = Date.now();
   const categoryName = `Vinos E2E ${testRunId}`;
   const slug = `vinos-e2e-${testRunId}`;
+  await page.locator("summary", { hasText: "Nueva categoría" }).click();
   await page.getByLabel("Slug").fill(slug);
   await page.getByLabel("Nombre de la categoría").fill(categoryName);
   await page.getByLabel("Destino").selectOption("barra");
   await page.getByRole("button", { name: "Crear categoría" }).click();
 
-  const categoryRow = page.getByTestId("admin-category").filter({ hasText: categoryName });
+  // Espera a que la categoría aparezca en el ÁRBOL antes de navegar: la Server Action y su
+  // revalidación tardan un instante, y navegar de inmediato compite contra esa escritura en
+  // vuelo (el mismo tropiezo que ya cerró `admin-catalogo-editar.spec.ts`).
+  await expect(page.getByTestId("tree-category").filter({ hasText: categoryName })).toBeVisible({
+    timeout: 15_000,
+  });
+
+  // El bloque de una categoría (editar/borrar) solo se pinta cuando está SELECCIONADA:
+  // con 59 categorías, repetir ese formulario en todas llenaba la página de campos que
+  // nadie estaba mirando. Se navega a su filtro para poder operar sobre ella.
+  await page.goto(`http://garum.localhost:3000/admin/catalogo?cat=${slug}`);
+
+  const categoryRow = page.getByTestId("admin-category");
   await expect(categoryRow).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId("admin-category-name")).toHaveText(categoryName);
 
   // Captura el id real de la categoría desde el propio panel (el hidden input que
   // alimenta `deleteCategoryAction`, ver `ConfirmDeleteForm`) -- `createCategoryAction`
@@ -125,6 +139,8 @@ test("un owner crea una categoría y un producto (con imagen), y aparecen en la 
   // ejerce de verdad el camino de subida (`uploadProductImage`), no solo el campo
   // vacío.
   const productName = `Ribera E2E ${testRunId}`;
+  // Los formularios de alta viven plegados en la tarjeta "Añadir": desplegarlo primero.
+  await page.locator("summary", { hasText: "Nuevo producto" }).click();
   await page.getByLabel("Categoría", { exact: true }).selectOption({ label: categoryName });
   await page.getByLabel("Nombre del producto").fill(productName);
   await page.getByLabel("Precio del producto (€)").fill("18.00");
@@ -165,9 +181,12 @@ test("un owner crea una categoría y un producto (con imagen), y aparecen en la 
   // revienta antes de llegar aquí -- de ahí que se limpie `createdCategoryId` justo
   // después de confirmar que este borrado por UI ya surtió efecto: evita un segundo
   // (inofensivo, pero innecesario) intento de borrado en el `afterEach`.
-  await page.goto("http://garum.localhost:3000/admin/catalogo");
+  // Con su filtro: el bloque de editar/borrar solo existe para la categoría seleccionada.
+  await page.goto(`http://garum.localhost:3000/admin/catalogo?cat=${slug}`);
   page.once("dialog", (dialog) => dialog.accept());
   await categoryRow.getByRole("button", { name: "Borrar categoría" }).click();
+  // Tras borrarla, su slug ya no resuelve y el panel vuelve a "todas": el bloque
+  // desaparece porque no hay categoría seleccionada.
   await expect(categoryRow).toHaveCount(0);
   createdCategoryId = undefined;
 });
