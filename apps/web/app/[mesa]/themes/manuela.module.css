@@ -551,3 +551,11 @@
   color: var(--color-bg, #ffffff);
   opacity: 1;
 }
+
+/* Badges de alérgeno en la esquina de la foto, como en su carta (el precio va en la otra). */
+.itemAllergens {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 1;
+}

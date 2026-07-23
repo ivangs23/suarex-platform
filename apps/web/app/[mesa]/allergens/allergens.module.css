@@ -1,0 +1,27 @@
+/* Badges de alérgeno sobre la tarjeta. Neutros a propósito -- fondo claro translúcido -- para
+   que se lean sobre cualquier foto sin depender del color del tema. */
+.badges {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  min-width: 1.4rem;
+  height: 1.4rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  font-size: 0.8rem;
+  line-height: 1;
+  /* Los nombres cortos (cuando no hay emoji) en tono discreto, para no gritar. */
+  color: #444;
+  font-weight: 600;
+  text-transform: lowercase;
+}

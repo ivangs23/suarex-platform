@@ -1,3 +1,4 @@
+import { AllergenBadges } from "../allergens/AllergenBadges";
 import { AddToCart } from "../cart/AddToCart";
 import { CartButton } from "../cart/CartButton";
 import styles from "./manuela.module.css";
@@ -202,6 +203,9 @@ export const ManuelaTheme: MenuTheme = ({
                     />
                   ) : null}
                   <span className={styles.price}>{product.priceLabel}</span>
+                  <div className={styles.itemAllergens}>
+                    <AllergenBadges allergens={product.allergens} />
+                  </div>
                 </div>
                 <div className={styles.itemBody}>
                   <span className={styles.itemName}>{product.name}</span>
