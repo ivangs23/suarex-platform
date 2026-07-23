@@ -1,3 +1,4 @@
+import { AllergenBadges } from "../allergens/AllergenBadges";
 import { AddToCart } from "../cart/AddToCart";
 import { CartButton } from "../cart/CartButton";
 import styles from "./generic.module.css";
@@ -170,6 +171,7 @@ export const GenericTheme: MenuTheme = ({
                 <div className={styles.itemText}>
                   <span className={styles.itemName}>{product.name}</span>
                   <span className={styles.price}>{product.priceLabel}</span>
+                  <AllergenBadges allergens={product.allergens} />
                 </div>
                 {/* La foto es de Storage por tenant, una URL absoluta que next/image no puede
                   optimizar sin configurar `remotePatterns` con un host que varía por

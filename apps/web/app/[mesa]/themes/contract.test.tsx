@@ -59,7 +59,10 @@ const VIEW_HOJA: MenuView = {
       priceLabel: "18,00 €",
       imageUrl: "https://storage.test/foto.jpg",
       extras: [{ id: "e1", name: "Copa extra", priceCents: 300, priceLabel: "3,00 €" }],
-      allergens: [{ id: 12, name: "Sulfitos", icon: null }],
+      allergens: [
+        { id: 7, name: "Lácteos", icon: "milk" },
+        { id: 12, name: "Sulfitos", icon: null },
+      ],
     },
   ],
   totalProducts: 8,
@@ -163,6 +166,29 @@ describe.each(nombres)("tema %s", (nombre) => {
       products: VIEW_HOJA.products.map((p) => ({ ...p, imageUrl: null })),
     };
     expect(render({ view: sinFoto })).not.toContain('data-testid="product-photo"');
+  });
+
+  it("pinta los alérgenos declarados como badges sobre la tarjeta", () => {
+    // Es un aviso a simple vista, y es CONTENIDO (lo que declaró el gestor): igual en todos
+    // los temas. Un alérgeno con emoji inequívoco se muestra con él; el resto, con su nombre
+    // -- nunca un emoji ambiguo que induzca a error. La lista completa vive en la ficha.
+    const html = render({ view: VIEW_HOJA });
+    expect(html).toContain('data-testid="allergen-badges"');
+    // Lácteos -> emoji de leche; y su nombre completo va como texto accesible.
+    expect(html).toContain("🥛");
+    expect(html).toContain('aria-label="Lácteos"');
+    // Sulfitos no tiene emoji claro: se muestra su nombre en el badge, no un emoji dudoso.
+    expect(html).toContain("Sulfitos");
+  });
+
+  it("un plato sin alérgenos declarados no pinta ningún badge", () => {
+    // Vacío significa "no hay ninguno declarado", NO "no tiene": no se pinta nada, no se
+    // afirma nada.
+    const sinAlergenos: MenuView = {
+      ...VIEW_HOJA,
+      products: VIEW_HOJA.products.map((p) => ({ ...p, allergens: [] })),
+    };
+    expect(render({ view: sinAlergenos })).not.toContain('data-testid="allergen-badges"');
   });
 
   it("deja abrir la ficha del producto para pedirlo", () => {
