@@ -399,3 +399,31 @@
   font-weight: 700;
   cursor: pointer;
 }
+
+/* PASO DE PAGO. El formulario de tarjeta (Stripe Elements) reusa el cuerpo de la hoja; solo
+   añade su fila de acciones -- volver / pagar -- al pie. */
+.paymentActions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+
+.paymentActions .pay {
+  flex: 1;
+}
+
+.payBack {
+  padding: 0.7rem 1.2rem;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.payBack:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

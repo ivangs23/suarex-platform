@@ -108,6 +108,11 @@ export type Strings = {
   close: string;
   table: string;
   orderError: string;
+  payTitle: string;
+  payNow: string;
+  payProcessing: string;
+  payError: string;
+  payBack: string;
 };
 
 const ES: Strings = {
@@ -137,6 +142,11 @@ const ES: Strings = {
   close: "Cerrar",
   table: "Mesa",
   orderError: "No se pudo crear el pedido",
+  payTitle: "Pago",
+  payNow: "Pagar {total}",
+  payProcessing: "Procesando…",
+  payError: "No se pudo completar el pago. Revisa los datos de la tarjeta.",
+  payBack: "Volver al pedido",
 };
 
 const EN: Strings = {
@@ -166,6 +176,11 @@ const EN: Strings = {
   close: "Close",
   table: "Table",
   orderError: "The order could not be created",
+  payTitle: "Payment",
+  payNow: "Pay {total}",
+  payProcessing: "Processing…",
+  payError: "The payment could not be completed. Please check your card details.",
+  payBack: "Back to order",
 };
 
 const PT: Strings = {
@@ -195,6 +210,11 @@ const PT: Strings = {
   close: "Fechar",
   table: "Mesa",
   orderError: "Não foi possível criar o pedido",
+  payTitle: "Pagamento",
+  payNow: "Pagar {total}",
+  payProcessing: "A processar…",
+  payError: "Não foi possível concluir o pagamento. Verifique os dados do cartão.",
+  payBack: "Voltar ao pedido",
 };
 
 const STRINGS: Record<Lang, Strings> = { es: ES, en: EN, pt: PT };

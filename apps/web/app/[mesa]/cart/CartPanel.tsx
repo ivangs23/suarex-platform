@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef } from "react";
 import { useCart } from "./CartProvider";
 import styles from "./cart.module.css";
+import { PaymentStep } from "./PaymentStep";
 
 /**
  * EL PEDIDO, ANTES DE PAGARLO.
@@ -33,6 +34,27 @@ export function CartPanel({ onClose }: { onClose: () => void }) {
 
   if (!cart) return null;
   const t = cart.strings;
+
+  // Con un cobro en curso, el panel deja de ser la lista del pedido y pasa a ser el
+  // formulario de tarjeta -- el último paso ocurre con el pedido a la vista, sin saltar a
+  // otra pantalla. Cerrarlo desde la X no cancela el cobro: eso es cosa de "volver al pedido".
+  if (cart.pago) {
+    return (
+      <div className={styles.overlay} data-testid="cart-panel">
+        <button type="button" className={styles.backdrop} aria-label={t.close} onClick={onClose} />
+        <div
+          className={styles.sheet}
+          ref={dialogo}
+          role="dialog"
+          aria-modal="true"
+          aria-label={t.payTitle}
+          tabIndex={-1}
+        >
+          <PaymentStep />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={styles.overlay} data-testid="cart-panel">

@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { deleteOrder, findOrderByPublicToken, orderLineNotes } from "./helpers/orders-db.js";
+import { deleteOrder, latestOrderForTenant, orderLineNotes } from "./helpers/orders-db.js";
 
 /**
  * El total vive en el PANEL del pedido, no en una barra siempre visible: el último gesto
@@ -105,15 +105,15 @@ test("una nota de la ficha llega a la comanda", async ({ page }) => {
 
   await page.getByTestId("cart-open").click();
   await page.getByTestId("cart-panel").getByTestId("cart-pay").click();
-  // `commit`: basta con que la navegación arranque, que es cuando la URL ya trae el token.
-  // Esperar al `load` metía en el reloj la creación del PaymentIntent en Stripe y, en dev, la
-  // primera compilación de `/pedido/[publicToken]` -- dos esperas que no son de este test y
-  // que lo hacían fallar en la suite completa aunque pasara aislado cinco veces seguidas.
-  await page.waitForURL(/\/pedido\//, { waitUntil: "commit", timeout: 30_000 });
 
-  const publicToken = new URL(page.url()).pathname.split("/").pop() as string;
-  const { orderId } = await findOrderByPublicToken(publicToken);
-  // El pedido es real a partir de aquí: se borra pase lo que pase con la aserción.
+  // El pedido existe (pending) en cuanto se pulsa Pagar: `createPendingOrder` escribe las
+  // líneas ANTES del cobro. Desde que el cobro ocurre en el panel, "Pagar" abre el formulario
+  // de tarjeta en vez de redirigir, así que el pedido se localiza por ser el último del
+  // cliente, no por un token en la URL. Esperar a que aparezca el paso de pago confirma que
+  // la escritura ya resolvió.
+  await expect(page.getByTestId("payment-step")).toBeVisible({ timeout: 30_000 });
+
+  const { orderId } = await latestOrderForTenant("garum");
   try {
     expect(await orderLineNotes(orderId)).toEqual(["Sin hielo, por favor"]);
   } finally {

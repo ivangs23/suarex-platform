@@ -124,3 +124,29 @@ export async function orderLineNotes(orderId: string): Promise<(string | null)[]
   if (error) throw error;
   return (data ?? []).map((row) => (row.notes as string | null) ?? null);
 }
+
+/**
+ * Pedido más reciente de un tenant, por su slug. Lo usan los tests que crean el pedido por
+ * la UI y ya no reciben el `publicToken` en una redirección: desde que el cobro ocurre en el
+ * panel, "Pagar" abre el formulario de tarjeta en vez de saltar a `/pedido`. El pedido, en
+ * cambio, existe (pending) en cuanto se pulsa Pagar -- `createPendingOrder` escribe las
+ * líneas antes del cobro -- así que se localiza por ser el último de ese cliente.
+ */
+export async function latestOrderForTenant(tenantSlug: string): Promise<CreatedOrder> {
+  const { data: tenant, error: tErr } = await admin
+    .from("tenants")
+    .select("id")
+    .eq("slug", tenantSlug)
+    .single();
+  if (tErr) throw tErr;
+
+  const { data, error } = await admin
+    .from("orders")
+    .select("id, order_number")
+    .eq("tenant_id", tenant.id as string)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .single();
+  if (error) throw error;
+  return { orderId: data.id as string, orderNumber: data.order_number as number };
+}

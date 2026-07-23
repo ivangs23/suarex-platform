@@ -62,6 +62,17 @@ type CartState = {
   panelOpen: boolean;
   openPanel: () => void;
   closePanel: () => void;
+  /**
+   * Datos del cobro en curso, o `null`. Cuando `checkout` crea el pedido, en vez de redirigir
+   * a ciegas devuelve aquí el `clientSecret` para cobrar la tarjeta EN el panel, con el
+   * pedido a la vista -- el último gesto antes de pagar no se hace en otra pantalla.
+   *
+   * `connectedAccount` viaja porque un cargo directo sobre la cuenta de un cliente solo se
+   * confirma si Stripe.js se inicializa contra esa misma cuenta.
+   */
+  pago: { clientSecret: string; publicToken: string; connectedAccount: string | null } | null;
+  /** El comensal cancela el cobro y vuelve a su pedido, sin haber pagado. */
+  cancelarPago: () => void;
   checkout: () => void;
 };
 
@@ -112,6 +123,7 @@ export function CartProvider({
   const [error, setError] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [pago, setPago] = useState<CartState["pago"]>(null);
 
   /* EL CARRITO SOBREVIVE A LA NAVEGACIÓN. La carta se navega por niveles con enlaces
      normales, así que cada categoría es una carga de página nueva y el estado de React se
@@ -227,19 +239,37 @@ export function CartProvider({
         }),
       });
 
-      const payload = (await response.json()) as { error?: string; publicToken?: string };
-      if (!response.ok || !payload.publicToken) {
+      const payload = (await response.json()) as {
+        error?: string;
+        publicToken?: string;
+        clientSecret?: string;
+        connectedAccount?: string | null;
+      };
+      if (!response.ok || !payload.publicToken || !payload.clientSecret) {
         setError(payload.error ?? strings.orderError);
         setEnviando(false);
         return;
       }
 
-      window.location.href = `/pedido/${payload.publicToken}`;
+      // El pedido ya existe (pending). NO se redirige aún: se pasa a cobrar la tarjeta en el
+      // propio panel. El redirect a la pantalla de estado lo hace `PaymentStep` cuando el
+      // cobro se confirma -- si el comensal cancela, su pedido sigue ahí, sin pagar.
+      setEnviando(false);
+      setPago({
+        clientSecret: payload.clientSecret,
+        publicToken: payload.publicToken,
+        connectedAccount: payload.connectedAccount ?? null,
+      });
     } catch {
       setError(strings.orderError);
       setEnviando(false);
     }
   }, [lines, strings]);
+
+  const cancelarPago = useCallback(() => {
+    setPago(null);
+    setError(null);
+  }, []);
 
   const value = useMemo<CartState>(
     () => ({
@@ -257,6 +287,8 @@ export function CartProvider({
       panelOpen,
       openPanel: abrirPanel,
       closePanel: cerrarPanel,
+      pago,
+      cancelarPago,
       checkout,
     }),
     [
@@ -274,6 +306,8 @@ export function CartProvider({
       panelOpen,
       abrirPanel,
       cerrarPanel,
+      pago,
+      cancelarPago,
       checkout,
     ],
   );

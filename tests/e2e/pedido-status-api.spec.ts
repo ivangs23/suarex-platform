@@ -47,7 +47,14 @@ test.describe("GET /api/pedido/[publicToken]", () => {
       data: { lines: [{ productId, quantity: 1, extraIds: [], notes: null }] },
     });
     expect(createResponse.ok()).toBeTruthy();
-    const { publicToken } = (await createResponse.json()) as { publicToken: string };
+    const created = (await createResponse.json()) as {
+      publicToken: string;
+      clientSecret?: string;
+    };
+    // Crear el pedido devuelve el `clientSecret` con el que el comensal cobra la tarjeta: sin
+    // él, "Pagar" no tendría con qué confirmar y el pedido se quedaría pending para siempre.
+    expect(created.clientSecret).toBeTruthy();
+    const { publicToken } = created;
     const { orderId } = await findOrderByPublicToken(publicToken);
 
     // A partir de aquí el pedido existe de verdad en la base: el `finally` lo

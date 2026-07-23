@@ -104,6 +104,11 @@ export async function POST(request: Request) {
     return NextResponse.json({
       clientSecret: intent.client_secret,
       publicToken: order.publicToken,
+      // La cuenta conectada del cliente, o null. NO es un secreto -- es el `acct_...` que ya
+      // recibe el dinero -- y el front LO NECESITA: un cargo directo sobre una cuenta
+      // conectada solo se puede confirmar si Stripe.js se inicializa contra esa misma cuenta.
+      // Sin esto, un tenant con Connect vería el formulario de pago fallar al confirmar.
+      connectedAccount,
     });
   } catch (error) {
     console.error(
