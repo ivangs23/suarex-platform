@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { AllergenBadges } from "../allergens/AllergenBadges";
 import { AddToCart } from "../cart/AddToCart";
 import { CartButton } from "../cart/CartButton";
@@ -33,14 +34,24 @@ export const ManuelaTheme: MenuTheme = ({
           {/* La foto de la bienvenida es un AJUSTE del cliente (`heroUrl`): puede cambiarla
               desde su panel sin tocar código. La pared de casetes de su local queda de
               respaldo mientras no suba otra. */}
-          <img
+          <Image
             className={styles.heroPhoto}
             src={branding.heroUrl ?? "/brands/manuela-fondo.png"}
             alt=""
-            aria-hidden="true"
+            aria-hidden
+            fill
+            sizes="100vw"
+            priority
           />
           <span className={styles.heroContent}>
-            <img className={styles.signature} src="/brands/manuela-logo.png" alt={businessName} />
+            <Image
+              className={styles.signature}
+              src="/brands/manuela-logo.png"
+              alt={businessName}
+              width={1283}
+              height={282}
+              priority
+            />
             <span className={styles.badge} aria-hidden="true">
               ☕
             </span>
@@ -92,7 +103,13 @@ export const ManuelaTheme: MenuTheme = ({
           href={welcome.href.replace("?ver=carta", "")}
           aria-label="Volver al inicio"
         >
-          <img className={styles.topbarLogo} src="/brands/manuela-logo.png" alt={businessName} />
+          <Image
+            className={styles.topbarLogo}
+            src="/brands/manuela-logo.png"
+            alt={businessName}
+            width={1283}
+            height={282}
+          />
         </a>
 
         <div className={styles.topbarEnd}>
@@ -160,12 +177,14 @@ export const ManuelaTheme: MenuTheme = ({
                     la hay. aria-hidden en ambos: el nombre de al lado ya dice qué es, y sin
                     esto un lector de pantalla anunciaría "taza de café Cafés". */}
                   {node.imageUrl ? (
-                    <img
+                    <Image
                       className={styles.cardPhoto}
                       src={node.imageUrl}
                       alt=""
-                      aria-hidden="true"
-                      loading="lazy"
+                      aria-hidden
+                      width={200}
+                      height={200}
+                      unoptimized
                     />
                   ) : node.icon ? (
                     <span className={styles.cardIcon} aria-hidden="true">
@@ -187,19 +206,18 @@ export const ManuelaTheme: MenuTheme = ({
             {view.products.map((product) => (
               <li key={product.id} className={styles.item} data-testid="product">
                 {/* Su tarjeta real: la foto arriba con el precio en una pastilla encima, y
-                    debajo el nombre y el botón a todo el ancho. La foto es de Storage por
-                    tenant, una URL absoluta que next/image no puede optimizar sin configurar
-                    `remotePatterns` con un host que varía por despliegue: <img> a propósito.
-                    `loading="lazy"` porque una categoría puede traer decenas y casi ninguna
-                    entra en la primera pantalla. */}
+                    debajo el nombre y el botón a todo el ancho. Foto de Storage ya optimizada
+                    al subir, por eso `unoptimized`; `fill` la ajusta a la franja. */}
                 <div className={styles.itemMedia}>
                   {product.imageUrl ? (
-                    <img
+                    <Image
                       className={styles.itemPhoto}
                       data-testid="product-photo"
                       src={product.imageUrl}
                       alt=""
-                      loading="lazy"
+                      fill
+                      sizes="(min-width: 48rem) 33vw, 50vw"
+                      unoptimized
                     />
                   ) : null}
                   <span className={styles.price}>{product.priceLabel}</span>

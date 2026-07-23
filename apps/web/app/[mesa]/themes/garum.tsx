@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { AllergenBadges } from "../allergens/AllergenBadges";
 import { AddToCart } from "../cart/AddToCart";
 import { CartButton } from "../cart/CartButton";
@@ -30,10 +31,25 @@ export const GarumTheme: MenuTheme = ({
       <main className={styles.page} data-theme="garum">
         <a className={styles.welcome} href={welcome.href} data-testid="welcome-enter">
           {branding.heroUrl ? (
-            <img className={styles.welcomePhoto} src={branding.heroUrl} alt="" aria-hidden="true" />
+            <Image
+              className={styles.welcomePhoto}
+              src={branding.heroUrl}
+              alt=""
+              aria-hidden
+              fill
+              sizes="100vw"
+              unoptimized
+            />
           ) : null}
           <span className={styles.welcomeContent}>
-            <img className={styles.welcomeLogo} src="/brands/garum-logo.png" alt="" aria-hidden />
+            <Image
+              className={styles.welcomeLogo}
+              src="/brands/garum-logo.png"
+              alt=""
+              aria-hidden
+              width={786}
+              height={472}
+            />
             <span className={styles.heroTitle} data-testid="tenant-name">
               {businessName}
             </span>
@@ -77,7 +93,13 @@ export const GarumTheme: MenuTheme = ({
           {t.table} {mesa}
         </span>
 
-        <img className={styles.logo} src="/brands/garum-logo.png" alt={businessName} />
+        <Image
+          className={styles.logo}
+          src="/brands/garum-logo.png"
+          alt={businessName}
+          width={786}
+          height={472}
+        />
 
         <div className={styles.topbarEnd}>
           {langs.length > 1 ? (
@@ -160,19 +182,19 @@ export const GarumTheme: MenuTheme = ({
                   <span className={styles.price}>{product.priceLabel}</span>
                   <AllergenBadges allergens={product.allergens} />
                 </div>
-                {/* La foto es de Storage por tenant, una URL absoluta que next/image no puede
-                  optimizar sin configurar `remotePatterns` con un host que varía por
-                  despliegue: <img> a propósito. `loading="lazy"` porque una categoría puede
-                  traer decenas y casi ninguna entra en la primera pantalla. */}
+                {/* Foto de Storage por tenant. Ya se sube optimizada (900px WebP, ver
+                  packages/db/src/image.js), así que va con `unoptimized`: next/image no la
+                  re-optimiza (sería CPU de más en el VPS sobre algo ya optimizado), pero sí
+                  aporta el lazy-load y las dimensiones que evitan el salto de layout. */}
                 {product.imageUrl ? (
-                  <img
+                  <Image
                     className={styles.itemPhoto}
                     data-testid="product-photo"
                     src={product.imageUrl}
                     alt=""
-                    loading="lazy"
                     width={88}
                     height={88}
+                    unoptimized
                   />
                 ) : null}
                 <AddToCart product={product} />
