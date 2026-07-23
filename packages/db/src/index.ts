@@ -23,6 +23,7 @@ export {
   deleteTenantAllergen,
   listAdminCatalog,
   listAssignableAllergens,
+  listCategoryParents,
   setProductAvailability,
   updateCategory,
   updateProduct,

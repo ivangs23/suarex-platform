@@ -17,6 +17,8 @@ import { ConfirmDeleteForm } from "./ConfirmDeleteForm";
 import { buildCatalogView } from "./catalog-view";
 import styles from "./catalogo.module.css";
 import { ExtraForm } from "./ExtraForm";
+import { MoveCategoryForm } from "./MoveCategoryForm";
+import { MoveProductForm } from "./MoveProductForm";
 import { ProductEditForm } from "./ProductEditForm";
 import { ProductForm } from "./ProductForm";
 
@@ -83,6 +85,11 @@ export default async function AdminCatalogoPage({
     name: category.nameI18n.es ?? category.slug,
   }));
 
+  // Para los selects de mover: el árbol YA aplanado por `buildCatalogView`, con su
+  // profundidad. Una lista plana de 59 nombres no dice de dónde cuelga cada uno, y en esta
+  // carta hay varios "BLANCO" y varios "TINTO" en ramas distintas.
+  const moveOptions = view.tree.map((n) => ({ id: n.id, name: n.name, depth: n.depth }));
+
   const productOptions = catalog.categories.flatMap((category) =>
     category.products.map((product) => ({ id: product.id, name: product.nameI18n.es ?? "" })),
   );
@@ -144,7 +151,7 @@ export default async function AdminCatalogoPage({
             </p>
           ) : (
             <ul className={styles.items}>
-              {view.items.map(({ product, categoryPath }) => {
+              {view.items.map(({ product, categoryId, categoryPath }) => {
                 const allergenNames = product.allergenIds
                   .map((id) => allergenNameById.get(id))
                   .filter((name): name is string => Boolean(name));
@@ -190,6 +197,16 @@ export default async function AdminCatalogoPage({
                         allergens={allergenOptions}
                         imagePath={product.imageUrl}
                         imageUrl={product.imageUrl ? catalogImageUrl(product.imageUrl) : null}
+                      />
+                    </details>
+
+                    <details className={styles.details}>
+                      <summary>Mover producto</summary>
+                      <MoveProductForm
+                        productId={product.id}
+                        currentCategoryId={categoryId}
+                        sortOrder={product.sortOrder}
+                        options={moveOptions}
                       />
                     </details>
 
@@ -249,6 +266,15 @@ export default async function AdminCatalogoPage({
                   name={seleccionada.nameI18n.es ?? seleccionada.slug}
                   slug={seleccionada.slug}
                   destination={seleccionada.destination}
+                />
+              </details>
+              <details className={styles.details}>
+                <summary>Mover categoría</summary>
+                <MoveCategoryForm
+                  categoryId={seleccionada.id}
+                  currentParentId={seleccionada.parentId}
+                  sortOrder={seleccionada.sortOrder}
+                  options={moveOptions}
                 />
               </details>
               <ConfirmDeleteForm

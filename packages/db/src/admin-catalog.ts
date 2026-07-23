@@ -124,6 +124,24 @@ export async function createCategory(
   return { id: data.id as string };
 }
 
+/**
+ * Solo el esqueleto del árbol: id y padre de cada categoría.
+ *
+ * Existe para que la comprobación de ciclos al mover una categoría no tenga que traerse el
+ * catálogo entero -- `listAdminCatalog` arrastra los 184 productos y sus extras para
+ * responder a una pregunta que solo necesita 59 parejas.
+ */
+export async function listCategoryParents(
+  tenantId: string,
+): Promise<{ id: string; parentId: string | null }[]> {
+  const { data, error } = await tenantScoped("categories", tenantId).select("id, parent_id");
+  if (error) throw error;
+  return (data ?? []).map((row) => ({
+    id: row.id as string,
+    parentId: (row.parent_id as string | null) ?? null,
+  }));
+}
+
 export async function updateCategory(
   tenantId: string,
   categoryId: string,

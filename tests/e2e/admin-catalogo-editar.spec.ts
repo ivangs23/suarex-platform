@@ -1,4 +1,4 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 
 /**
  * Edición de catálogo desde el panel.
@@ -272,5 +272,107 @@ test.describe("foto de producto", () => {
     await expect(
       filaProducto(page, "Ribera del Duero").getByTestId("admin-product-image"),
     ).toHaveCount(0, { timeout: 15_000 });
+  });
+});
+
+/**
+ * Elige una categoría en un `<select>` de mover por su NOMBRE, sin depender de la sangría.
+ *
+ * Las opciones llevan un prefijo de guiones por nivel (`— — Blancos`), así que fijar la
+ * etiqueta completa en el test la ata a la profundidad actual del árbol: mover una
+ * categoría un nivel arriba rompería un test que no tiene nada que ver. Se busca la opción
+ * cuyo texto TERMINA en el nombre y se selecciona por su valor.
+ */
+async function elegirCategoria(select: Locator, nombre: string): Promise<void> {
+  const value = await select
+    .locator("option")
+    .filter({ hasText: nombre })
+    .last()
+    .getAttribute("value");
+  await select.selectOption(value as string);
+}
+
+test.describe("mover por el árbol", () => {
+  // El seed compartido se restaura SIEMPRE: mover deja el catálogo distinto para el resto
+  // de la suite si una aserción revienta a mitad.
+  test.afterEach(async ({ page }) => {
+    await page.goto("http://garum.localhost:3000/admin/catalogo?cat=blancos");
+    const bloque = page.getByTestId("admin-category");
+    if ((await bloque.count()) === 0) return;
+    await bloque.locator("summary", { hasText: "Mover categoría" }).click();
+    const f = bloque.getByTestId("move-category-form");
+    await elegirCategoria(f.getByLabel("Colgar de"), "Vinos");
+    await f.getByRole("button", { name: "Mover categoría" }).click();
+    await expect(page.getByTestId("catalog-crumbs")).toContainText("Vinos", { timeout: 15_000 });
+  });
+
+  test("un owner mueve un producto de categoría y se refleja en la carta", async ({ page }) => {
+    await loginComoOwner(page);
+    await page.goto("http://garum.localhost:3000/admin/catalogo?cat=tintos");
+
+    const fila = filaProducto(page, "Ribera del Duero");
+    await fila.locator("summary", { hasText: "Mover producto" }).click();
+    const formulario = fila.getByTestId("move-product-form");
+    await elegirCategoria(formulario.getByLabel("Categoría"), "Blancos");
+    await formulario.getByRole("button", { name: "Mover producto" }).click();
+
+    // Aparece en la categoría de destino…
+    await page.goto("http://garum.localhost:3000/admin/catalogo?cat=blancos");
+    await expect(filaProducto(page, "Ribera del Duero")).toBeVisible({ timeout: 15_000 });
+
+    // …y en la carta pública, que es lo que ve el comensal.
+    await page.goto("http://garum.localhost:3000/5?cat=blancos");
+    await expect(page.getByTestId("product").filter({ hasText: "Ribera del Duero" })).toBeVisible();
+
+    // Se devuelve a su sitio.
+    await page.goto("http://garum.localhost:3000/admin/catalogo?cat=blancos");
+    const vuelta = filaProducto(page, "Ribera del Duero");
+    await vuelta.locator("summary", { hasText: "Mover producto" }).click();
+    const f2 = vuelta.getByTestId("move-product-form");
+    await elegirCategoria(f2.getByLabel("Categoría"), "Tintos");
+    await f2.getByRole("button", { name: "Mover producto" }).click();
+    await page.goto("http://garum.localhost:3000/admin/catalogo?cat=tintos");
+    await expect(filaProducto(page, "Ribera del Duero")).toBeVisible({ timeout: 15_000 });
+  });
+
+  test("el panel rechaza mover una categoría dentro de su propio descendiente", async ({
+    page,
+  }) => {
+    // El ciclo es el fallo grave de esta función: Postgres lo acepta (parent_id es una
+    // clave ajena a la propia tabla) y no da error -- deja una rama inalcanzable desde la
+    // raíz, con sus productos fuera de la carta sin que nadie los haya borrado.
+    await loginComoOwner(page);
+    await page.goto("http://garum.localhost:3000/admin/catalogo?cat=vinos");
+
+    const bloque = page.getByTestId("admin-category");
+    await bloque.locator("summary", { hasText: "Mover categoría" }).click();
+    const formulario = bloque.getByTestId("move-category-form");
+    // Blancos cuelga de Vinos: colgar Vinos de Blancos cerraría el ciclo.
+    await elegirCategoria(formulario.getByLabel("Colgar de"), "Blancos");
+    await formulario.getByRole("button", { name: "Mover categoría" }).click();
+    await page.waitForTimeout(2000);
+
+    // Sigue siendo raíz: el movimiento se rechazó.
+    await page.goto("http://garum.localhost:3000/admin/catalogo?cat=vinos");
+    await expect(page.getByTestId("catalog-crumbs")).toHaveText("Vinos");
+  });
+
+  test("un owner saca una categoría al primer nivel", async ({ page }) => {
+    await loginComoOwner(page);
+    await page.goto("http://garum.localhost:3000/admin/catalogo?cat=blancos");
+
+    const bloque = page.getByTestId("admin-category");
+    await bloque.locator("summary", { hasText: "Mover categoría" }).click();
+    const formulario = bloque.getByTestId("move-category-form");
+    // Cadena vacía = raíz; es el valor, no la etiqueta, así que no depende del texto.
+    await formulario.getByLabel("Colgar de").selectOption("");
+    await formulario.getByRole("button", { name: "Mover categoría" }).click();
+
+    // Ya no cuelga de Vinos: las migas son solo ella.
+    await expect(page.getByTestId("catalog-crumbs")).toHaveText("Blancos", { timeout: 15_000 });
+
+    // Y aparece como categoría raíz en la carta pública.
+    await page.goto("http://garum.localhost:3000/5");
+    await expect(page.getByTestId("category").filter({ hasText: "Blancos" })).toBeVisible();
   });
 });
