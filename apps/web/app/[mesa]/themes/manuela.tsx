@@ -9,6 +9,19 @@ import type { MenuTheme } from "./types";
  */
 export const ManuelaTheme: MenuTheme = ({ businessName, mesa, branding, view }) => (
   <main className={styles.page} data-theme="manuela">
+    {/* Su cabecera real: la foto de la pared de casetes de su local con la firma
+        manuscrita encima. Assets versionados con la app (no el logo por tenant de
+        Storage), servidos estáticos: <img> a propósito, sin optimizar. */}
+    <header className={styles.topbar}>
+      <img
+        className={styles.topbarPhoto}
+        src="/brands/manuela-fondo.png"
+        alt=""
+        aria-hidden="true"
+      />
+      <img className={styles.signature} src="/brands/manuela-logo.png" alt={businessName} />
+    </header>
+
     <div className={styles.inner}>
       <header className={styles.header}>
         {/* Logo por tenant desde una URL absoluta de Storage, no un asset local
