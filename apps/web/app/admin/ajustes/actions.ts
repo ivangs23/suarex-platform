@@ -5,7 +5,7 @@ import {
   getTenantSettings,
   setTenantCustomDomain,
   updateTenantSettings,
-  uploadBrandingLogo,
+  uploadBrandingImage,
 } from "@suarex/db";
 import { revalidatePath } from "next/cache";
 import { managerAction } from "@/lib/require-manager";
@@ -24,10 +24,11 @@ const ROOT_DOMAINS = resolveRootDomains(process.env);
  * `catalogo/actions.ts`): `managerAction` comprueba owner/admin ANTES del cuerpo, y el
  * `tenantId` es SIEMPRE `session.tenantId`, nunca del formulario.
  *
- * El logo se sube aparte (Storage, `uploadBrandingLogo`) y su URL se fusiona en `branding`.
- * Si el formulario no trae fichero nuevo, se PRESERVA el `logoUrl` que ya tuviera el tenant
- * (leído de los ajustes actuales vía `parseBranding`, que degrada con seguridad) -- guardar
- * la marca sin volver a subir el logo no debe borrarlo.
+ * Las imágenes de marca (el logo y la foto de la pantalla de bienvenida) se suben aparte
+ * (Storage, `uploadBrandingImage`) y sus URLs se fusionan en `branding`. Si el formulario no
+ * trae fichero nuevo, se PRESERVA la que ya tuviera el tenant (leída de los ajustes actuales
+ * vía `parseBranding`, que degrada con seguridad) -- guardar la marca sin volver a subir la
+ * foto no debe borrarla.
  */
 export const updateSettingsAction = managerAction(async (session, formData: FormData) => {
   const brandingFields = parseBrandingFields(formData);
@@ -36,15 +37,19 @@ export const updateSettingsAction = managerAction(async (session, formData: Form
   const currency = parseCurrency(formData);
   const customDomain = parseCustomDomain(formData, ROOT_DOMAINS);
 
-  // Punto de partida del logo: el que ya está guardado (o null).
+  // Punto de partida de cada imagen: la que ya está guardada (o null).
   const current = await getTenantSettings(session.tenantId);
-  let logoUrl = parseBranding(current?.branding).logoUrl;
+  const guardado = parseBranding(current?.branding);
 
-  const logo = formData.get("logo");
-  if (logo instanceof File && logo.size > 0) {
-    const bytes = new Uint8Array(await logo.arrayBuffer());
-    logoUrl = await uploadBrandingLogo(session.tenantId, { bytes, contentType: logo.type });
-  }
+  const subirSiViene = async (campo: string, actual: string | null) => {
+    const file = formData.get(campo);
+    if (!(file instanceof File) || file.size === 0) return actual;
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    return uploadBrandingImage(session.tenantId, { bytes, contentType: file.type });
+  };
+
+  const logoUrl = await subirSiViene("logo", guardado.logoUrl);
+  const heroUrl = await subirSiViene("hero", guardado.heroUrl);
 
   await updateTenantSettings(session.tenantId, {
     branding: {
@@ -52,6 +57,7 @@ export const updateSettingsAction = managerAction(async (session, formData: Form
       colors: brandingFields.colors,
       fonts: brandingFields.fonts,
       logoUrl,
+      heroUrl,
     },
     fiscal,
     locale,

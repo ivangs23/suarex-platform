@@ -14,9 +14,12 @@ export const ManuelaTheme: MenuTheme = ({ businessName, mesa, branding, view, we
     return (
       <main className={styles.page} data-theme="manuela">
         <a className={styles.welcome} href={welcome.href} data-testid="welcome-enter">
+          {/* La foto de la bienvenida es un AJUSTE del cliente (`heroUrl`): puede cambiarla
+              desde su panel sin tocar código. La pared de casetes de su local queda de
+              respaldo mientras no suba otra. */}
           <img
             className={styles.heroPhoto}
-            src="/brands/manuela-fondo.png"
+            src={branding.heroUrl ?? "/brands/manuela-fondo.png"}
             alt=""
             aria-hidden="true"
           />

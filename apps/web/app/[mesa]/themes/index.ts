@@ -14,7 +14,10 @@ import type { MenuTheme } from "./types";
  * `tenant_settings.theme`. No hay que tocar la página ni el data layer: todos los temas
  * comparten el contrato `MenuThemeProps`.
  */
-const THEMES: Record<string, MenuTheme> = {
+/* Exportado para que `contract.test.tsx` recorra TODOS los temas: un tema nuevo queda
+   vigilado por el mero hecho de registrarse aquí, sin apuntarlo en ninguna lista aparte que
+   alguien se olvidaría de actualizar. */
+export const THEMES: Record<string, MenuTheme> = {
   generic: GenericTheme,
   garum: GarumTheme,
   manuela: ManuelaTheme,

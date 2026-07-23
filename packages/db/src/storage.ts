@@ -58,17 +58,23 @@ export async function uploadProductImage(
 }
 
 /**
- * Sube un logo de marca al bucket `catalog` bajo `tenant/{tenantId}/branding/`, siempre por
- * el servidor con service role -- mismo bucket, mismas garantías y misma validación que
+ * Sube una imagen de marca al bucket `catalog` bajo `tenant/{tenantId}/branding/`, siempre
+ * por el servidor con service role -- mismo bucket, mismas garantías y misma validación que
  * `uploadProductImage` (UUID de tenant, tipo, tamaño validados ANTES de construir la ruta o
- * tocar Storage). A DIFERENCIA de `uploadProductImage`, devuelve la URL pública ABSOLUTA, no
- * la ruta: `branding.logoUrl` (ver `@suarex/config`, `safeParseLogoUrl`) solo admite URLs
+ * tocar Storage).
+ *
+ * Sirve para las DOS imágenes de marca -- el logo y la foto de la pantalla de bienvenida
+ * (`heroUrl`) --, que se validan y se guardan exactamente igual: una función por campo solo
+ * duplicaría los límites de tipo y tamaño, con el riesgo de que uno se quedara atrás.
+ *
+ * A DIFERENCIA de `uploadProductImage`, devuelve la URL pública ABSOLUTA, no
+ * la ruta: las imágenes de marca (ver `@suarex/config`, `safeParseImageUrl`) solo admiten URLs
  * absolutas http/https, así que quien consume el logo (el layout público) necesita la URL
  * ya resuelta, no una ruta relativa que tendría que recomponer. Se compone igual que
  * `catalogImageUrl` en `apps/web/app/admin/catalogo/page.tsx`: `${SUPABASE_URL}` +
  * el prefijo público del bucket.
  */
-export async function uploadBrandingLogo(
+export async function uploadBrandingImage(
   tenantId: string,
   file: { bytes: Uint8Array; contentType: string },
 ): Promise<string> {

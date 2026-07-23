@@ -180,3 +180,55 @@
   object-fit: cover;
   border-radius: 0.5rem;
 }
+
+/* PANTALLA DE BIENVENIDA. Es un paso del flujo, así que la tienen todos los clientes,
+   también los que no quieren tema propio. Se pinta entera con sus variables de marca: si no
+   han subido foto, el fondo de marca ya da una pantalla digna. */
+.welcome {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: 2rem 1.25rem;
+  overflow: hidden;
+  text-decoration: none;
+  color: inherit;
+}
+
+.welcomePhoto {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.welcomeContent {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  text-align: center;
+  /* Legible tanto sobre la foto del cliente como sobre el color de marca sin ella. */
+  background: color-mix(in srgb, var(--color-bg) 82%, transparent);
+  border-radius: 1.5rem;
+  padding: 2.5rem 2rem;
+}
+
+.welcomeLogo {
+  max-height: 5.5rem;
+  width: auto;
+}
+
+.enter {
+  margin-top: 0.5rem;
+  padding: 0.7rem 1.6rem;
+  border-radius: 999px;
+  background: var(--color-primary);
+  color: var(--color-bg);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}

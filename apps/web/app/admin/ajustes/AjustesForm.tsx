@@ -5,6 +5,7 @@ type Props = {
   colors: { bg: string; fg: string; primary: string; accent: string; muted: string };
   fonts: { display: string; body: string };
   logoUrl: string | null;
+  heroUrl: string | null;
   fiscal: {
     legalName: string;
     cif: string;
@@ -62,6 +63,15 @@ export function AjustesForm(props: Props) {
           <input name="logo" type="file" accept="image/png,image/jpeg,image/webp" />
         </label>
         {props.logoUrl ? <img src={props.logoUrl} alt="Logo actual" width={80} /> : null}
+        {/* La pantalla de bienvenida la tienen todos los clientes; lo que cada uno elige es
+            esta foto. Sin ella, el tema la resuelve con su marca. */}
+        <label>
+          Foto de bienvenida (PNG/JPG/WebP, máx 5 MB)
+          <input name="hero" type="file" accept="image/png,image/jpeg,image/webp" />
+        </label>
+        {props.heroUrl ? (
+          <img src={props.heroUrl} alt="Foto de bienvenida actual" width={80} />
+        ) : null}
       </fieldset>
 
       <fieldset>

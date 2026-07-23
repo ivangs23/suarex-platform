@@ -7,6 +7,15 @@ export type Branding = {
   name: string | null;
   colors: { bg: string; fg: string; primary: string; accent: string; muted: string };
   logoUrl: string | null;
+  /**
+   * Foto de la PANTALLA DE BIENVENIDA (el paso previo a la carta), o `null`.
+   *
+   * La bienvenida existe para todos los clientes -- es funcionalidad, no decoración. Lo que
+   * cambia de uno a otro es esta foto, que por eso es un ajuste y no un asset escrito en el
+   * código de un tema. Un tema a medida puede caer a su propia imagen cuando no hay ninguna
+   * configurada; el genérico se queda con el color de marca.
+   */
+  heroUrl: string | null;
   fonts: { display: string; body: string };
 };
 
@@ -20,6 +29,7 @@ export const DEFAULT_BRANDING: Branding = {
     muted: "#d9d1bd",
   },
   logoUrl: null,
+  heroUrl: null,
   fonts: { display: "system-ui", body: "system-ui" },
 };
 
@@ -85,7 +95,8 @@ function withDefault<T>(value: T | undefined, fallback: T): T {
 }
 
 /**
- * `logoUrl` solo admite URLs absolutas http/https. Se rechaza deliberadamente
+ * Las imágenes de marca (`logoUrl`, `heroUrl`) solo admiten URLs absolutas http/https. Se
+ * rechaza deliberadamente
  * cualquier otro esquema (`javascript:`, `data:`, `vbscript:`, `file:`, ...)
  * y también las rutas relativas: el storage de logos (Supabase Storage,
  * `tenant/{id}/...`) siempre entrega URLs absolutas https, no hay ningún
@@ -94,7 +105,7 @@ function withDefault<T>(value: T | undefined, fallback: T): T {
  * ambiguas (p.ej. URLs "protocol-relative" `//host/...`) sin ningún
  * beneficio real. Mantener el contrato mínimo: absoluto, http o https.
  */
-function safeParseLogoUrl(value: unknown): string | null | undefined {
+function safeParseImageUrl(value: unknown): string | null | undefined {
   if (value === null) return null;
   if (typeof value !== "string") return undefined;
   try {
@@ -110,6 +121,7 @@ export function parseBranding(raw: unknown): Branding {
   const colorsRaw = safeProp(raw, "colors");
   const fontsRaw = safeProp(raw, "fonts");
   const logoUrlRaw = safeProp(raw, "logoUrl");
+  const heroUrlRaw = safeProp(raw, "heroUrl");
   const nameRaw = safeProp(raw, "name");
 
   return {
@@ -136,7 +148,8 @@ export function parseBranding(raw: unknown): Branding {
         DEFAULT_BRANDING.colors.muted,
       ),
     },
-    logoUrl: withDefault(safeParseLogoUrl(logoUrlRaw), DEFAULT_BRANDING.logoUrl),
+    logoUrl: withDefault(safeParseImageUrl(logoUrlRaw), DEFAULT_BRANDING.logoUrl),
+    heroUrl: withDefault(safeParseImageUrl(heroUrlRaw), DEFAULT_BRANDING.heroUrl),
     fonts: {
       display: withDefault(
         safeParseLeaf(fontSchema, safeProp(fontsRaw, "display")),
