@@ -61,7 +61,15 @@ export function ProductForm({
       <input id={`${formId}-price`} name="price" type="number" step="0.01" min="0" required />
 
       <label htmlFor={`${formId}-image`}>Imagen</label>
-      <input id={`${formId}-image`} name="image" type="file" accept="image/*" />
+      {/* Los tipos EXACTOS que acepta el servidor, no `image/*`: con el comodín, el
+          selector deja elegir un HEIC (formato por defecto del iPhone) y la subida muere con
+          un error crudo tras esperar a que suba. */}
+      <input
+        id={`${formId}-image`}
+        name="image"
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+      />
 
       <fieldset>
         <legend>Alérgenos</legend>

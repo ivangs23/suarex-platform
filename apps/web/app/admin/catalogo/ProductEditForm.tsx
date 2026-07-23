@@ -13,6 +13,10 @@ type Props = {
   price: number;
   allergenIds: number[];
   allergens: AllergenOption[];
+  /** Ruta de la foto actual dentro del bucket, o `null`. */
+  imagePath: string | null;
+  /** URL pública de la foto actual, para la vista previa. */
+  imageUrl: string | null;
 };
 
 /**
@@ -77,15 +81,50 @@ export function ProductEditForm(props: Props) {
         defaultValue={props.description}
       />
 
-      {/* Sin fichero nuevo, `extractImagePath` devuelve undefined y la imagen actual se
-          conserva: elegir foto es opcional en una edición.
+      {/* La ruta actual viaja para poder BORRAR el objeto de Storage al quitar la foto: sin
+          ella, la fila se quedaría sin referencia y el fichero huérfano ahí para siempre. */}
+      {props.imagePath ? (
+        <input type="hidden" name="current_image" value={props.imagePath} />
+      ) : null}
+
+      {/* Ver la foto actual antes de sustituirla: sin vista previa, "Sustituir foto" pide
+          decidir a ciegas sobre algo que sí se puede mirar. */}
+      {props.imageUrl ? (
+        // biome-ignore lint/performance/noImgElement: miniatura de admin; next/image exigiría remotePatterns con el host de Supabase, que varía por despliegue
+        <img
+          data-testid="product-edit-current-image"
+          src={props.imageUrl}
+          alt="Foto actual del producto"
+          width={72}
+          height={72}
+        />
+      ) : null}
+
+      {/* Sin fichero nuevo y sin marcar "quitar", la foto actual se conserva: elegir foto es
+          opcional en una edición.
 
           "Sustituir foto" y no "Cambiar imagen": `getByLabel` hace subcadena sin distinguir
           mayúsculas, así que cualquier etiqueta que CONTENGA "Imagen" casaría también con la
           del formulario de alta -- único en la página y localizado así por sus tests -- y
-          con 184 productos ese localizador pasaría de 1 a 185 elementos. */}
+          con 184 productos ese localizador pasaría de 1 a 185 elementos.
+
+          `accept` lista los tipos EXACTOS que acepta el servidor, no `image/*`: con el
+          comodín, el selector del sistema deja elegir un HEIC (el formato por defecto de las
+          fotos de iPhone) y la subida muere con un error crudo tras esperar a que suba. */}
       <label htmlFor={`${formId}-image`}>Sustituir foto</label>
-      <input id={`${formId}-image`} name="image" type="file" accept="image/*" />
+      <input
+        id={`${formId}-image`}
+        name="image"
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+      />
+
+      {props.imageUrl ? (
+        <label>
+          <input type="checkbox" name="remove_image" data-testid="remove-image" />
+          Quitar la foto
+        </label>
+      ) : null}
 
       <fieldset>
         <legend>Alérgenos</legend>
