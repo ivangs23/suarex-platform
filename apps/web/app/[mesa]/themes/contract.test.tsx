@@ -52,11 +52,13 @@ const VIEW_HOJA: MenuView = {
     {
       id: "p1",
       name: "Ribera del Duero",
+      description: "Crianza de la ribera",
       price: 18,
       priceCents: 1800,
       priceLabel: "18,00 €",
       imageUrl: "https://storage.test/foto.jpg",
       extras: [{ id: "e1", name: "Copa extra", priceCents: 300, priceLabel: "3,00 €" }],
+      allergens: [{ id: 12, name: "Sulfitos", icon: null }],
     },
   ],
   totalProducts: 8,
@@ -153,15 +155,16 @@ describe.each(nombres)("tema %s", (nombre) => {
     expect(render({ view: sinFoto })).not.toContain('data-testid="product-photo"');
   });
 
-  it("deja pedir cada producto, con sus extras", () => {
+  it("deja abrir la ficha del producto para pedirlo", () => {
     // Pedir es FUNCIONALIDAD: la tienen todos los clientes. Un tema a medida escrito
-    // copiando otro y al que se le olvide el botón deja a ese cliente con una carta que no
+    // copiando otro y al que se le olvide el control deja a ese cliente con una carta que no
     // vende, y eso no se ve en ninguna captura.
+    //
+    // La ficha (alérgenos, opciones, notas, total) es un componente compartido que se monta
+    // al abrirla, así que aquí se comprueba la puerta -- que es lo que pinta el tema.
     const html = render({ view: VIEW_HOJA });
 
-    expect(html).toContain('data-testid="add-to-cart"');
-    expect(html).toContain('data-testid="extra-checkbox"');
-    expect(html).toContain("Copa extra");
+    expect(html).toContain('data-testid="open-product-sheet"');
   });
 
   it("sin haber escaneado el QR de la mesa, la carta se consulta pero no se pide", () => {
@@ -169,7 +172,7 @@ describe.each(nombres)("tema %s", (nombre) => {
     const html = render({ view: VIEW_HOJA }, false);
 
     expect(html).toContain('data-testid="product"');
-    expect(html).not.toContain('data-testid="add-to-cart"');
+    expect(html).not.toContain('data-testid="open-product-sheet"');
   });
 
   it("ofrece la vuelta al primer nivel desde dentro de una categoría", () => {

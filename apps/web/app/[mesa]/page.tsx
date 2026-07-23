@@ -1,5 +1,11 @@
 import { parseBranding } from "@suarex/config";
-import { findTableByToken, getCategories, getProducts, getTenantSettings } from "@suarex/db";
+import {
+  findTableByToken,
+  getCategories,
+  getProducts,
+  getTenantSettings,
+  listAssignableAllergens,
+} from "@suarex/db";
 import { notFound } from "next/navigation";
 import { readMesaToken } from "@/lib/mesa-cookie";
 import { requireTenant } from "@/lib/tenant-context";
@@ -57,10 +63,14 @@ export default async function MenuPage({
     notFound();
   }
 
-  const [categories, products, settings] = await Promise.all([
+  const [categories, products, settings, allergens] = await Promise.all([
     getCategories(tenant.id),
     getProducts(tenant.id),
     getTenantSettings(tenant.id).catch(() => null),
+    // Los 14 de la UE más los propios del cliente. Si esta lectura fallara, la ficha diría
+    // que no hay ninguno declarado, que es MENTIRA y no un fallo cosmético: mejor que
+    // reviente la carta a que un celíaco lea "sin alérgenos" sobre un plato con gluten.
+    listAssignableAllergens(tenant.id),
   ]);
 
   const branding = parseBranding(settings?.branding);
@@ -82,6 +92,7 @@ export default async function MenuPage({
     // que basta el endpoint público; NEXT_PUBLIC_* se inlinea en build y no expone ninguna
     // clave de servicio.
     storageOrigin: process.env.NEXT_PUBLIC_SUPABASE_URL,
+    allergens,
   });
 
   // Paso de bienvenida: activo solo en la raíz de la carta y mientras no se haya entrado.

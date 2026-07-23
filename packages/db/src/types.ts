@@ -50,6 +50,10 @@ export type Product = {
   /** Ruta de la foto dentro del bucket `catalog`, o `null`. NO es una URL completa: el
    * bucket es público en lectura y la carta le antepone el endpoint de Storage. */
   imagePath: string | null;
+  /** Ids de `allergens` (los 14 globales de la UE y/o los propios del tenant). La carta los
+   * resuelve a nombre e icono; declararlos mal es un riesgo para el comensal, así que nunca
+   * se infieren: solo se muestra lo que el gestor marcó. */
+  allergenIds: number[];
   isAvailable: boolean;
   sortOrder: number;
   extras: ProductExtra[];

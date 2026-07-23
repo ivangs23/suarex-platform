@@ -19,7 +19,13 @@ function cat(
   };
 }
 
-function prod(id: string, categoryId: string, name: string, price: number): Product {
+function prod(
+  id: string,
+  categoryId: string,
+  name: string,
+  price: number,
+  allergenIds: number[] = [],
+): Product {
   return {
     id,
     categoryId,
@@ -27,6 +33,7 @@ function prod(id: string, categoryId: string, name: string, price: number): Prod
     descriptionI18n: {},
     price,
     imagePath: null,
+    allergenIds,
     isAvailable: true,
     sortOrder: 0,
     extras: [],
@@ -154,5 +161,45 @@ describe("buildMenuView", () => {
       basePath: "/5",
     });
     expect(view.children[0]?.href).toBe("/5?cat=con%20espacio");
+  });
+});
+
+describe("alérgenos", () => {
+  // Declararlos mal es un riesgo para el comensal, no un fallo cosmético: la vista NUNCA los
+  // infiere, solo resuelve los ids que marcó el gestor.
+  const CATALOGO = [
+    { id: 1, nameI18n: { es: "Gluten" }, icon: "wheat" },
+    { id: 7, nameI18n: { es: "Lácteos" }, icon: "milk" },
+  ];
+
+  function conProducto(allergenIds: number[], catalogo = CATALOGO) {
+    return buildMenuView({
+      categories: [cat("tapas", null, "Tapas")],
+      products: [prod("p1", "c-tapas", "Tosta", 4, allergenIds)],
+      currentSlug: "tapas",
+      basePath: "/1",
+      allergens: catalogo,
+    }).products[0];
+  }
+
+  it("resuelve cada id a su nombre y su icono", () => {
+    expect(conProducto([1, 7])?.allergens).toEqual([
+      { id: 1, name: "Gluten", icon: "wheat" },
+      { id: 7, name: "Lácteos", icon: "milk" },
+    ]);
+  });
+
+  it("un producto sin alérgenos declarados no trae ninguno", () => {
+    expect(conProducto([])?.allergens).toEqual([]);
+  });
+
+  it("descarta un id que no resuelve en vez de pintarlo en crudo", () => {
+    // Un número suelto en la ficha no le dice nada al comensal, y pintar "99" donde debería
+    // ir "Sulfitos" se parece demasiado a una declaración.
+    expect(conProducto([1, 99])?.allergens).toEqual([{ id: 1, name: "Gluten", icon: "wheat" }]);
+  });
+
+  it("sin catálogo de alérgenos no inventa ninguno", () => {
+    expect(conProducto([1, 7], [])?.allergens).toEqual([]);
   });
 });

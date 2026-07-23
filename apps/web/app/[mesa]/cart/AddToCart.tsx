@@ -1,58 +1,40 @@
 "use client";
 
-import { type CartProduct, useCart } from "./CartProvider";
+import { useState } from "react";
+import type { MenuProduct } from "../menu-view";
+import { useCart } from "./CartProvider";
 import styles from "./cart.module.css";
+import { ProductSheet } from "./ProductSheet";
 
 /**
- * Botón de añadir con sus extras. Lo pinta CADA tema dentro de su tarjeta de producto: dónde
- * cae y qué aspecto tiene es cosa del tema, pero que exista no lo es -- lo comprueba
+ * Control de pedido de una tarjeta de producto. Lo pinta CADA tema dentro de su tarjeta:
+ * dónde cae y qué aspecto tiene es cosa del tema, pero que exista no lo es -- lo comprueba
  * `themes/contract.test.tsx`.
  *
- * Sin proveedor (o sin haber escaneado el QR) no pinta nada: la carta sigue siendo
- * consultable, pero no se puede pedir desde una mesa que no se ha escaneado.
+ * Dos caminos a propósito:
+ *
+ *   "Añadir / personalizar" abre la FICHA, que es donde están los alérgenos, las opciones
+ *   y las notas. Es el camino principal: un café con leche de avena no se puede pedir
+ *   desde un botón suelto.
+ *
+ *   El contador aparece cuando ya hay unidades de ese producto, para subir y bajar sin
+ *   volver a abrir nada. Corregir un plato añadido de más tiene que poder hacerse donde se
+ *   añadió; obligar a abrir la ficha para quitar uno es donde el comensal se rinde.
+ *
+ * Sin haber escaneado el QR no pinta nada: la carta sigue consultable, pero no se pide desde
+ * una mesa en la que no estás sentado.
  */
-export function AddToCart({ product }: { product: CartProduct }) {
+export function AddToCart({ product }: { product: MenuProduct }) {
   const cart = useCart();
+  const [fichaAbierta, setFichaAbierta] = useState(false);
+
   if (!cart?.canOrder) return null;
 
-  const unidades = cart.quantities[product.id] ?? 0;
-  const elegidas = cart.selectedExtras[product.id] ?? [];
+  const unidades = cart.unitsOf(product.id);
 
   return (
     <div className={styles.add}>
-      {product.extras.length > 0 ? (
-        <ul className={styles.extras} data-testid="extras-list">
-          {product.extras.map((extra) => (
-            <li key={extra.id}>
-              <label className={styles.extra}>
-                <input
-                  type="checkbox"
-                  data-testid="extra-checkbox"
-                  data-extra-id={extra.id}
-                  checked={elegidas.includes(extra.id)}
-                  onChange={() => cart.toggleExtra(product.id, extra.id)}
-                />
-                {extra.name} (+{extra.priceLabel})
-              </label>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-
-      {/* Con unidades en el carrito, el botón único da paso al contador. Quitar tiene que
-          estar donde se puso: obligar a bajar a la barra del total para corregir un plato
-          añadido de más es justo donde el comensal se rinde y llama al camarero. */}
-      {unidades === 0 ? (
-        <button
-          type="button"
-          className={styles.addButton}
-          data-testid="add-to-cart"
-          data-product-id={product.id}
-          onClick={() => cart.add(product)}
-        >
-          Añadir
-        </button>
-      ) : (
+      {unidades > 0 ? (
         <div className={styles.stepper}>
           <button
             type="button"
@@ -60,7 +42,7 @@ export function AddToCart({ product }: { product: CartProduct }) {
             data-testid="remove-from-cart"
             data-product-id={product.id}
             aria-label={`Quitar una unidad de ${product.name}`}
-            onClick={() => cart.remove(product.id)}
+            onClick={() => cart.removeOne(product.id)}
           >
             −
           </button>
@@ -73,12 +55,26 @@ export function AddToCart({ product }: { product: CartProduct }) {
             data-testid="add-to-cart"
             data-product-id={product.id}
             aria-label={`Añadir una unidad de ${product.name}`}
-            onClick={() => cart.add(product)}
+            onClick={() => cart.addOne(product)}
           >
             +
           </button>
         </div>
-      )}
+      ) : null}
+
+      <button
+        type="button"
+        className={styles.addButton}
+        data-testid="open-product-sheet"
+        data-product-id={product.id}
+        onClick={() => setFichaAbierta(true)}
+      >
+        {unidades > 0 ? "Personalizar" : "Añadir / Personalizar"}
+      </button>
+
+      {fichaAbierta ? (
+        <ProductSheet product={product} onClose={() => setFichaAbierta(false)} />
+      ) : null}
     </div>
   );
 }

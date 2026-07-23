@@ -17,31 +17,57 @@ export type CartExtra = { id: string; name: string; priceLabel: string; priceCen
 /** Lo mínimo que el carrito necesita de un producto para contar y cobrar. */
 export type CartProduct = { id: string; name: string; priceCents: number; extras: CartExtra[] };
 
+/**
+ * Una LÍNEA del carrito: un producto con las extras y la nota que eligió el comensal.
+ *
+ * El carrito se lleva por líneas y no por producto porque el mismo café puede pedirse dos
+ * veces de formas distintas -- uno con leche de avena y otro sin lactosa -- y con una entrada
+ * por producto la segunda elección pisaría a la primera. Es además la forma que ya espera el
+ * pedido (`CartLineInput`): una línea = un producto + sus extras + su nota.
+ */
+export type CartLine = {
+  /** Id local de la línea; no existe en la base, solo distingue líneas en esta pantalla. */
+  id: string;
+  product: CartProduct;
+  quantity: number;
+  extraIds: string[];
+  notes: string | null;
+  /** Precio de UNA unidad con sus extras, en céntimos. */
+  unitCents: number;
+};
+
 type CartState = {
-  /** Unidades por producto. */
-  quantities: Record<string, number>;
-  /** Extras elegidas por producto, aplicadas a TODAS las unidades de esa línea. */
-  selectedExtras: Record<string, string[]>;
+  lines: CartLine[];
   totalLabel: string;
   totalCents: number;
+  /** Unidades totales en el carrito, para el distintivo del botón del pedido. */
+  totalUnits: number;
   error: string | null;
   enviando: boolean;
   /** `false` cuando este navegador no ha escaneado el QR de ninguna mesa. */
   canOrder: boolean;
-  add: (product: CartProduct) => void;
-  /** Quita una unidad. Al llegar a cero el producto sale del carrito, con sus extras. */
-  remove: (productId: string) => void;
-  toggleExtra: (productId: string, extraId: string) => void;
+  /** Unidades que hay de un producto, sumando todas sus líneas. */
+  unitsOf: (productId: string) => number;
+  addLine: (
+    product: CartProduct,
+    opciones?: { extraIds?: string[]; notes?: string | null; quantity?: number },
+  ) => void;
+  /** Suma una unidad a la última línea de ese producto, o la crea sin personalizar. */
+  addOne: (product: CartProduct) => void;
+  /** Quita una unidad de la última línea de ese producto; a cero, la línea desaparece. */
+  removeOne: (productId: string) => void;
+  setLineQuantity: (lineId: string, quantity: number) => void;
+  formatCents: (cents: number) => string;
   checkout: () => void;
 };
 
 /**
  * EL CARRITO ES UNO SOLO, PARA TODOS LOS CLIENTES.
  *
- * Toda la lógica de pedir -- contar unidades, aplicar extras, sumar, crear el pedido -- vive
- * aquí y en ningún otro sitio. Los temas solo colocan los botones y el resumen donde encajen
- * en su diseño. Es la misma regla que ya cumple la navegación de la carta: la página calcula,
- * el tema pinta.
+ * Toda la lógica de pedir -- líneas, extras, notas, sumas, crear el pedido -- vive aquí y en
+ * ningún otro sitio. Los temas solo colocan los botones y el resumen donde encajen en su
+ * diseño. Es la misma regla que ya cumple la navegación de la carta: la página calcula, el
+ * tema pinta.
  *
  * Nació de un fallo real: el carrito vivía en una segunda carta (`/m/{token}`) sin tema, así
  * que ningún cliente lo veía con su marca y cada mejora se hacía en una pantalla que no
@@ -52,14 +78,16 @@ const CartContext = createContext<CartState | null>(null);
 /** Carrito en curso de ESTA visita, para que sobreviva a navegar entre categorías. */
 const CLAVE_CARRITO = "suarex_carrito";
 
-type CarritoGuardado = {
-  quantities: Record<string, number>;
-  selectedExtras: Record<string, string[]>;
-  enCarrito: Record<string, CartProduct>;
-};
-
 export function useCart(): CartState | null {
   return useContext(CartContext);
+}
+
+function unitCentsDe(product: CartProduct, extraIds: string[]): number {
+  const extras = extraIds.reduce((suma, extraId) => {
+    const extra = product.extras.find((e) => e.id === extraId);
+    return suma + (extra?.priceCents ?? 0);
+  }, 0);
+  return product.priceCents + extras;
 }
 
 export function CartProvider({
@@ -74,19 +102,14 @@ export function CartProvider({
   /** Solo se puede pedir habiendo escaneado el QR de la mesa (ver `lib/mesa-cookie.ts`). */
   canOrder: boolean;
 }) {
-  const [quantities, setQuantities] = useState<Record<string, number>>({});
-  const [selectedExtras, setSelectedExtras] = useState<Record<string, string[]>>({});
-  // Los productos que han entrado al carrito, guardados al añadirlos: el total se calcula
-  // sobre ellos y no sobre el nivel que se esté viendo, porque navegar a otra categoría
-  // desmonta los productos anteriores y si no el total se desharía al cambiar de pantalla.
-  const [enCarrito, setEnCarrito] = useState<Record<string, CartProduct>>({});
+  const [lines, setLines] = useState<CartLine[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
 
   /* EL CARRITO SOBREVIVE A LA NAVEGACIÓN. La carta se navega por niveles con enlaces
      normales, así que cada categoría es una carga de página nueva y el estado de React se
-     pierde entero. Un pedido real cae en categorías distintas -- un vino y una tosta -- y sin
-     esto el comensal perdería lo que llevaba cada vez que cambiara de pantalla.
+     pierde entero. Un pedido real cae en categorías distintas -- un café y una tostada -- y
+     sin esto el comensal perdería lo que llevaba cada vez que cambiara de pantalla.
 
      `sessionStorage` y no `localStorage`: el carrito es de ESTA visita. Volver mañana al
      restaurante y encontrarse el pedido de ayer a medio hacer sería peor que empezar de cero.
@@ -97,10 +120,8 @@ export function CartProvider({
     try {
       const crudo = window.sessionStorage.getItem(CLAVE_CARRITO);
       if (!crudo) return;
-      const guardado = JSON.parse(crudo) as Partial<CarritoGuardado>;
-      setQuantities(guardado.quantities ?? {});
-      setSelectedExtras(guardado.selectedExtras ?? {});
-      setEnCarrito(guardado.enCarrito ?? {});
+      const guardado = JSON.parse(crudo) as CartLine[];
+      if (Array.isArray(guardado)) setLines(guardado);
     } catch {
       // Un carrito guardado ilegible (otra versión, manipulado) se ignora: empezar vacío es
       // molesto; romper la carta entera, no se puede.
@@ -110,87 +131,116 @@ export function CartProvider({
 
   useEffect(() => {
     try {
-      const vacio = Object.keys(enCarrito).length === 0;
-      if (vacio) {
+      if (lines.length === 0) {
         window.sessionStorage.removeItem(CLAVE_CARRITO);
         return;
       }
-      window.sessionStorage.setItem(
-        CLAVE_CARRITO,
-        JSON.stringify({ quantities, selectedExtras, enCarrito } satisfies CarritoGuardado),
-      );
+      window.sessionStorage.setItem(CLAVE_CARRITO, JSON.stringify(lines));
     } catch {
       // Sin almacenamiento (modo privado de algunos navegadores) el carrito sigue
       // funcionando dentro de una misma pantalla; solo deja de sobrevivir al cambio.
     }
-  }, [quantities, selectedExtras, enCarrito]);
+  }, [lines]);
 
   // Cifra ORIENTATIVA para el comensal. El cobro real lo recalcula `createPendingOrder`
   // desde la base de datos ignorando por completo lo que diga el navegador.
   const totalCents = useMemo(
-    () =>
-      Object.values(enCarrito).reduce((suma, product) => {
-        const unidades = quantities[product.id] ?? 0;
-        if (unidades === 0) return suma;
-        const extrasCents = (selectedExtras[product.id] ?? []).reduce((extraSuma, extraId) => {
-          const extra = product.extras.find((e) => e.id === extraId);
-          return extraSuma + (extra?.priceCents ?? 0);
-        }, 0);
-        return suma + (product.priceCents + extrasCents) * unidades;
-      }, 0),
-    [enCarrito, quantities, selectedExtras],
+    () => lines.reduce((suma, line) => suma + line.unitCents * line.quantity, 0),
+    [lines],
   );
 
-  const add = useCallback((product: CartProduct) => {
-    setEnCarrito((actual) => ({ ...actual, [product.id]: product }));
-    setQuantities((actual) => ({ ...actual, [product.id]: (actual[product.id] ?? 0) + 1 }));
-  }, []);
+  const totalUnits = useMemo(() => lines.reduce((suma, line) => suma + line.quantity, 0), [lines]);
 
-  const remove = useCallback(
-    (productId: string) => {
-      const restantes = (quantities[productId] ?? 0) - 1;
+  const unitsOf = useCallback(
+    (productId: string) =>
+      lines
+        .filter((line) => line.product.id === productId)
+        .reduce((suma, line) => suma + line.quantity, 0),
+    [lines],
+  );
 
-      if (restantes > 0) {
-        setQuantities((actual) => ({ ...actual, [productId]: restantes }));
-        return;
+  const addLine = useCallback<CartState["addLine"]>((product, opciones) => {
+    const extraIds = opciones?.extraIds ?? [];
+    const notes = opciones?.notes?.trim() ? opciones.notes.trim() : null;
+    const quantity = Math.max(1, opciones?.quantity ?? 1);
+
+    setLines((actual) => {
+      // Dos veces lo MISMO (mismas extras, misma nota) se agrupa en una línea con más
+      // unidades: en la comanda de cocina son el mismo plato, y separarlas solo alargaría
+      // el ticket.
+      const igual = actual.find(
+        (line) =>
+          line.product.id === product.id &&
+          line.notes === notes &&
+          line.extraIds.length === extraIds.length &&
+          line.extraIds.every((id) => extraIds.includes(id)),
+      );
+      if (igual) {
+        return actual.map((line) =>
+          line.id === igual.id ? { ...line, quantity: line.quantity + quantity } : line,
+        );
       }
 
-      // Al llegar a cero el producto sale del carrito ENTERO, con sus extras: dejarlo a cero
-      // con las extras marcadas haría que volver a añadirlo trajera de vuelta una elección
-      // que el comensal ya había deshecho.
-      const sinEl = <T,>(mapa: Record<string, T>) => {
-        const { [productId]: _fuera, ...resto } = mapa;
-        return resto;
-      };
-      setQuantities(sinEl);
-      setEnCarrito(sinEl);
-      setSelectedExtras(sinEl);
+      return [
+        ...actual,
+        {
+          // `crypto.randomUUID` existe en todo navegador con soporte de la carta; el respaldo
+          // cubre contextos no seguros (http en una IP local), donde no está definido.
+          id: globalThis.crypto?.randomUUID?.() ?? `${product.id}-${actual.length}`,
+          product,
+          quantity,
+          extraIds,
+          notes,
+          unitCents: unitCentsDe(product, extraIds),
+        },
+      ];
+    });
+  }, []);
+
+  const addOne = useCallback(
+    (product: CartProduct) => {
+      // Sin personalizar: suma a la ÚLTIMA línea de ese producto para no crear una línea
+      // nueva idéntica cada vez que se pulsa el más.
+      const ultima = [...lines].reverse().find((line) => line.product.id === product.id);
+      if (!ultima) {
+        addLine(product);
+        return;
+      }
+      setLines((actual) =>
+        actual.map((line) =>
+          line.id === ultima.id ? { ...line, quantity: line.quantity + 1 } : line,
+        ),
+      );
     },
-    [quantities],
+    [lines, addLine],
   );
 
-  const toggleExtra = useCallback((productId: string, extraId: string) => {
-    setSelectedExtras((actual) => {
-      const elegidas = actual[productId] ?? [];
-      const siguiente = elegidas.includes(extraId)
-        ? elegidas.filter((id) => id !== extraId)
-        : [...elegidas, extraId];
-      return { ...actual, [productId]: siguiente };
+  const removeOne = useCallback((productId: string) => {
+    setLines((actual) => {
+      const ultima = [...actual].reverse().find((line) => line.product.id === productId);
+      if (!ultima) return actual;
+      if (ultima.quantity > 1) {
+        return actual.map((line) =>
+          line.id === ultima.id ? { ...line, quantity: line.quantity - 1 } : line,
+        );
+      }
+      // A cero la línea desaparece ENTERA, con sus extras y su nota: dejarla a cero haría
+      // que volver a añadir el producto trajera de vuelta una elección ya deshecha.
+      return actual.filter((line) => line.id !== ultima.id);
     });
+  }, []);
+
+  const setLineQuantity = useCallback((lineId: string, quantity: number) => {
+    setLines((actual) =>
+      quantity <= 0
+        ? actual.filter((line) => line.id !== lineId)
+        : actual.map((line) => (line.id === lineId ? { ...line, quantity } : line)),
+    );
   }, []);
 
   const checkout = useCallback(async () => {
     setError(null);
     setEnviando(true);
-
-    const lines = Object.entries(quantities)
-      .filter(([, unidades]) => unidades > 0)
-      .map(([productId, quantity]) => ({
-        productId,
-        quantity,
-        extraIds: selectedExtras[productId] ?? [],
-        notes: null,
-      }));
 
     try {
       // Sin `tableToken`: la mesa la pone el servidor desde la cookie httpOnly del QR, así
@@ -198,7 +248,14 @@ export function CartProvider({
       const response = await fetch("/api/orders", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ lines }),
+        body: JSON.stringify({
+          lines: lines.map((line) => ({
+            productId: line.product.id,
+            quantity: line.quantity,
+            extraIds: line.extraIds,
+            notes: line.notes,
+          })),
+        }),
       });
 
       const payload = (await response.json()) as { error?: string; publicToken?: string };
@@ -213,34 +270,39 @@ export function CartProvider({
       setError("No se pudo crear el pedido");
       setEnviando(false);
     }
-  }, [quantities, selectedExtras]);
+  }, [lines]);
 
   const value = useMemo<CartState>(
     () => ({
-      quantities,
-      selectedExtras,
+      lines,
       totalCents,
+      totalUnits,
       totalLabel: formatCents(totalCents, locale, currency),
       error,
       enviando,
       canOrder,
-      add,
-      remove,
-      toggleExtra,
+      unitsOf,
+      addLine,
+      addOne,
+      removeOne,
+      setLineQuantity,
+      formatCents: (cents: number) => formatCents(cents, locale, currency),
       checkout,
     }),
     [
-      quantities,
-      selectedExtras,
+      lines,
       totalCents,
+      totalUnits,
       locale,
       currency,
       error,
       enviando,
       canOrder,
-      add,
-      remove,
-      toggleExtra,
+      unitsOf,
+      addLine,
+      addOne,
+      removeOne,
+      setLineQuantity,
       checkout,
     ],
   );

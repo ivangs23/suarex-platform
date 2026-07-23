@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { deleteOrder, findOrderByPublicToken, orderLineNotes } from "./helpers/orders-db.js";
 
 /**
  * El recorrido del comensal: escanea el QR de su mesa y pide.
@@ -28,30 +29,85 @@ test("el QR de la mesa lleva a la carta del cliente, con su tema", async ({ page
   await expect(page.locator("[data-theme]")).toHaveAttribute("data-theme", "garum");
 });
 
-test("tras escanear se puede pedir, y el total se acumula", async ({ page }) => {
+test("la ficha del producto declara alérgenos, opciones y total antes de añadir", async ({
+  page,
+}) => {
+  // El comensal decide en la ficha: qué lleva, qué puede cambiar y cuánto le va a costar.
+  // Enseñar el precio DESPUÉS de añadir es como esconderlo.
   await page.goto(QR_MESA_1);
   await page.goto(TINTOS);
 
-  await expect(page.getByTestId("product").filter({ hasText: "Ribera del Duero" })).toBeVisible();
+  const tarjeta = page.getByTestId("product").filter({ hasText: "Ribera del Duero" });
+  await tarjeta.getByTestId("open-product-sheet").click();
 
-  await page.getByTestId("add-to-cart").first().click();
-  await page.getByTestId("add-to-cart").first().click();
-  await expect(page.getByTestId("cart-total")).toHaveText("36,00 €");
+  const ficha = page.getByTestId("product-sheet");
+  await expect(ficha).toBeVisible();
+  await expect(ficha.getByTestId("sheet-total")).toHaveText("18,00 €");
+
+  // La extra se elige AQUÍ y su precio se ve al momento, no al llegar a la cuenta.
+  await ficha.getByTestId("extra-checkbox").first().click();
+  await expect(ficha.getByTestId("sheet-total")).toHaveText("21,00 €");
+
+  // Dos unidades: el total de la ficha las multiplica.
+  await ficha.getByTestId("sheet-more").click();
+  await expect(ficha.getByTestId("sheet-units")).toHaveText("2");
+  await expect(ficha.getByTestId("sheet-total")).toHaveText("42,00 €");
+
+  await ficha.getByTestId("sheet-add").click();
+  await expect(ficha).toHaveCount(0);
+  await expect(page.getByTestId("cart-total")).toHaveText("42,00 €");
 });
 
-test("elegir un extra suma su precio al total", async ({ page }) => {
+test("la ficha dice lo que sabe de los alérgenos, sin afirmar de más", async ({ page }) => {
+  // La carta no puede afirmar "no contiene": solo puede decir qué declaró el gestor, y
+  // remitir al personal ante una alergia grave.
   await page.goto(QR_MESA_1);
   await page.goto(TINTOS);
 
-  await page.getByTestId("add-to-cart").first().click();
+  await page
+    .getByTestId("product")
+    .filter({ hasText: "Ribera del Duero" })
+    .getByTestId("open-product-sheet")
+    .click();
+
+  const ficha = page.getByTestId("product-sheet");
+  // El seed no declara alérgenos en este producto.
+  await expect(ficha.getByTestId("sheet-allergens-empty")).toBeVisible();
+  await expect(ficha).toContainText(/alergia severa/i);
+});
+
+test("una nota de la ficha llega a la comanda", async ({ page }) => {
+  // La nota solo sirve si acaba en la comanda que sale por la impresora de cocina. Comprobar
+  // que se escribe en el recuadro no prueba nada: este test la sigue hasta la base.
+  await page.goto(QR_MESA_1);
+  await page.goto(TINTOS);
+
+  await page
+    .getByTestId("product")
+    .filter({ hasText: "Ribera del Duero" })
+    .getByTestId("open-product-sheet")
+    .click();
+
+  const ficha = page.getByTestId("product-sheet");
+  await ficha.getByTestId("sheet-notes").fill("Sin hielo, por favor");
+  await ficha.getByTestId("sheet-add").click();
   await expect(page.getByTestId("cart-total")).toHaveText("18,00 €");
 
-  await page.getByTestId("extra-checkbox").first().click();
-  await expect(page.getByTestId("cart-total")).toHaveText("21,00 €");
+  await page.getByTestId("cart-pay").click();
+  // `commit`: basta con que la navegación arranque, que es cuando la URL ya trae el token.
+  // Esperar al `load` metía en el reloj la creación del PaymentIntent en Stripe y, en dev, la
+  // primera compilación de `/pedido/[publicToken]` -- dos esperas que no son de este test y
+  // que lo hacían fallar en la suite completa aunque pasara aislado cinco veces seguidas.
+  await page.waitForURL(/\/pedido\//, { waitUntil: "commit", timeout: 30_000 });
 
-  // Desmarcarla la resta de nuevo.
-  await page.getByTestId("extra-checkbox").first().click();
-  await expect(page.getByTestId("cart-total")).toHaveText("18,00 €");
+  const publicToken = new URL(page.url()).pathname.split("/").pop() as string;
+  const { orderId } = await findOrderByPublicToken(publicToken);
+  // El pedido es real a partir de aquí: se borra pase lo que pase con la aserción.
+  try {
+    expect(await orderLineNotes(orderId)).toEqual(["Sin hielo, por favor"]);
+  } finally {
+    await deleteOrder(orderId);
+  }
 });
 
 test("desde la tarjeta se quitan unidades, y a cero el producto sale del carrito", async ({
@@ -63,7 +119,8 @@ test("desde la tarjeta se quitan unidades, y a cero el producto sale del carrito
   await page.goto(TINTOS);
 
   const tarjeta = page.getByTestId("product").filter({ hasText: "Ribera del Duero" });
-  await tarjeta.getByTestId("add-to-cart").click();
+  await tarjeta.getByTestId("open-product-sheet").click();
+  await page.getByTestId("product-sheet").getByTestId("sheet-add").click();
   await tarjeta.getByTestId("add-to-cart").click();
   await expect(tarjeta.getByTestId("cart-units")).toHaveText("2");
   await expect(page.getByTestId("cart-total")).toHaveText("36,00 €");
@@ -85,12 +142,17 @@ test("quitar un producto olvida también sus extras", async ({ page }) => {
   await page.goto(TINTOS);
 
   const tarjeta = page.getByTestId("product").filter({ hasText: "Ribera del Duero" });
-  await tarjeta.getByTestId("add-to-cart").click();
-  await tarjeta.getByTestId("extra-checkbox").click();
+  await tarjeta.getByTestId("open-product-sheet").click();
+  const ficha = page.getByTestId("product-sheet");
+  await ficha.getByTestId("extra-checkbox").click();
+  await ficha.getByTestId("sheet-add").click();
   await expect(page.getByTestId("cart-total")).toHaveText("21,00 €");
 
+  // Quitarlo se lleva la línea entera, con su extra: volver a añadirlo sin personalizar
+  // vuelve al precio base y no arrastra una elección ya deshecha.
   await tarjeta.getByTestId("remove-from-cart").click();
-  await tarjeta.getByTestId("add-to-cart").click();
+  await tarjeta.getByTestId("open-product-sheet").click();
+  await page.getByTestId("product-sheet").getByTestId("sheet-add").click();
   await expect(page.getByTestId("cart-total")).toHaveText("18,00 €");
 });
 
@@ -111,7 +173,8 @@ test("el total sobrevive a cambiar de categoría", async ({ page }) => {
   // podría pedir un vino y una tosta en la misma comanda.
   await page.goto(QR_MESA_1);
   await page.goto(TINTOS);
-  await page.getByTestId("add-to-cart").first().click();
+  await page.getByTestId("open-product-sheet").first().click();
+  await page.getByTestId("product-sheet").getByTestId("sheet-add").click();
   await expect(page.getByTestId("cart-total")).toHaveText("18,00 €");
 
   await page.goto("http://garum.localhost:3000/1?cat=blancos");
@@ -124,7 +187,7 @@ test("sin escanear el QR, la carta se consulta pero no se pide", async ({ page }
   await page.goto(TINTOS);
 
   await expect(page.getByTestId("product").filter({ hasText: "Ribera del Duero" })).toBeVisible();
-  await expect(page.getByTestId("add-to-cart")).toHaveCount(0);
+  await expect(page.getByTestId("open-product-sheet")).toHaveCount(0);
 });
 
 test("la cookie de una mesa no sirve para pedir desde otra", async ({ page }) => {
@@ -134,7 +197,7 @@ test("la cookie de una mesa no sirve para pedir desde otra", async ({ page }) =>
   await page.goto("http://garum.localhost:3000/5?cat=tintos");
 
   await expect(page.getByTestId("product").filter({ hasText: "Ribera del Duero" })).toBeVisible();
-  await expect(page.getByTestId("add-to-cart")).toHaveCount(0);
+  await expect(page.getByTestId("open-product-sheet")).toHaveCount(0);
 });
 
 test("la carta de un tenant no muestra productos de otro", async ({ page }) => {

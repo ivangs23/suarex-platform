@@ -23,9 +23,14 @@ export type MenuExtra = {
   priceLabel: string;
 };
 
+/** Alérgeno declarado de un producto, ya resuelto a nombre e icono. */
+export type MenuAllergen = { id: number; name: string; icon: string | null };
+
 export type MenuProduct = {
   id: string;
   name: string;
+  /** Descripción del producto, o cadena vacía. */
+  description: string;
   price: number;
   /** Precio en céntimos, que es como suma el carrito: en euros, `0.1 + 0.2` no da `0.3`. */
   priceCents: number;
@@ -37,6 +42,13 @@ export type MenuProduct = {
   imageUrl: string | null;
   /** Extras que el comensal puede añadir a este producto. */
   extras: MenuExtra[];
+  /**
+   * Alérgenos DECLARADOS por el gestor. Nunca se infieren del nombre ni de la categoría:
+   * equivocarse con un alérgeno es un riesgo para el comensal, no un fallo cosmético. Una
+   * lista vacía significa "no hay ninguno declarado", que es lo que la ficha dice
+   * literalmente -- no "no tiene".
+   */
+  allergens: MenuAllergen[];
 };
 
 export type MenuCrumb = { name: string; href: string };
@@ -101,6 +113,9 @@ export function buildMenuView(params: {
   /** Endpoint público de Storage (`NEXT_PUBLIC_SUPABASE_URL`). Sin él las fotos no se
    * pintan, en vez de componer una URL rota. */
   storageOrigin?: string;
+  /** Catálogo de alérgenos del tenant (globales de la UE + propios), para resolver los ids
+   * que trae cada producto. Sin él, la ficha no declara ninguno. */
+  allergens?: { id: number; nameI18n: Record<string, string>; icon: string | null }[];
 }): MenuView {
   const {
     categories,
@@ -110,7 +125,10 @@ export function buildMenuView(params: {
     locale = "es",
     currency = "EUR",
     storageOrigin = "",
+    allergens = [],
   } = params;
+
+  const allergensById = new Map(allergens.map((allergen) => [allergen.id, allergen]));
 
   const childrenByParent = new Map<string | null, Category[]>();
   for (const category of categories) {
@@ -196,6 +214,13 @@ export function buildMenuView(params: {
       price: product.price,
       priceCents: eurosToCents(product.price),
       priceLabel: formatCents(eurosToCents(product.price), locale, currency),
+      description: product.descriptionI18n.es ?? "",
+      // Un id que no resuelve se descarta en vez de pintarse en crudo: un número suelto en
+      // la ficha no le dice nada al comensal.
+      allergens: product.allergenIds.flatMap((id) => {
+        const allergen = allergensById.get(id);
+        return allergen ? [{ id, name: allergen.nameI18n.es ?? "", icon: allergen.icon }] : [];
+      }),
       extras: product.extras.map((extra) => ({
         id: extra.id,
         name: extra.nameI18n.es ?? "",

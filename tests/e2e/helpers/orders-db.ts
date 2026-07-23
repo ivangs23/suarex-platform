@@ -116,3 +116,11 @@ export async function firstProductIdOfTenant(
 
   return data.id as string;
 }
+
+/** Notas de las líneas de un pedido, para comprobar que lo que escribió el comensal llega
+ *  a la comanda que se imprime en cocina -- y no se queda en el navegador. */
+export async function orderLineNotes(orderId: string): Promise<(string | null)[]> {
+  const { data, error } = await admin.from("order_items").select("notes").eq("order_id", orderId);
+  if (error) throw error;
+  return (data ?? []).map((row) => (row.notes as string | null) ?? null);
+}

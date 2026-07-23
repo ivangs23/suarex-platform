@@ -130,3 +130,195 @@
   opacity: 0.6;
   cursor: progress;
 }
+
+/* FICHA DEL PRODUCTO. Hoja que sube desde abajo en móvil -- que es donde se usa la carta --
+   y queda centrada con holgura en pantallas grandes. Se pinta con las variables de marca,
+   así que se ve del color de cada cliente sin que ningún tema la redefina. */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0;
+}
+
+/* Cubre toda la pantalla por detrás de la hoja: es el botón de cerrar tocando fuera. */
+.backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  padding: 0;
+  background: rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+}
+
+.sheet {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(32rem, 100%);
+  /* Nunca más alta que la pantalla: el pie con el total y el botón tiene que verse siempre,
+     también con el teclado abierto escribiendo una nota. */
+  max-height: min(88vh, 44rem);
+  background: var(--color-bg);
+  color: var(--color-fg);
+  border-radius: 1.25rem 1.25rem 0 0;
+  overflow: hidden;
+}
+
+@media (min-width: 40rem) {
+  .overlay {
+    align-items: center;
+    padding: 1.5rem;
+  }
+
+  .sheet {
+    border-radius: 1.25rem;
+  }
+}
+
+.sheetHead {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.1rem 1.25rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-primary) 22%, transparent);
+}
+
+.sheetTitle {
+  margin: 0;
+  flex: 1;
+  font-family: var(--font-playfair), Georgia, serif;
+  font-size: 1.35rem;
+  line-height: 1.2;
+}
+
+.sheetClose {
+  width: 2.4rem;
+  height: 2.4rem;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-primary) 14%, transparent);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.sheetBody {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.1rem 1.25rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+}
+
+.sheetDescription {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.sheetSection {
+  margin: 0 0 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-primary);
+}
+
+.sheetNote {
+  margin: 0.5rem 0 0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  opacity: 0.75;
+}
+
+.allergens {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.allergen {
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-primary) 14%, transparent);
+  font-size: 0.82rem;
+}
+
+.options {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 22%, transparent);
+  border-radius: 0.9rem;
+  background: color-mix(in srgb, var(--color-bg) 60%, #ffffff);
+  cursor: pointer;
+}
+
+.optionName {
+  flex: 1;
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.optionPrice {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--color-primary);
+}
+
+.notes {
+  width: 100%;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 22%, transparent);
+  border-radius: 0.9rem;
+  background: color-mix(in srgb, var(--color-bg) 60%, #ffffff);
+  color: inherit;
+  font: inherit;
+  font-size: 0.92rem;
+  resize: vertical;
+}
+
+.sheetFoot {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.9rem 1.25rem;
+  border-top: 1px solid color-mix(in srgb, var(--color-primary) 22%, transparent);
+}
+
+.sheetTotal {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.sheetTotalLabel {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
