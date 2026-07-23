@@ -70,6 +70,7 @@ export {
   attachPaymentIntent,
   cancelOrphanedPendingOrder,
   createPendingOrder,
+  expirePendingOrders,
   getOrderByPublicToken,
   markOrderPaid,
   OrderCartError,

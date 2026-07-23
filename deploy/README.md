@@ -306,6 +306,39 @@ se ha restaurado nunca es una suposición, no una copia de seguridad.
 
 ---
 
+## 9. Expirar pedidos pendientes (cron del sistema)
+
+Un comensal puede crear un pedido y no llegar a pagar (cierra la pestaña, se queda sin
+batería). Ese pedido queda `pending` para siempre si nadie lo barre: ensucia el tablero del
+personal y las métricas.
+
+La base trae una función que los cancela (`expire_pending_orders`), y la migración intenta
+programarla con **pg_cron**. Pero el Supabase autoalojado no siempre trae pg_cron en
+`shared_preload_libraries`; cuando falta, verás en los logs del `db reset`/`db push` un
+`pg_cron scheduling skipped: ...` y **nadie los barre**. Compruébalo:
+
+```bash
+docker compose -p supabase exec db \
+  psql -U postgres -c "select jobname from cron.job;" 2>/dev/null || echo "pg_cron no disponible"
+```
+
+Si no hay job, prográmalo desde el **cron del sistema**, que existe en cualquier servidor:
+
+```bash
+crontab -e
+```
+
+```
+*/5 * * * * CRON_SECRET=<el de .env.app> APP_URL=https://<tu-dominio> /opt/suarex/deploy/scripts/expire-orders.sh >> /var/log/suarex-expire.log 2>&1
+```
+
+El endpoint (`/api/internal/expire-orders`) exige ese `CRON_SECRET` en la cabecera y **falla
+cerrado**: sin secreto configurado responde 503 y no barre nada, para que un despliegue a
+medio hacer no lo deje abierto. Genera el secreto con `openssl rand -hex 32` y ponlo tanto en
+`.env.app` como en la línea del cron.
+
+---
+
 ## Operación diaria
 
 Desplegar una versión nueva:

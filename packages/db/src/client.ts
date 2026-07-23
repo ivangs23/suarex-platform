@@ -335,6 +335,15 @@ export function rateLimitRpc(bucket: string, key: string, windowSeconds: number,
 }
 
 /**
+ * MISMA EXENCIÓN. `expire_pending_orders` es SECURITY DEFINER, es una tarea de mantenimiento
+ * (no una operación de negocio de ningún tenant) y se concede solo a `service_role`. Acotado
+ * por firma a `expirePendingOrders` (`src/orders.ts`), que lo llama el endpoint de cron.
+ */
+export function expirePendingOrdersRpc(timeoutMinutes: number) {
+  return serviceClient().rpc("expire_pending_orders", { p_timeout_minutes: timeoutMinutes });
+}
+
+/**
  * DUODÉCIMA EXENCIÓN DELIBERADA, mismo razonamiento que `authAdminForDevicePairing` pero
  * para el reset: `resetDevice` (`src/admin-devices.ts`) borra la cuenta de Auth del
  * dispositivo (`deleteUser`) para revocar sus refresh tokens y su membership al dar de baja

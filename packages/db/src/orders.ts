@@ -5,7 +5,12 @@ import {
   lineTotal,
   type PricedLine,
 } from "@suarex/domain";
-import { nextOrderNumberRpc, ordersTableForPaymentResolution, tenantScoped } from "./client.js";
+import {
+  expirePendingOrdersRpc,
+  nextOrderNumberRpc,
+  ordersTableForPaymentResolution,
+  tenantScoped,
+} from "./client.js";
 import type { CartLineInput, OrderStatus } from "./types.js";
 
 type ProductRow = {
@@ -331,4 +336,24 @@ export async function getOrderByPublicToken(publicToken: string): Promise<OrderS
     totalCents: eurosToCents(Number(data.total)),
     currency: data.currency as string,
   };
+}
+
+/**
+ * Cancela los pedidos que llevan `pending` más de `timeoutMinutes` y devuelve cuántos.
+ *
+ * Un pedido queda `pending` cuando el comensal crea el pedido pero no completa el pago (cierra
+ * la pestaña, se le acaba la batería). Sin barrerlos, se acumulan para siempre: ensucian el
+ * tablero del personal y las métricas. La migración `20260721000009` intenta programar esto
+ * con pg_cron, pero el Supabase autoalojado del despliegue no siempre trae pg_cron en
+ * `shared_preload_libraries`; ahí esta función se llama desde el endpoint de cron
+ * (`/api/internal/expire-orders`), disparado por el cron del sistema. Es idempotente: dos
+ * ejecuciones seguidas no cancelan nada nuevo.
+ *
+ * `security definer` en la función SQL; aquí se llega por `service_role`. NO acota por tenant
+ * a propósito -- es mantenimiento global de la plataforma, no una operación de un cliente.
+ */
+export async function expirePendingOrders(timeoutMinutes = 30): Promise<number> {
+  const { data, error } = await expirePendingOrdersRpc(timeoutMinutes);
+  if (error) throw error;
+  return Array.isArray(data) ? data.length : 0;
 }
