@@ -1,6 +1,7 @@
 import {
   attachPaymentIntent,
   cancelOrphanedPendingOrder,
+  checkOrderRateLimit,
   createPendingOrder,
   findTableByToken,
   getTenantSettings,
@@ -42,6 +43,26 @@ export async function POST(request: Request) {
 
   if (!table?.isActive) {
     return NextResponse.json({ error: "Mesa no encontrada" }, { status: 404 });
+  }
+
+  // RATE-LIMIT POR MESA. Sin esto, quien fotografíe un QR puede repetir esta petición sin
+  // límite y saturar la impresora de cocina (que ve la comanda en cuanto existe, pagada o
+  // no). Se limita por `table.id` -- el eje del abuso es la mesa -- y va DESPUÉS de resolver
+  // la mesa para no gastar cuota con un token inválido, pero ANTES de crear el pedido o
+  // tocar Stripe. Falla CERRADO: si el contador no responde, se rechaza en vez de dejar
+  // pasar (la disponibilidad del rate-limit no puede convertirse en la vía de saltárselo).
+  let permitido: boolean;
+  try {
+    permitido = await checkOrderRateLimit(table.id);
+  } catch (error) {
+    console.error(`[orders] Rate-limit no disponible (mesa ${table.id}):`, error);
+    return NextResponse.json({ error: GENERIC_ERROR }, { status: 500 });
+  }
+  if (!permitido) {
+    return NextResponse.json(
+      { error: "Demasiados pedidos en poco tiempo. Espera un momento e inténtalo de nuevo." },
+      { status: 429 },
+    );
   }
 
   let settings: Awaited<ReturnType<typeof getTenantSettings>>;

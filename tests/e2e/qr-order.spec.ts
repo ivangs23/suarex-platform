@@ -1,5 +1,10 @@
 import { expect, test } from "@playwright/test";
-import { deleteOrder, latestOrderForTenant, orderLineNotes } from "./helpers/orders-db.js";
+import {
+  clearAllRateLimits,
+  deleteOrder,
+  latestOrderForTenant,
+  orderLineNotes,
+} from "./helpers/orders-db.js";
 
 /**
  * El total vive en el PANEL del pedido, no en una barra siempre visible: el último gesto
@@ -23,6 +28,10 @@ async function esperaTotal(page: import("@playwright/test").Page, total: string)
 const QR_MESA_1 = "http://garum.localhost:3000/m/11111111-1111-1111-1111-111111111111";
 // Los vinos tintos del seed: es donde están "Ribera del Duero" (18 €) y su extra (3 €).
 const TINTOS = "http://garum.localhost:3000/1?cat=tintos";
+
+test.beforeEach(async () => {
+  await clearAllRateLimits();
+});
 
 test("un token de mesa desconocido devuelve 404", async ({ page }) => {
   const response = await page.goto(

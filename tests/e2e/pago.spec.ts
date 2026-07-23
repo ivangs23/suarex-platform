@@ -1,5 +1,15 @@
 import { expect, test } from "@playwright/test";
-import { deleteOrder, latestOrderForTenant } from "./helpers/orders-db.js";
+import {
+  clearAllRateLimits,
+  clearRateLimit,
+  deleteOrder,
+  deleteOrdersForTenant,
+  firstProductIdOfTenant,
+  latestOrderForTenant,
+  tableIdForToken,
+} from "./helpers/orders-db.js";
+
+const BASE = "http://garum.localhost:3000";
 
 /**
  * EL PASO DE PAGO, DENTRO DEL PANEL DEL PEDIDO.
@@ -29,6 +39,10 @@ async function pedirYPagar(page: import("@playwright/test").Page) {
   await page.getByTestId("cart-open").click();
   await page.getByTestId("cart-panel").getByTestId("cart-pay").click();
 }
+
+test.beforeEach(async () => {
+  await clearAllRateLimits();
+});
 
 test("Pagar crea el pedido y monta el formulario de tarjeta con el total", async ({ page }) => {
   await pedirYPagar(page);
@@ -61,4 +75,35 @@ test("volver al pedido cancela el cobro sin pagar", async ({ page }) => {
 
   const { orderId } = await latestOrderForTenant("garum");
   await deleteOrder(orderId);
+});
+
+test("una mesa no puede saturar la cocina: al superar el tope se rechaza (429)", async ({
+  page,
+}) => {
+  // Sin esto, quien fotografíe el QR repite la petición sin límite. El tope es por mesa: se
+  // escanea una vez y luego se dispara por encima del máximo; el pedido que lo supera se
+  // rechaza con 429, no con un pedido más para la impresora.
+  // Mesa 2, aparte de la que usan los otros tests de este fichero: su contador es propio y no
+  // arrastra los pedidos que ellos crearon en la mesa 1 dentro de la misma ventana de 2 min.
+  const MESA_2 = "http://garum.localhost:3000/m/22222222-2222-2222-2222-222222222222";
+  await page.goto(MESA_2); // fija la cookie de la mesa 2
+  await clearRateLimit(await tableIdForToken("22222222-2222-2222-2222-222222222222"));
+  const productId = await firstProductIdOfTenant("garum");
+  const cuerpo = { lines: [{ productId, quantity: 1, extraIds: [], notes: null }] };
+
+  const estados: number[] = [];
+  // ORDER_RATE_MAX = 10 en una ventana de 2 min: 10 pasan, el 11º se rechaza.
+  for (let i = 0; i < 11; i++) {
+    const r = await page.request.post(`${BASE}/api/orders`, { data: cuerpo });
+    estados.push(r.status());
+  }
+
+  try {
+    // Los 10 primeros crean pedido (200); el 11º es 429.
+    expect(estados.slice(0, 10).every((s) => s === 200)).toBe(true);
+    expect(estados[10]).toBe(429);
+  } finally {
+    // Los 10 pedidos son reales: se borran todos los de la mesa.
+    await deleteOrdersForTenant("garum");
+  }
 });

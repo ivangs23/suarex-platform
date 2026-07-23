@@ -1,5 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 import {
+  clearAllRateLimits,
   deleteOrder,
   findOrderByPublicToken,
   firstProductIdOfTenant,
@@ -43,6 +44,10 @@ function cardInStation(page: Page, station: "Cocina" | "Barra", orderId: string)
     `[aria-label="${station}"] [data-testid="order-card"][data-order-id="${orderId}"]`,
   );
 }
+
+test.beforeEach(async () => {
+  await clearAllRateLimits();
+});
 
 test("sin sesión, /staff redirige al acceso", async ({ page }) => {
   await page.goto("http://garum.localhost:3000/staff");

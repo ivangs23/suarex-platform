@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import {
+  clearAllRateLimits,
   deleteOrder,
   findOrderByPublicToken,
   firstProductIdOfTenant,
@@ -36,6 +37,10 @@ async function escanearQr(request: import("@playwright/test").APIRequestContext)
   const response = await request.get(`${BASE}/m/${GARUM_TABLE_TOKEN}`);
   expect(response.ok()).toBeTruthy();
 }
+
+test.beforeEach(async () => {
+  await clearAllRateLimits();
+});
 
 test.describe("GET /api/pedido/[publicToken]", () => {
   test("un publicToken real devuelve exactamente {orderNumber, status, totalCents, currency}", async ({

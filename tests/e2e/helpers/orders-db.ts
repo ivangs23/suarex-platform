@@ -150,3 +150,43 @@ export async function latestOrderForTenant(tenantSlug: string): Promise<CreatedO
   if (error) throw error;
   return { orderId: data.id as string, orderNumber: data.order_number as number };
 }
+
+/**
+ * Borra TODOS los pedidos de un tenant. Lo usa el test del rate-limit, que crea varios
+ * pedidos de golpe hasta chocar con el tope y no tiene un id concreto que limpiar.
+ */
+export async function deleteOrdersForTenant(tenantSlug: string): Promise<void> {
+  const { data: tenant, error: tErr } = await admin
+    .from("tenants")
+    .select("id")
+    .eq("slug", tenantSlug)
+    .single();
+  if (tErr) throw tErr;
+  const { error } = await admin
+    .from("orders")
+    .delete()
+    .eq("tenant_id", tenant.id as string);
+  if (error) throw error;
+}
+
+/** Vacía el contador de rate-limit de una clave (el id de una mesa), para que un test empiece
+ *  con cupo limpio sin depender de lo que hicieran los tests anteriores en su misma ventana. */
+export async function clearRateLimit(key: string): Promise<void> {
+  const { error } = await admin.from("rate_limit_hits").delete().eq("key", key);
+  if (error) throw error;
+}
+
+/** Id de la mesa que resuelve un token, para operar sobre su contador de rate-limit. */
+export async function tableIdForToken(token: string): Promise<string> {
+  const { data, error } = await admin.from("tables").select("id").eq("token", token).single();
+  if (error) throw error;
+  return data.id as string;
+}
+
+/** Vacía TODO el contador de rate-limit. Lo llama un `beforeEach` en los ficheros e2e que
+ *  crean pedidos: sin esto, varios tests que piden en la misma mesa dentro de la ventana de
+ *  2 min comparten cupo y el rate-limit (real en producción) haría fallar a los de después. */
+export async function clearAllRateLimits(): Promise<void> {
+  const { error } = await admin.from("rate_limit_hits").delete().neq("bucket", "__none__");
+  if (error) throw error;
+}
