@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { AllergenBadges } from "../allergens/AllergenBadges";
 import { AddToCart } from "../cart/AddToCart";
 import { CartButton } from "../cart/CartButton";
@@ -35,11 +36,27 @@ export const GenericTheme: MenuTheme = ({
       <main className={styles.page} data-theme="generic">
         <a className={styles.welcome} href={welcome.href} data-testid="welcome-enter">
           {branding.heroUrl ? (
-            <img className={styles.welcomePhoto} src={branding.heroUrl} alt="" aria-hidden="true" />
+            <Image
+              className={styles.welcomePhoto}
+              src={branding.heroUrl}
+              alt=""
+              aria-hidden
+              fill
+              sizes="100vw"
+              unoptimized
+            />
           ) : null}
           <span className={styles.welcomeContent}>
             {branding.logoUrl ? (
-              <img className={styles.welcomeLogo} src={branding.logoUrl} alt="" aria-hidden />
+              <Image
+                className={styles.welcomeLogo}
+                src={branding.logoUrl}
+                alt=""
+                aria-hidden
+                width={200}
+                height={200}
+                unoptimized
+              />
             ) : null}
             <span className={styles.name} data-testid="tenant-name">
               {businessName}
@@ -86,7 +103,14 @@ export const GenericTheme: MenuTheme = ({
             next/image pueda optimizar en build: se usa <img> a propósito. Sin logo, la marca
             del centro es el propio nombre. */}
         {branding.logoUrl ? (
-          <img className={styles.topbarLogo} src={branding.logoUrl} alt={businessName} />
+          <Image
+            className={styles.topbarLogo}
+            src={branding.logoUrl}
+            alt={businessName}
+            width={200}
+            height={200}
+            unoptimized
+          />
         ) : (
           <span className={styles.topbarName}>{businessName}</span>
         )}
@@ -173,19 +197,19 @@ export const GenericTheme: MenuTheme = ({
                   <span className={styles.price}>{product.priceLabel}</span>
                   <AllergenBadges allergens={product.allergens} />
                 </div>
-                {/* La foto es de Storage por tenant, una URL absoluta que next/image no puede
-                  optimizar sin configurar `remotePatterns` con un host que varía por
-                  despliegue: <img> a propósito. `loading="lazy"` porque una categoría puede
-                  traer decenas y casi ninguna entra en la primera pantalla. */}
+                {/* Foto de Storage por tenant. Ya se sube optimizada (900px WebP, ver
+                  packages/db/src/image.js), así que va con `unoptimized`: next/image no la
+                  re-optimiza (sería CPU de más en el VPS sobre algo ya optimizado), pero sí
+                  aporta el lazy-load y las dimensiones que evitan el salto de layout. */}
                 {product.imageUrl ? (
-                  <img
+                  <Image
                     className={styles.itemPhoto}
                     data-testid="product-photo"
                     src={product.imageUrl}
                     alt=""
-                    loading="lazy"
                     width={88}
                     height={88}
+                    unoptimized
                   />
                 ) : null}
                 <AddToCart product={product} />

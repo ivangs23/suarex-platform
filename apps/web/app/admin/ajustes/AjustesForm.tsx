@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { updateSettingsAction } from "./actions";
 
 type Props = {
@@ -62,7 +63,9 @@ export function AjustesForm(props: Props) {
           Logo (PNG/JPG/WebP, máx 5 MB)
           <input name="logo" type="file" accept="image/png,image/jpeg,image/webp" />
         </label>
-        {props.logoUrl ? <img src={props.logoUrl} alt="Logo actual" width={80} /> : null}
+        {props.logoUrl ? (
+          <Image src={props.logoUrl} alt="Logo actual" width={80} height={80} unoptimized />
+        ) : null}
         {/* La pantalla de bienvenida la tienen todos los clientes; lo que cada uno elige es
             esta foto. Sin ella, el tema la resuelve con su marca. */}
         <label>
@@ -70,7 +73,13 @@ export function AjustesForm(props: Props) {
           <input name="hero" type="file" accept="image/png,image/jpeg,image/webp" />
         </label>
         {props.heroUrl ? (
-          <img src={props.heroUrl} alt="Foto de bienvenida actual" width={80} />
+          <Image
+            src={props.heroUrl}
+            alt="Foto de bienvenida actual"
+            width={80}
+            height={80}
+            unoptimized
+          />
         ) : null}
       </fieldset>
 
