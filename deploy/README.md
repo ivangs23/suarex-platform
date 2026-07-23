@@ -391,10 +391,26 @@ docker stats --no-stream
 
 ## Dar de alta un cliente
 
-1. Crear el tenant desde el panel (su `slug` decide el subdominio).
-2. El comodín de DNS y el certificado ya lo cubren: **no hay que tocar ni DNS ni Caddy**.
-3. Configurar su marca y su tema en Ajustes.
-4. Si lleva impresora: generar su instalador del agente con `PLATFORM_WEB_ORIGIN=https://<slug>.suarex.app`.
+El primer owner de un cliente no puede salir del panel (el panel solo deja crear personal a
+un owner que ya exista). Ese arranque lo hace un script:
+
+```bash
+node scripts/create-tenant.mjs --slug bar-paco --nombre "Bar Paco" --email dueno@barpaco.com
+```
+
+Crea su fila de cliente, sus ajustes, su sede por defecto y su **primer owner** (con una
+contraseña que imprime al final para entregársela). Es **idempotente**: reejecutar no
+duplica nada. Opcionales: `--dominio` (dominio propio), `--tema` (por defecto `generic`),
+`--idioma`, `--moneda`, `--password` (si no, se genera).
+
+Luego:
+
+1. El comodín de DNS y el certificado ya cubren su subdominio: **no hay que tocar ni DNS ni Caddy**.
+2. El owner entra en `https://<slug>.<tu-dominio>/admin` con las credenciales impresas y
+   configura su marca y su tema en Ajustes.
+3. Su carta se importa con `node scripts/import-catalog.mjs <volcado> <slug> --reemplazar`
+   (ver `docs/migrar-un-cliente.md`).
+4. Si lleva impresora: generar su instalador del agente con `PLATFORM_WEB_ORIGIN=https://<slug>.<tu-dominio>`.
 
 ---
 

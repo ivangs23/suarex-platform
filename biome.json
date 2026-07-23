@@ -50,7 +50,8 @@
       "includes": [
         "scripts/seed-staff.mjs",
         "scripts/import-catalog.mjs",
-        "scripts/limpiar-storage.mjs"
+        "scripts/limpiar-storage.mjs",
+        "scripts/create-tenant.mjs"
       ],
       "linter": { "rules": { "style": { "noRestrictedImports": "off" } } }
     },
