@@ -36,7 +36,9 @@ export function ConfirmDeleteForm({
       }}
     >
       <input type="hidden" name={hiddenName} value={hiddenValue} />
-      <button type="submit">{label}</button>
+      <button type="submit" data-danger="true">
+        {label}
+      </button>
     </form>
   );
 }

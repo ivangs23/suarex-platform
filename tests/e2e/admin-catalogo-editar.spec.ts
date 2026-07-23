@@ -35,17 +35,15 @@ function filaProducto(page: Page, nombre: string) {
 }
 
 /**
- * Bloque del panel de una categoría, localizado por su ENCABEZADO.
+ * Abre el panel filtrado por una categoría y devuelve su bloque de edición.
  *
- * No vale `filter({ hasText })`: cada formulario de edición de producto lleva un `<select>`
- * con TODAS las categorías, así que el nombre de cualquiera aparece dentro del bloque de
- * todas las demás y el filtro por texto casa de más (lo destapó este mismo test: cuatro
- * coincidencias para "Postres"). El encabezado sí es único por bloque.
+ * El bloque de editar/borrar solo se pinta para la categoría SELECCIONADA (`?cat=`): con 59
+ * categorías, repetir ese formulario en todas llenaba la página de campos que nadie estaba
+ * mirando. Así que para operar sobre una hay que filtrar por ella.
  */
-function bloqueCategoria(page: Page, nombre: string) {
-  return page.getByTestId("admin-category").filter({
-    has: page.getByTestId("admin-category-name").filter({ hasText: nombre }),
-  });
+async function abrirCategoria(page: Page, slug: string) {
+  await page.goto(`http://garum.localhost:3000/admin/catalogo?cat=${slug}`);
+  return page.getByTestId("admin-category");
 }
 
 test("un owner cambia el precio de un producto y se refleja en la carta pública", async ({
@@ -109,21 +107,23 @@ test.describe("renombrar categoría", () => {
   // "Postres" convertido en otra cosa y contamina al resto de la suite (que comparte
   // stack) -- exactamente lo que pasó al escribir este test.
   test.afterEach(async ({ page }) => {
-    await page.goto("http://garum.localhost:3000/admin/catalogo");
-    const renombrada = bloqueCategoria(page, "Dulces de la casa");
-    if ((await renombrada.count()) === 0) return;
-    await renombrada.getByText("Editar categoría").click();
-    const f = renombrada.getByTestId("category-edit-form");
+    const bloque = await abrirCategoria(page, "postres");
+    if ((await bloque.count()) === 0) return;
+    const nombreActual = await page.getByTestId("admin-category-name").textContent();
+    if (nombreActual === "Postres") return;
+
+    await bloque.getByText("Editar categoría").click();
+    const f = bloque.getByTestId("category-edit-form");
     await f.getByLabel("Nombre", { exact: true }).fill("Postres");
     await f.getByRole("button", { name: "Guardar" }).click();
-    await expect(bloqueCategoria(page, "Postres")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("admin-category-name")).toHaveText("Postres", {
+      timeout: 15_000,
+    });
   });
 
   test("un owner renombra una categoría y se ve en la carta", async ({ page }) => {
     await loginComoOwner(page);
-    await page.goto("http://garum.localhost:3000/admin/catalogo");
-
-    const categoria = bloqueCategoria(page, "Postres");
+    const categoria = await abrirCategoria(page, "postres");
     await categoria.getByText("Editar categoría").click();
 
     const formulario = categoria.getByTestId("category-edit-form");
@@ -135,7 +135,9 @@ test.describe("renombrar categoría", () => {
     // form de categoría es server-side y su Server Action + revalidación tardan un
     // instante; navegar de inmediato compite contra esa escritura en vuelo (mismo patrón
     // que el test del precio).
-    await expect(bloqueCategoria(page, "Dulces de la casa")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("admin-category-name")).toHaveText("Dulces de la casa", {
+      timeout: 15_000,
+    });
 
     await page.goto("http://garum.localhost:3000/5");
     await expect(page.getByTestId("category").filter({ hasText: "Dulces de la casa" })).toBeVisible(
@@ -155,4 +157,41 @@ test("un staff no puede editar: el panel ni siquiera se le muestra", async ({ pa
 
   await page.goto("http://garum.localhost:3000/admin/catalogo");
   await expect(page.getByTestId("product-edit-form")).toHaveCount(0);
+});
+
+test("el buscador y el árbol acotan el catálogo", async ({ page }) => {
+  // Con la carta real de garum (184 productos, 59 categorías) la página llegó a medir
+  // 30.000 píxeles. Buscar y filtrar es lo que la hace usable, así que se prueba de punta
+  // a punta y no solo en la función pura.
+  await loginComoOwner(page);
+  await page.goto("http://garum.localhost:3000/admin/catalogo");
+
+  // Sin filtros el listado va acotado: se pinta un tope y se dice cuántos quedan fuera.
+  const total = await page.getByTestId("admin-product").count();
+  expect(total).toBeGreaterThan(0);
+
+  // Buscar sin acentos encuentra el producto acentuado: nadie teclea tildes en un buscador.
+  await page.getByTestId("catalog-search").fill("cafe");
+  await page.getByRole("button", { name: "Buscar" }).click();
+  await expect(page).toHaveURL(/q=cafe/);
+
+  // Filtrar por una categoría raíz incluye a sus DESCENDIENTES: los vinos de garum cuelgan
+  // de nietos y bisnietos, así que filtrar por "Vinos" y ver cero sería inútil.
+  await page.goto("http://garum.localhost:3000/admin/catalogo?cat=vinos");
+  await expect(page.getByTestId("catalog-crumbs")).toContainText("Vinos");
+  await expect(page.getByTestId("admin-product").first()).toBeVisible();
+
+  // "Quitar filtros" vuelve al catálogo completo.
+  await page.getByTestId("catalog-clear").click();
+  await expect(page).toHaveURL("http://garum.localhost:3000/admin/catalogo");
+});
+
+test("una búsqueda sin resultados lo dice, en vez de dejar la página vacía", async ({ page }) => {
+  await loginComoOwner(page);
+  await page.goto("http://garum.localhost:3000/admin/catalogo?q=zzzznoexiste");
+
+  await expect(page.getByTestId("catalog-empty")).toBeVisible();
+  await expect(page.getByTestId("admin-product")).toHaveCount(0);
+  // El árbol sigue ahí para poder cambiar de filtro sin volver atrás.
+  await expect(page.getByTestId("tree-category").first()).toBeVisible();
 });

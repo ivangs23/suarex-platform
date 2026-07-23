@@ -1,0 +1,185 @@
+/* Armazón del panel de administración.
+ *
+ * Lo usan TODAS sus pantallas (catálogo, mesas, dispositivos, impresoras, ajustes,
+ * personal) y también se ve dentro de la app de escritorio, que lo incrusta. Hasta ahora
+ * era HTML sin estilar.
+ *
+ * Neutro y denso a propósito: es una herramienta de trabajo, no un escaparate. La marca del
+ * cliente manda en su carta pública, no aquí -- un panel que cambiara de color por cliente
+ * haría que el mismo botón se viera distinto en cada negocio.
+ */
+
+.shell {
+  --admin-bg: #f7f8fa;
+  --admin-surface: #ffffff;
+  --admin-surface-alt: #f1f3f7;
+  --admin-border: #dfe3ea;
+  --admin-text: #1b1f27;
+  --admin-muted: #616b7a;
+  --admin-accent: #4f46e5;
+  --admin-danger: #b42318;
+  --admin-ok: #12855a;
+  --admin-radius: 10px;
+  --admin-shadow: 0 1px 2px rgb(16 24 40 / 5%);
+
+  min-height: 100vh;
+  background: var(--admin-bg);
+  color: var(--admin-text);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 0 1.25rem;
+  background: var(--admin-surface);
+  border-bottom: 1px solid var(--admin-border);
+  /* Pegada arriba: en catálogo la página es larguísima y perder la navegación al bajar
+     obliga a subir del todo para cambiar de pantalla. */
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.brand {
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  padding: 0.9rem 0;
+  white-space: nowrap;
+}
+
+.tabs {
+  display: flex;
+  gap: 0.15rem;
+  overflow-x: auto;
+}
+
+.tab {
+  display: block;
+  padding: 0.9rem 0.75rem;
+  color: var(--admin-muted);
+  text-decoration: none;
+  white-space: nowrap;
+  border-bottom: 2px solid transparent;
+}
+
+.tab:hover {
+  color: var(--admin-text);
+}
+
+.tab[aria-current="page"] {
+  color: var(--admin-text);
+  font-weight: 600;
+  border-bottom-color: var(--admin-accent);
+}
+
+.main {
+  padding: 1.5rem;
+}
+
+/* --- Neutralizar la marca del cliente ------------------------------------------------- */
+
+/* `globals.css` aplica al documento entero la tipografía y el color de marca del cliente
+   (`--font-display`, `--color-primary`): correcto en su carta pública, equivocado aquí. Un
+   panel de gestión que cambia de fuente y de color según el negocio hace que el MISMO botón
+   se vea distinto en cada instalación, y que el propio SuarEx parezca parte del cliente.
+   Se reinstauran los valores del panel dentro de su armazón. */
+.shell :is(h1, h2, h3, h4) {
+  font-family: inherit;
+  color: inherit;
+}
+
+/* --- Controles ------------------------------------------------------------------------ */
+
+.shell :is(input, select, textarea) {
+  font: inherit;
+  color: var(--admin-text);
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+  padding: 0.45rem 0.6rem;
+  max-width: 100%;
+}
+
+.shell :is(input[type="checkbox"], input[type="radio"], input[type="file"]) {
+  padding: 0;
+}
+
+.shell :is(input, select, textarea, button, summary):focus-visible {
+  outline: 2px solid var(--admin-accent);
+  outline-offset: 2px;
+}
+
+.shell button {
+  font: inherit;
+  font-weight: 500;
+  color: var(--admin-text);
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+  padding: 0.45rem 0.8rem;
+  cursor: pointer;
+}
+
+.shell button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--admin-accent) 45%, var(--admin-border));
+}
+
+.shell button[type="submit"] {
+  border-color: color-mix(in srgb, var(--admin-accent) 40%, var(--admin-border));
+  color: var(--admin-accent);
+}
+
+/* Los botones de borrar se distinguen a simple vista: son las únicas acciones de este panel
+   que no se pueden deshacer. */
+.shell button:is([data-danger="true"]) {
+  color: var(--admin-danger);
+  border-color: color-mix(in srgb, var(--admin-danger) 35%, var(--admin-border));
+}
+
+/* Formularios dentro de una tarjeta: etiquetas en bloque, sin apelotonarse. */
+.shell form label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--admin-muted);
+}
+
+.shell form label input,
+.shell form label select,
+.shell form label textarea {
+  display: block;
+  margin-top: 0.2rem;
+  width: 100%;
+  max-width: 24rem;
+}
+
+.shell fieldset {
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+  margin: 0 0 0.75rem;
+}
+
+.shell legend {
+  font-size: 0.78rem;
+  color: var(--admin-muted);
+  padding: 0 0.3rem;
+}
+
+/* Las casillas de alérgeno van en línea, no una etiqueta de bloque por casilla. */
+.shell fieldset label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0 0.75rem 0.3rem 0;
+}
+
+.shell fieldset label input {
+  display: inline-block;
+  width: auto;
+  margin: 0;
+}
