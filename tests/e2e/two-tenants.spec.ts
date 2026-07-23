@@ -43,6 +43,15 @@ test("manuela sirve un catálogo, una marca y un tema distintos", async ({ page 
   );
   expect(bg).toBe("#f9f7f2");
 
+  // La bienvenida es un PASO PROPIO, no una cabecera: hasta tocarla no hay carta. Comprobar
+  // la ausencia de categorías es lo que distingue el paso real de un simple héroe encima
+  // del menú, que es como estaba antes.
+  await expect(page.getByTestId("welcome-enter")).toBeVisible();
+  await expect(page.getByTestId("category")).toHaveCount(0);
+
+  await page.getByTestId("welcome-enter").click();
+  await expect(page.getByTestId("welcome-enter")).toHaveCount(0);
+
   // Carta plana (un solo nivel): al entrar en una categoría raíz ya salen sus productos.
   await page.getByTestId("category").filter({ hasText: "Tostas" }).getByRole("link").click();
   await expect(page.getByTestId("product").filter({ hasText: "Tosta de jamón" })).toHaveCount(1);
@@ -62,7 +71,9 @@ test("ningún producto de un tenant aparece en el otro", async ({ page }) => {
   await expect(page.getByTestId("product-count")).toHaveText("8");
   await expect(page.getByText("Tosta de jamón")).toHaveCount(0);
 
-  await page.goto("http://manuela.localhost:3000/1");
+  // `?ver=carta` porque la raíz de manuela es su pantalla de bienvenida, que no pinta
+  // catálogo ninguno; el conteo solo existe una vez dentro.
+  await page.goto("http://manuela.localhost:3000/1?ver=carta");
   await expect(page.getByTestId("product-count")).toHaveText("8");
   await expect(page.getByText("Ribera del Duero")).toHaveCount(0);
 });

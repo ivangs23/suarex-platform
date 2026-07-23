@@ -30,6 +30,64 @@
 /* HÉROE. Medido sobre manueladesayuna.com: foto de la pared de casetes de su local a
    sangre completa, firma manuscrita encima, insignia verde con la taza y el saludo en
    versales enormes. Es la primera pantalla de su carta, no un adorno. */
+/* Pantalla de bienvenida completa: ocupa todo el alto porque ES la primera pantalla, no
+   una cabecera. Se toca en cualquier punto para entrar. */
+.welcome {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: 2rem 1.25rem;
+  overflow: hidden;
+  text-decoration: none;
+  color: inherit;
+}
+
+.enter {
+  margin-top: 0.5rem;
+  padding: 0.6rem 1.4rem;
+  border-radius: 999px;
+  background: rgba(44, 26, 15, 0.85);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* Cabecera compacta de la carta, ya sin el héroe. */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 1.25rem;
+  background: #ffffff;
+  border-bottom: 1px solid var(--manuela-border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.topbarLogo {
+  height: 2.1rem;
+  width: auto;
+  display: block;
+}
+
+/* Solo para lectores de pantalla y para el contrato de los tests: en esta vista el nombre
+   ya lo dice el logo, y repetirlo en grande robaría sitio a la carta. */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .hero {
   position: relative;
   min-height: 68vh;

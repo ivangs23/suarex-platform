@@ -16,6 +16,22 @@ export type MenuThemeProps = {
   branding: Branding;
   /** Nivel actual de la carta: hijos, productos, rastro de vuelta y totales. */
   view: MenuView;
+  /**
+   * Pantalla de BIENVENIDA, un paso independiente ANTES de la carta.
+   *
+   * La carta de Manuela arranca así: una pantalla completa con su marca y un "toca para
+   * empezar" que lleva a los productos. No es una cabecera que se desplaza -- es otra
+   * pantalla.
+   *
+   * Se modela como un paso de URL (`?ver=carta`) y no como estado de cliente, igual que el
+   * resto de la navegación: funciona sin JavaScript, se puede compartir el enlace y el
+   * botón "atrás" hace lo esperado.
+   *
+   * `active` es `false` en cuanto hay categoría elegida o el comensal ya entró. Un tema que
+   * no quiera este paso -- garum y el genérico van directos a las categorías -- simplemente
+   * ignora este campo.
+   */
+  welcome: { active: boolean; href: string };
 };
 
 export type MenuTheme = (props: MenuThemeProps) => ReactNode;

@@ -81,6 +81,14 @@ export default async function MenuPage({
     storageOrigin: process.env.NEXT_PUBLIC_SUPABASE_URL,
   });
 
+  // Paso de bienvenida: activo solo en la raíz de la carta y mientras no se haya entrado.
+  // Es la página quien lo calcula y el tema quien decide si lo usa (ver `MenuThemeProps`).
+  const entrado = (Array.isArray(query.ver) ? query.ver[0] : query.ver) === "carta";
+  const welcome = {
+    active: !entrado && currentSlug === null,
+    href: `/${mesa}?ver=carta`,
+  };
+
   const Theme = resolveTheme(settings?.theme);
 
   return (
@@ -90,6 +98,7 @@ export default async function MenuPage({
       mesa={mesa}
       branding={branding}
       view={view}
+      welcome={welcome}
     />
   );
 }
