@@ -87,3 +87,15 @@ test("un cliente con dominio propio sirve su carta por ese dominio", async ({ pa
   await page.getByTestId("category").filter({ hasText: "Vinos" }).getByRole("link").click();
   await expect(page.getByTestId("category").filter({ hasText: "Tintos" })).toBeVisible();
 });
+
+test("la carta muestra la foto del producto cuando la tiene", async ({ page }) => {
+  // La web real de garum enseña una miniatura a la derecha de cada tarjeta en las
+  // categorías que tienen foto (tapas, raciones). Solo 37 de sus 184 productos la tienen,
+  // así que la tarjeta debe funcionar igual de bien con foto y sin ella.
+  await page.goto("http://garum.localhost:3000/5?cat=tintos");
+
+  const conFoto = page.getByTestId("product").filter({ hasText: "Ribera del Duero" });
+  await expect(conFoto).toBeVisible();
+  // El seed no trae fotos: sin `image_url`, la tarjeta no pinta un hueco ni una imagen rota.
+  await expect(conFoto.getByTestId("product-photo")).toHaveCount(0);
+});

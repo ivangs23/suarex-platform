@@ -156,8 +156,9 @@
 
 .item {
   display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
   background: var(--manuela-surface);
   border: 2px solid var(--manuela-border);
   border-radius: 1.25rem;
@@ -179,4 +180,21 @@
   text-align: center;
   color: rgba(44, 26, 15, 0.6);
   padding: 3rem 0;
+}
+
+/* Nombre y precio a un lado, foto al otro. La miniatura se acota para que una foto grande
+   no descuadre la fila. */
+.itemText {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.itemPhoto {
+  flex: none;
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 1rem;
 }

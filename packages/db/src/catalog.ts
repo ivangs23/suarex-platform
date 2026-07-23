@@ -37,7 +37,7 @@ export async function getCategories(tenantId: string): Promise<Category[]> {
 export async function getProducts(tenantId: string): Promise<Product[]> {
   const { data, error } = await tenantScoped("products", tenantId)
     .select(
-      "id, category_id, name_i18n, description_i18n, price, is_available, sort_order, product_extras(id, name_i18n, price)",
+      "id, category_id, name_i18n, description_i18n, price, image_url, is_available, sort_order, product_extras(id, name_i18n, price)",
     )
     .eq("is_available", true)
     .order("sort_order", { ascending: true });
@@ -58,6 +58,7 @@ export async function getProducts(tenantId: string): Promise<Product[]> {
       nameI18n: row.name_i18n as Record<string, string>,
       descriptionI18n: row.description_i18n as Record<string, string>,
       price: Number(row.price),
+      imagePath: (row.image_url as string | null) ?? null,
       isAvailable: row.is_available as boolean,
       sortOrder: row.sort_order as number,
       extras,

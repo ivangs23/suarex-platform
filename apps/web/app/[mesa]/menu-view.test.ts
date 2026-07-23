@@ -18,6 +18,7 @@ function prod(id: string, categoryId: string, name: string, price: number): Prod
     nameI18n: { es: name },
     descriptionI18n: {},
     price,
+    imagePath: null,
     isAvailable: true,
     sortOrder: 0,
     extras: [],
