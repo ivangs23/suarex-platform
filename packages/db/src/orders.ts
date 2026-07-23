@@ -12,7 +12,7 @@ import {
   tenantScoped,
 } from "./client.js";
 import { getTenantSettings } from "./tenants.js";
-import type { CartLineInput, OrderStatus } from "./types.js";
+import type { CartLineInput, OrderReceipt, OrderStatus, ReceiptLine } from "./types.js";
 
 type ProductRow = {
   id: string;
@@ -377,4 +377,71 @@ export async function expirePendingOrders(timeoutMinutes = 30): Promise<number> 
   const { data, error } = await expirePendingOrdersRpc(timeoutMinutes);
   if (error) throw error;
   return Array.isArray(data) ? data.length : 0;
+}
+
+/** Resuelve un `name_snapshot` (jsonb por idioma) al idioma dado, con es de respaldo. */
+function nombreSnapshot(snapshot: Record<string, string>, lang: string): string {
+  return snapshot[lang] ?? snapshot.es ?? Object.values(snapshot)[0] ?? "";
+}
+
+/**
+ * Recibo del comensal: el desglose de SU pedido por su `publicToken` -- el mismo token
+ * anónimo con el que ve el estado, sin necesidad de sesión. Todo sale de los SNAPSHOTS
+ * congelados en la compra (nombres y precios), no del catálogo de hoy: un recibo tiene que
+ * reflejar lo que se pidió y se pagó, aunque después cambien los precios o desaparezca un
+ * plato. Devuelve `null` si el token no resuelve.
+ */
+export async function getOrderReceipt(
+  publicToken: string,
+  lang = "es",
+): Promise<OrderReceipt | null> {
+  const { data, error } = await ordersTableForPaymentResolution()
+    .select(
+      "order_number, created_at, total, currency, tables(label), " +
+        "order_items(id, name_snapshot, quantity, line_total, notes, " +
+        "order_item_extras(name_snapshot, price))",
+    )
+    .eq("public_token", publicToken)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+
+  // El embed de PostgREST no lo tipa bien el SDK (lo colapsa a un error genérico), así que se
+  // castea la fila entera a la forma que la propia `select` garantiza.
+  const row = data as unknown as {
+    order_number: number;
+    created_at: string;
+    total: number;
+    currency: string;
+    tables: { label?: string } | null;
+    order_items: {
+      id: string;
+      name_snapshot: Record<string, string>;
+      quantity: number;
+      line_total: number;
+      notes: string | null;
+      order_item_extras: { name_snapshot: Record<string, string>; price: number }[];
+    }[];
+  };
+
+  const lines: ReceiptLine[] = (row.order_items ?? []).map((item) => ({
+    id: item.id,
+    name: nombreSnapshot(item.name_snapshot, lang),
+    quantity: item.quantity,
+    lineTotalCents: eurosToCents(Number(item.line_total)),
+    notes: item.notes,
+    extras: (item.order_item_extras ?? []).map((extra) => ({
+      name: nombreSnapshot(extra.name_snapshot, lang),
+      priceCents: eurosToCents(Number(extra.price)),
+    })),
+  }));
+
+  return {
+    orderNumber: row.order_number,
+    createdAt: row.created_at,
+    tableLabel: row.tables?.label ?? null,
+    totalCents: eurosToCents(Number(row.total)),
+    currency: row.currency,
+    lines,
+  };
 }

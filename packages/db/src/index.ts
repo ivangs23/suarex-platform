@@ -73,6 +73,7 @@ export {
   expirePendingOrders,
   getOrderByPublicToken,
   getOrderLocale,
+  getOrderReceipt,
   markOrderPaid,
   OrderCartError,
 } from "./orders.js";
@@ -103,9 +104,11 @@ export {
 export type {
   CartLineInput,
   Category,
+  OrderReceipt,
   OrderStatus,
   Product,
   ProductExtra,
+  ReceiptLine,
   TableRow,
   Tenant,
   TenantSettingsRow,

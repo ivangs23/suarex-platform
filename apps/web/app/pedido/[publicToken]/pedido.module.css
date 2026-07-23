@@ -3,9 +3,11 @@
    esta pantalla sepa de qué cliente es. */
 .page {
   min-height: 100vh;
-  display: grid;
-  place-items: center;
-  padding: 2rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 2rem 1.25rem 3rem;
   background: var(--color-bg, #f5f1e8);
   color: var(--color-fg, #0f0f0f);
   font-family: var(--font-inter), system-ui, sans-serif;
@@ -104,4 +106,116 @@
   margin: 0;
   color: #1b7a3d;
   font-weight: 600;
+}
+
+/* RECIBO. Aspecto de ticket: papel blanco, líneas separadas, total abajo. Guardable e
+   imprimible. */
+.receipt {
+  width: min(26rem, 100%);
+  padding: 1.5rem 1.5rem 1.25rem;
+  background: #ffffff;
+  border-radius: 1rem;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.06);
+}
+
+.receiptHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding-bottom: 0.75rem;
+  margin-bottom: 0.75rem;
+  border-bottom: 1px dashed color-mix(in srgb, var(--color-fg) 25%, transparent);
+}
+
+.receiptTitle {
+  font-family: var(--font-playfair), Georgia, serif;
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+.receiptTable {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: color-mix(in srgb, var(--color-fg) 60%, transparent);
+}
+
+.receiptLines {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.receiptLine {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  font-size: 0.95rem;
+}
+
+.receiptQty {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  min-width: 1.6rem;
+}
+
+.receiptName {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.receiptExtras {
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+
+.receiptLineTotal {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.receiptTotal {
+  margin: 0;
+  display: flex;
+  justify-content: space-between;
+  padding-top: 0.75rem;
+  border-top: 1px dashed color-mix(in srgb, var(--color-fg) 25%, transparent);
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+
+.receiptPrint {
+  margin-top: 1rem;
+  width: 100%;
+  padding: 0.7rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--color-primary, #a88445) 40%, transparent);
+  border-radius: 0.7rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* Al imprimir: solo el papel del recibo, sin el fondo de marca ni el botón. */
+@media print {
+  .page {
+    background: #ffffff;
+    padding: 0;
+  }
+  .card {
+    display: none;
+  }
+  .receipt {
+    box-shadow: none;
+    width: 100%;
+  }
+  .noPrint {
+    display: none;
+  }
 }
