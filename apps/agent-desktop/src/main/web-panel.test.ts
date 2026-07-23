@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { isSameOrigin } from "./admin-window.js";
+import { isSameOrigin } from "./web-panel.js";
 
 /**
- * `isSameOrigin` es la guarda que impide que la ventana de gestión se convierta en un
+ * `isSameOrigin` es la guarda que impide que el panel incrustado se convierta en un
  * navegador completo SIN barra de direcciones. Si deja pasar un origen ajeno, el usuario no
  * tiene forma de saber qué sitio está mirando mientras teclea su contraseña -- que es
  * exactamente la condición que necesita una página de phishing.

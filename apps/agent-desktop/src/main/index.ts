@@ -1,10 +1,10 @@
 import { join } from "node:path";
 import { app, BrowserWindow, Menu, nativeImage, Tray } from "electron";
-import { closeAdminWindow, openAdminWindow } from "./admin-window.js";
 import { startAgent, stopAgent } from "./agent-runner.js";
 import { loadCredentials } from "./config-store.js";
 import { registerIpc } from "./ipc.js";
 import { realConfigBackend } from "./real-config-backend.js";
+import { destroyWebPanel, layoutWebPanel } from "./web-panel.js";
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -42,14 +42,18 @@ if (!gotLock) {
   app.on("before-quit", () => {
     quitting = true;
     stopAgent();
-    closeAdminWindow();
+    destroyWebPanel();
   });
 }
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
-    width: 760,
-    height: 620,
+    // Más ancha que antes: ahora la ventana aloja la barra lateral MÁS el panel de la
+    // plataforma incrustado (catálogo, pedidos), que necesita sitio para respirar.
+    width: 1140,
+    height: 780,
+    minWidth: 900,
+    minHeight: 600,
     show: false,
     webPreferences: {
       preload: join(import.meta.dirname, "../preload/index.js"),
@@ -64,6 +68,13 @@ function createWindow(): void {
     if (!app.getLoginItemSettings().wasOpenedAtLogin) {
       mainWindow?.show();
     }
+  });
+
+  // El panel incrustado NO se recoloca solo: es una vista hermana del renderer, con sus
+  // propios bounds en píxeles. Sin esto, al redimensionar la ventana se queda del tamaño
+  // anterior y deja una franja muerta o tapa la barra lateral.
+  mainWindow.on("resize", () => {
+    if (mainWindow) layoutWebPanel(mainWindow);
   });
 
   // Cerrar la ventana la oculta a la bandeja (no cierra la app) salvo que estemos saliendo.
@@ -88,7 +99,6 @@ function createTray(): void {
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: "Abrir", click: () => mainWindow?.show() },
-      { label: "Gestionar catálogo", click: () => openAdminWindow() },
       { type: "separator" },
       {
         label: "Salir",

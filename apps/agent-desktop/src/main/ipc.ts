@@ -1,11 +1,11 @@
 import { type BrowserWindow, ipcMain } from "electron";
-import { type OpenAdminResult, openAdminWindow } from "./admin-window.js";
 import { isAgentRunning, startAgent, stopAgent } from "./agent-runner.js";
 import { PLATFORM_WEB_ORIGIN } from "./baked-config.js";
 import { loadCredentials, saveCredentials } from "./config-store.js";
 import { type PairError, pairDevice } from "./pairing.js";
 import { listLocalPrinters, printTestTicket } from "./printers.js";
 import { realConfigBackend } from "./real-config-backend.js";
+import { hideWebPanel, isWebSection, type ShowWebPanelResult, showWebPanel } from "./web-panel.js";
 
 export type PairIpcResult =
   | { ok: true; deviceId: string; tenantId: string }
@@ -18,10 +18,21 @@ function isPairError(e: unknown): e is PairError {
 /** Registra los canales IPC. El renderer nunca toca Node/Electron directo: todo pasa por
  * estos handlers vía el puente contextBridge del preload. */
 export function registerIpc(getWindow: () => BrowserWindow | null): void {
-  // Abre el panel de gestión de la plataforma en su propia ventana. No recibe ningún
-  // parámetro a propósito: la URL sale del origen horneado en el build, nunca de algo que
-  // pueda teclear o inyectar el renderer.
-  ipcMain.handle("open-admin", (): OpenAdminResult => openAdminWindow());
+  // Navegación de la barra lateral. El renderer manda solo un NOMBRE de sección; la ruta y
+  // el origen salen de `WEB_SECTIONS` y del origen horneado en el build, nunca de una
+  // cadena que el renderer pueda componer -- de lo contrario, un XSS en la interfaz local
+  // podría hacer que el panel cargara cualquier URL.
+  ipcMain.handle("show-section", (_e, section: string): ShowWebPanelResult => {
+    const win = getWindow();
+    if (!win) return { ok: false, reason: "sin-origen-configurado" };
+    if (!isWebSection(section)) {
+      // Sección local (config, impresoras): la pinta el propio renderer, así que solo hay
+      // que quitar de en medio la vista incrustada, que se superpone.
+      hideWebPanel();
+      return { ok: true };
+    }
+    return showWebPanel(win, section);
+  });
 
   ipcMain.handle("list-printers", async () => {
     const win = getWindow();

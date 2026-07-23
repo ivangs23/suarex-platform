@@ -26,6 +26,14 @@
   --danger: #b42318;
   --shadow: 0 1px 2px rgb(16 24 40 / 6%), 0 1px 3px rgb(16 24 40 / 10%);
   --radius: 10px;
+  /* Debe coincidir con SIDEBAR_WIDTH en main/web-panel.ts: la vista incrustada de la
+     plataforma se coloca en píxeles justo a la derecha de la barra. Si divergen, tapa la
+     barra o deja una franja muerta. */
+  --sidebar: 208px;
+  --side-bg: #12151b;
+  --side-text: #d6dae1;
+  --side-muted: #838d9c;
+  --side-active: #262c36;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -51,53 +59,166 @@
   box-sizing: border-box;
 }
 
+html,
+body {
+  height: 100%;
+}
+
 body {
   margin: 0;
-  padding: 1.25rem;
   background: var(--bg);
   color: var(--text);
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   font-size: 14px;
   line-height: 1.5;
-  /* La ventana no se redimensiona a lo ancho en la práctica; un límite evita que en un
-     monitor grande los campos se estiren hasta ser incómodos de recorrer con la vista. */
-  max-width: 46rem;
-  margin-inline: auto;
 }
 
-.appbar {
+.shell {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
+  height: 100%;
+}
+
+/* --- Barra lateral -------------------------------------------------------------------- */
+
+.sidebar {
+  width: var(--sidebar);
+  flex: none;
+  display: flex;
+  flex-direction: column;
   gap: 1rem;
-  margin-bottom: 1rem;
+  padding: 1rem 0.75rem;
+  /* Oscura en ambos temas a propósito: separa la navegación del contenido -- que en
+     Productos y Pedidos es la web de la plataforma, con su propio fondo claro -- para que
+     se vea siempre como parte de la aplicación y no como parte de la página. */
+  background: var(--side-bg);
+  color: var(--side-text);
 }
 
-.appbar h1 {
-  font-size: 1rem;
-  font-weight: 600;
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.25rem 0.5rem 0.5rem;
+}
+
+.brand-mark {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+
+.brand-text strong {
+  font-size: 0.9rem;
+}
+
+.brand-text span {
+  font-size: 0.72rem;
+  color: var(--side-muted);
+}
+
+.nav {
+  list-style: none;
   margin: 0;
-  letter-spacing: -0.01em;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  /* Empuja el estado al fondo de la barra. */
+  flex: 1;
 }
 
-.appbar .version {
-  font-size: 0.75rem;
+.nav-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.65rem;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--side-muted);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nav-item:hover {
+  background: var(--side-active);
+  color: var(--side-text);
+}
+
+.nav-item[aria-selected="true"] {
+  background: var(--side-active);
+  color: #fff;
+  font-weight: 600;
+}
+
+.nav-icon {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+/* Estado siempre visible, se esté en la sección que se esté: es el dato por el que se abre
+   la app. Compacto aquí para no competir con el contenido. */
+.side-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  padding: 0.65rem;
+  border-radius: 8px;
+  background: rgb(255 255 255 / 4%);
+  font-size: 0.78rem;
+}
+
+/* --- Contenido ------------------------------------------------------------------------ */
+
+.content {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  padding: 1.5rem;
+}
+
+.panel[hidden] {
+  display: none;
+}
+
+.panel-head {
+  margin-bottom: 1.25rem;
+}
+
+.panel-head h1 {
+  font-size: 1.35rem;
+  font-weight: 650;
+  margin: 0;
+  letter-spacing: -0.015em;
+}
+
+.panel-head p {
+  margin: 0.2rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+/* Solo se ve si la vista incrustada no pudo cargarse: normalmente queda tapada por ella. */
+.web-fallback {
   color: var(--text-muted);
 }
 
-/* --- Estado: la pieza principal ------------------------------------------------------ */
-
-.status {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 1rem 1.125rem;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  margin-bottom: 1.25rem;
-}
+/* --- Estado -------------------------------------------------------------------------- */
 
 /* El punto lleva ADEMÁS el texto de al lado: el color por sí solo no comunica el estado a
    quien no distingue rojo y verde, que es ~8% de los hombres. */
@@ -109,16 +230,16 @@ body {
   background: var(--text-muted);
 }
 
-.status[data-state="running"] .dot {
+.side-status[data-state="running"] .dot {
   background: var(--ok);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 22%, transparent);
 }
 
-.status[data-state="paired"] .dot {
+.side-status[data-state="paired"] .dot {
   background: var(--warn);
 }
 
-.status[data-state="error"] .dot {
+.side-status[data-state="error"] .dot {
   background: var(--danger);
 }
 
@@ -133,15 +254,15 @@ body {
   font-weight: 600;
 }
 
-.status[data-state="running"] .status-title {
+.side-status[data-state="running"] .status-title {
   color: var(--ok);
 }
 
-.status[data-state="paired"] .status-title {
+.side-status[data-state="paired"] .status-title {
   color: var(--warn);
 }
 
-.status[data-state="error"] .status-title {
+.side-status[data-state="error"] .status-title {
   color: var(--danger);
 }
 
@@ -150,6 +271,19 @@ body {
   color: var(--text-muted);
   /* El id del dispositivo es un UUID: no debe romper el ancho de la ventana. */
   overflow-wrap: anywhere;
+}
+
+/* Ajustes del estado cuando vive en la barra lateral (fondo oscuro, menos espacio). Van
+   aquí, después de las reglas base, y no arriba en el bloque de la barra: una sobrescritura
+   colocada antes de la regla que sobrescribe solo gana por orden de fichero, y eso se
+   rompe en cuanto alguien reordena. */
+.side-status .dot {
+  margin-top: 0.35rem;
+}
+
+.side-status .status-detail {
+  color: var(--side-muted);
+  font-size: 0.72rem;
 }
 
 /* --- Tarjetas ------------------------------------------------------------------------ */

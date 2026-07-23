@@ -6,74 +6,125 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <header class="appbar">
-      <h1>SuarEx · Agente de impresión</h1>
-      <span class="version">Este equipo</span>
-    </header>
+    <div class="shell">
+      <!-- Barra lateral. Su ancho debe coincidir con SIDEBAR_WIDTH (main/web-panel.ts):
+           el panel incrustado de la plataforma se coloca justo a su derecha, en píxeles. -->
+      <nav class="sidebar" aria-label="Secciones">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">S</span>
+          <span class="brand-text">
+            <strong>SuarEx</strong>
+            <span>Agente</span>
+          </span>
+        </div>
 
-    <!-- Lo primero y más grande: a esto se viene el 90% de las veces. -->
-    <section class="status" id="status" data-state="loading" aria-live="polite">
-      <span class="dot" aria-hidden="true"></span>
-      <span class="status-text">
-        <span class="status-title" id="status-title">Cargando…</span>
-        <span class="status-detail" id="status-detail"></span>
-      </span>
-    </section>
+        <ul class="nav" role="tablist">
+          <li>
+            <button class="nav-item" type="button" data-section="config" role="tab">
+              <span class="nav-icon" aria-hidden="true">⚙️</span> Configuración
+            </button>
+          </li>
+          <li>
+            <button class="nav-item" type="button" data-section="impresoras" role="tab">
+              <span class="nav-icon" aria-hidden="true">🖨️</span> Impresoras
+            </button>
+          </li>
+          <li>
+            <button class="nav-item" type="button" data-section="productos" role="tab">
+              <span class="nav-icon" aria-hidden="true">📖</span> Productos
+            </button>
+          </li>
+          <li>
+            <button class="nav-item" type="button" data-section="pedidos" role="tab">
+              <span class="nav-icon" aria-hidden="true">🧾</span> Pedidos
+            </button>
+          </li>
+        </ul>
 
-    <section class="card">
-      <h2>Emparejamiento</h2>
-      <div class="row">
-        <input
-          class="grow"
-          id="code"
-          type="text"
-          autocomplete="off"
-          placeholder="Código de emparejamiento"
-          aria-label="Código de emparejamiento"
-        />
-        <button id="pair" class="primary" type="button">Emparejar</button>
-        <button id="unpair" class="danger" type="button">Des-emparejar</button>
-      </div>
-      <p class="hint">
-        El código se genera en el panel de administración, en Dispositivos. Caduca a los
-        pocos minutos.
-      </p>
-    </section>
+        <!-- El estado vive en la barra lateral, no dentro de una sección: es lo que se
+             quiere ver de un vistazo, se esté donde se esté. -->
+        <div class="side-status" id="status" data-state="loading">
+          <span class="dot" aria-hidden="true"></span>
+          <span class="status-text">
+            <span class="status-title" id="status-title">Cargando…</span>
+            <span class="status-detail" id="status-detail"></span>
+          </span>
+        </div>
+      </nav>
 
-    <section class="card">
-      <h2>Impresoras de este equipo</h2>
-      <!-- Solo fuera de Windows: la impresión USB usa winspool. Decirlo aquí evita que
-           alguien pulse "Imprimir prueba" y solo entonces descubra por qué no funciona. -->
-      <div class="note" id="platform-note" hidden>
-        <span aria-hidden="true">⚠️</span>
-        <span
-          >La impresión por USB solo está disponible en Windows. En este equipo puedes
-          emparejar y gestionar la carta, pero no listar impresoras ni imprimir.</span
-        >
-      </div>
-      <div class="row">
-        <select class="grow" id="printers" aria-label="Impresora"></select>
-        <button id="refresh" type="button">Actualizar</button>
-        <button id="test" type="button">Imprimir prueba</button>
-      </div>
-    </section>
+      <main class="content">
+        <section class="panel" data-panel="config">
+          <header class="panel-head">
+            <h1>Configuración</h1>
+            <p>Vincula este equipo con el negocio para que reciba e imprima los pedidos.</p>
+          </header>
 
-    <section class="card">
-      <h2>Carta</h2>
-      <div class="row">
-        <button id="admin" type="button">Gestionar catálogo</button>
-      </div>
-      <p class="hint">
-        Se abre el panel de la plataforma en otra ventana. Hay que entrar con una cuenta de
-        propietario o administrador: este dispositivo, por sí solo, únicamente puede
-        imprimir.
-      </p>
-    </section>
+          <section class="card">
+            <h2>Emparejamiento</h2>
+            <div class="row">
+              <input
+                class="grow"
+                id="code"
+                type="text"
+                autocomplete="off"
+                placeholder="Código de emparejamiento"
+                aria-label="Código de emparejamiento"
+              />
+              <button id="pair" class="primary" type="button">Emparejar</button>
+              <button id="unpair" class="danger" type="button">Des-emparejar</button>
+            </div>
+            <p class="hint">
+              El código se genera en el panel de administración, en Dispositivos. Caduca a
+              los pocos minutos.
+            </p>
+          </section>
 
-    <section class="card">
-      <h2>Registro</h2>
-      <div class="log" id="log" role="log" aria-live="polite"></div>
-    </section>
+          <section class="card">
+            <h2>Registro</h2>
+            <div class="log" id="log" role="log" aria-live="polite"></div>
+          </section>
+        </section>
+
+        <section class="panel" data-panel="impresoras" hidden>
+          <header class="panel-head">
+            <h1>Impresoras</h1>
+            <p>Impresoras instaladas en este equipo y prueba de impresión.</p>
+          </header>
+
+          <section class="card">
+            <!-- Solo fuera de Windows: la impresión USB usa winspool. Decirlo aquí evita
+                 que alguien pulse "Imprimir prueba" y solo entonces descubra por qué no
+                 funciona. -->
+            <div class="note" id="platform-note" hidden>
+              <span aria-hidden="true">⚠️</span>
+              <span
+                >La impresión por USB solo está disponible en Windows. En este equipo puedes
+                emparejar y gestionar la carta, pero no listar impresoras ni imprimir.</span
+              >
+            </div>
+            <div class="row">
+              <select class="grow" id="printers" aria-label="Impresora"></select>
+              <button id="refresh" type="button">Actualizar</button>
+              <button id="test" type="button">Imprimir prueba</button>
+            </div>
+            <p class="hint">
+              El nombre que aparezca aquí es el que hay que usar al dar de alta la impresora
+              en el panel de administración.
+            </p>
+          </section>
+        </section>
+
+        <!-- Productos y Pedidos los pinta una vista incrustada del panel de la plataforma
+             (main/web-panel.ts), que se superpone a esta zona. Este texto solo se ve si esa
+             vista no puede cargarse. -->
+        <section class="panel panel-web" data-panel="productos" hidden>
+          <div class="web-fallback" id="web-fallback-productos"></div>
+        </section>
+        <section class="panel panel-web" data-panel="pedidos" hidden>
+          <div class="web-fallback" id="web-fallback-pedidos"></div>
+        </section>
+      </main>
+    </div>
 
     <script type="module" src="./main.ts"></script>
   </body>
