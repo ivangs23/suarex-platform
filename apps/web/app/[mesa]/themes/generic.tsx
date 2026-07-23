@@ -72,38 +72,52 @@ export const GenericTheme: MenuTheme = ({
 
   return (
     <main className={styles.page} data-theme="generic">
-      <div className={styles.inner}>
-        <header className={styles.header}>
-          {/* El logo es una URL absoluta de Storage por tenant, no un asset local que
-            next/image pueda optimizar en build: se usa <img> a propósito. */}
-          {branding.logoUrl ? (
-            <img className={styles.logo} src={branding.logoUrl} alt={businessName} />
+      {/* Cabecera en TRES zonas, igual que el resto de temas: la mesa a un lado, la marca
+          centrada, y a la derecha los idiomas con la bolsa del pedido. Que estos controles
+          estén en el MISMO sitio en todos los temas es parte de la regla: cambia el aspecto,
+          no dónde encuentra el comensal cada cosa. */}
+      <header className={styles.topbar}>
+        <span className={styles.mesa} data-testid="mesa">
+          {t.table} {mesa}
+        </span>
+
+        {/* El logo es una URL absoluta de Storage por tenant, no un asset local que
+            next/image pueda optimizar en build: se usa <img> a propósito. Sin logo, la marca
+            del centro es el propio nombre. */}
+        {branding.logoUrl ? (
+          <img className={styles.topbarLogo} src={branding.logoUrl} alt={businessName} />
+        ) : (
+          <span className={styles.topbarName}>{businessName}</span>
+        )}
+
+        <div className={styles.topbarEnd}>
+          {langs.length > 1 ? (
+            <nav className={styles.langs} data-testid="lang-switch" aria-label="Idioma">
+              {langs.map((lang) => (
+                <a
+                  key={lang.code}
+                  className={styles.lang}
+                  href={lang.href}
+                  hrefLang={lang.code}
+                  data-testid="lang-option"
+                  data-lang={lang.code}
+                  aria-current={lang.active ? "true" : undefined}
+                >
+                  {lang.label}
+                </a>
+              ))}
+            </nav>
           ) : null}
+          <CartButton className={styles.cartButton} />
+        </div>
+      </header>
+
+      <div className={styles.inner}>
+        <section className={styles.hero}>
           <h1 className={styles.name} data-testid="tenant-name">
             {businessName}
           </h1>
-          <p className={styles.mesa} data-testid="mesa">
-            {t.table} {mesa}
-          </p>
-          <CartButton className={styles.cartButton} />
-        </header>
-        {langs.length > 1 ? (
-          <nav className={styles.langs} data-testid="lang-switch" aria-label="Idioma">
-            {langs.map((lang) => (
-              <a
-                key={lang.code}
-                className={styles.lang}
-                href={lang.href}
-                hrefLang={lang.code}
-                data-testid="lang-option"
-                data-lang={lang.code}
-                aria-current={lang.active ? "true" : undefined}
-              >
-                {lang.label}
-              </a>
-            ))}
-          </nav>
-        ) : null}
+        </section>
 
         <p data-testid="product-count" hidden>
           {view.totalProducts}
