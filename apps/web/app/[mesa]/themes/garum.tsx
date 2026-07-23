@@ -1,3 +1,4 @@
+import { AddToCart } from "../cart/AddToCart";
 import styles from "./garum.module.css";
 import type { MenuTheme } from "./types";
 
@@ -121,6 +122,7 @@ export const GarumTheme: MenuTheme = ({ businessName, mesa, branding, view, welc
                     height={88}
                   />
                 ) : null}
+                <AddToCart product={product} />
               </li>
             ))}
           </ul>

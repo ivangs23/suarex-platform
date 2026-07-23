@@ -15,16 +15,28 @@ export type MenuNode = {
   href: string;
 };
 
+/** Una extra elegible del producto, con su precio ya formateado y en céntimos. */
+export type MenuExtra = {
+  id: string;
+  name: string;
+  priceCents: number;
+  priceLabel: string;
+};
+
 export type MenuProduct = {
   id: string;
   name: string;
   price: number;
+  /** Precio en céntimos, que es como suma el carrito: en euros, `0.1 + 0.2` no da `0.3`. */
+  priceCents: number;
   /** Precio ya formateado en la moneda y el idioma del tenant, p. ej. `18,00 €`. Lo
    * calcula la vista para que ningún tema tenga que saber de locales ni de monedas. */
   priceLabel: string;
   /** URL pública completa de la foto, o `null`. Se compone aquí para que ningún tema
    * tenga que conocer el endpoint de Storage ni el nombre del bucket. */
   imageUrl: string | null;
+  /** Extras que el comensal puede añadir a este producto. */
+  extras: MenuExtra[];
 };
 
 export type MenuCrumb = { name: string; href: string };
@@ -78,7 +90,7 @@ export function buildMenuView(params: {
   /** Ruta de la mesa, p. ej. `/5`; los enlaces cuelgan de aquí. */
   basePath: string;
   /** `tenant_settings.locale` / `.currency`, con los mismos valores por defecto que usa la
-   * carta de pedido (`apps/web/app/m/[token]/page.tsx`). */
+   * carta pública (`apps/web/app/[mesa]/page.tsx`). */
   locale?: string;
   currency?: string;
   /** Endpoint público de Storage (`NEXT_PUBLIC_SUPABASE_URL`). Sin él las fotos no se
@@ -177,7 +189,14 @@ export function buildMenuView(params: {
       id: product.id,
       name: product.nameI18n.es ?? "",
       price: product.price,
+      priceCents: eurosToCents(product.price),
       priceLabel: formatCents(eurosToCents(product.price), locale, currency),
+      extras: product.extras.map((extra) => ({
+        id: extra.id,
+        name: extra.nameI18n.es ?? "",
+        priceCents: eurosToCents(extra.price),
+        priceLabel: formatCents(eurosToCents(extra.price), locale, currency),
+      })),
       // Sin origen de Storage no se compone nada: mejor sin foto que con una URL rota.
       imageUrl:
         storageOrigin && product.imagePath

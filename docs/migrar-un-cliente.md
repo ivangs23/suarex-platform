@@ -162,14 +162,32 @@ reintentarlas.
 
 ## 5. Su tema
 
+> **La regla, antes de escribir una línea:** la **funcionalidad es la misma para todos los
+> clientes**. Un paso del flujo, el carrito, el pedido: si se desarrolla, se desarrolla para
+> todos. Lo que cambia de un cliente a otro es el **aspecto** (colores, dónde cae cada cosa)
+> y el **contenido** (sus productos, sus fotos, la imagen de su bienvenida).
+>
+> Un tema es una hoja de estilo con opiniones, no una variante del producto. No decide qué
+> pasos existen ni si se puede pedir: eso lo calcula la página y lo comprueba
+> [`themes/contract.test.tsx`](../apps/web/app/[mesa]/themes/contract.test.tsx), que renderiza
+> TODOS los temas registrados y falla si a alguno le falta un paso.
+>
+> Se aprendió rompiéndola dos veces: la pantalla de bienvenida nació pintándose solo en el
+> tema de Manuela, y el carrito vivía en una segunda carta sin tema que ningún cliente
+> enseñaba.
+
 Un cliente que no quiera diseño propio se queda con `generic`, que se pinta entero con su
 branding sin escribir una línea de código. Para uno que sí lo quiera:
 
 1. Copia `apps/web/app/[mesa]/themes/generic.{tsx,module.css}` con su nombre.
 2. Pon los colores **medidos** en el paso 1, no estimados. Deja escrito en un comentario de
    dónde salieron.
-3. Sus assets de marca van a `apps/web/public/brands/`.
+3. Sus assets de marca van a `apps/web/public/brands/`. La foto de su bienvenida NO: esa es
+   un ajuste (`branding.heroUrl`) que sube el propio cliente desde su panel.
 4. Regístralo en `themes/index.ts` y pon su slug en `tenant_settings.theme`.
+5. Corre `pnpm --filter @suarex/web test`. El test de contrato ya está recorriendo tu tema
+   nuevo: si te falta la bienvenida, el botón de añadir o cualquier otro paso, falla ahí y no
+   en producción.
 
 Un slug de tema desconocido cae al genérico, así que un cliente mal configurado nunca deja
 una carta en blanco.

@@ -1,5 +1,9 @@
 import { expect, test } from "@playwright/test";
-import { deleteOrder, findOrderByPublicToken } from "./helpers/orders-db.js";
+import {
+  deleteOrder,
+  findOrderByPublicToken,
+  firstProductIdOfTenant,
+} from "./helpers/orders-db.js";
 
 /**
  * Cobertura de regresión para `GET /api/pedido/[publicToken]`
@@ -23,29 +27,24 @@ import { deleteOrder, findOrderByPublicToken } from "./helpers/orders-db.js";
 const GARUM_TABLE_TOKEN = "11111111-1111-1111-1111-111111111111";
 const BASE = "http://garum.localhost:3000";
 
-// Igual que `firstProductId` en `staff-board.spec.ts`, pero contra la
-// `APIRequestContext` de Playwright (`request`) en lugar de `page.request`: este
-// fichero no necesita un navegador real, solo peticiones HTTP contra la ruta.
-async function firstGarumProductId(
-  request: import("@playwright/test").APIRequestContext,
-): Promise<string> {
+/**
+ * Crear el pedido exige la cookie de la mesa: la pone `/m/{token}` al escanear el QR y el
+ * endpoint la lee de ahí, nunca del cuerpo (ver `apps/web/lib/mesa-cookie.ts`). Este
+ * ayudante la deja puesta en el contexto de peticiones que se le pase.
+ */
+async function escanearQr(request: import("@playwright/test").APIRequestContext): Promise<void> {
   const response = await request.get(`${BASE}/m/${GARUM_TABLE_TOKEN}`);
-  const html = await response.text();
-  const match = html.match(/data-product-id="([0-9a-f-]{36})"/);
-  if (!match?.[1]) throw new Error("No se encontró ningún producto en la carta de garum");
-  return match[1];
+  expect(response.ok()).toBeTruthy();
 }
 
 test.describe("GET /api/pedido/[publicToken]", () => {
   test("un publicToken real devuelve exactamente {orderNumber, status, totalCents, currency}", async ({
     request,
   }) => {
-    const productId = await firstGarumProductId(request);
+    const productId = await firstProductIdOfTenant("garum");
+    await escanearQr(request);
     const createResponse = await request.post(`${BASE}/api/orders`, {
-      data: {
-        tableToken: GARUM_TABLE_TOKEN,
-        lines: [{ productId, quantity: 1, extraIds: [], notes: null }],
-      },
+      data: { lines: [{ productId, quantity: 1, extraIds: [], notes: null }] },
     });
     expect(createResponse.ok()).toBeTruthy();
     const { publicToken } = (await createResponse.json()) as { publicToken: string };

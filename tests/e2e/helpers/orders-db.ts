@@ -81,3 +81,38 @@ export async function markOrderPaidForTest(orderId: string): Promise<void> {
     .eq("status", "pending");
   if (error) throw error;
 }
+
+/**
+ * Id de un producto de un tenant, para componer una comanda desde un test.
+ *
+ * Se lee de la base y no rascando el HTML de la carta, como se hacía antes. La carta se
+ * navega por niveles: un producto solo se pinta si estás dentro de SU categoría, así que
+ * rascar la raíz devolvía cero y un test fallaba por dónde miraba, no por lo que probaba.
+ *
+ * `destination` filtra por la estación a la que va el producto (`cocina`/`barra`). Un test
+ * que compruebe en qué estación aparece la comanda TIENE que elegirlo: con un producto
+ * cualquiera, el resultado depende del orden en que la base devuelva las filas, y ese test
+ * pasa o falla por azar.
+ */
+export async function firstProductIdOfTenant(
+  tenantSlug: string,
+  destination?: "cocina" | "barra",
+): Promise<string> {
+  const { data: tenant, error: tenantError } = await admin
+    .from("tenants")
+    .select("id")
+    .eq("slug", tenantSlug)
+    .single();
+  if (tenantError) throw tenantError;
+
+  let query = admin
+    .from("products")
+    .select("id, categories!inner(destination)")
+    .eq("tenant_id", tenant.id as string);
+  if (destination) query = query.eq("categories.destination", destination);
+
+  const { data, error } = await query.limit(1).single();
+  if (error) throw error;
+
+  return data.id as string;
+}

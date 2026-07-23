@@ -8,6 +8,7 @@ import {
   OrderCartError,
 } from "@suarex/db";
 import { NextResponse } from "next/server";
+import { readMesaToken } from "@/lib/mesa-cookie";
 import { stripeClient } from "@/lib/stripe";
 
 // Mensaje genérico para cualquier fallo que NO sea un `OrderCartError`: el
@@ -19,17 +20,21 @@ const GENERIC_ERROR = "No se pudo procesar el pedido";
 
 export async function POST(request: Request) {
   const body = (await request.json()) as {
-    tableToken?: string;
     lines?: { productId: string; quantity: number; extraIds: string[]; notes: string | null }[];
   };
 
-  if (!body.tableToken || !Array.isArray(body.lines) || body.lines.length === 0) {
+  // LA MESA NO LA ELIGE EL CLIENTE. Sale de la cookie httpOnly que fijó el QR al escanearlo
+  // (ver `lib/mesa-cookie.ts`), no del cuerpo de la petición: si viniera del navegador,
+  // cualquiera podría mandar comandas a la mesa que quisiera con solo cambiar un campo.
+  const tableToken = await readMesaToken();
+
+  if (!tableToken || !Array.isArray(body.lines) || body.lines.length === 0) {
     return NextResponse.json({ error: "Petición inválida" }, { status: 400 });
   }
 
   let table: Awaited<ReturnType<typeof findTableByToken>>;
   try {
-    table = await findTableByToken(body.tableToken);
+    table = await findTableByToken(tableToken);
   } catch (error) {
     console.error("[orders] Error resolviendo mesa por token:", error);
     return NextResponse.json({ error: GENERIC_ERROR }, { status: 500 });

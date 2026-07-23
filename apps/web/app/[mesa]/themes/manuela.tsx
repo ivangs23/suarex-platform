@@ -1,3 +1,4 @@
+import { AddToCart } from "../cart/AddToCart";
 import styles from "./manuela.module.css";
 import type { MenuTheme } from "./types";
 
@@ -137,6 +138,7 @@ export const ManuelaTheme: MenuTheme = ({ businessName, mesa, branding, view, we
                     height={88}
                   />
                 ) : null}
+                <AddToCart product={product} />
               </li>
             ))}
           </ul>

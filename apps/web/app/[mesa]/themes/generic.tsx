@@ -1,3 +1,4 @@
+import { AddToCart } from "../cart/AddToCart";
 import styles from "./generic.module.css";
 import type { MenuTheme } from "./types";
 
@@ -127,6 +128,7 @@ export const GenericTheme: MenuTheme = ({ businessName, mesa, branding, view, we
                     height={88}
                   />
                 ) : null}
+                <AddToCart product={product} />
               </li>
             ))}
           </ul>

@@ -1,6 +1,7 @@
 import { DEFAULT_BRANDING } from "@suarex/config";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { CartProvider } from "../cart/CartProvider";
 import { THEMES } from "./index";
 import type { MenuThemeProps, MenuView } from "./types";
 
@@ -52,8 +53,10 @@ const VIEW_HOJA: MenuView = {
       id: "p1",
       name: "Ribera del Duero",
       price: 18,
+      priceCents: 1800,
       priceLabel: "18,00 €",
       imageUrl: "https://storage.test/foto.jpg",
+      extras: [{ id: "e1", name: "Copa extra", priceCents: 300, priceLabel: "3,00 €" }],
     },
   ],
   totalProducts: 8,
@@ -82,8 +85,14 @@ it("hay temas registrados que comprobar", () => {
 describe.each(nombres)("tema %s", (nombre) => {
   const Theme = THEMES[nombre];
   if (!Theme) throw new Error(`tema '${nombre}' registrado pero vacío`);
-  const render = (overrides: Partial<MenuThemeProps>) =>
-    renderToStaticMarkup(<>{Theme(props(overrides))}</>);
+  // El carrito es un componente de cliente con su propio contexto: el tema se envuelve en el
+  // proveedor, igual que hace la página, o el botón de añadir no tendría de dónde salir.
+  const render = (overrides: Partial<MenuThemeProps>, canOrder = true) =>
+    renderToStaticMarkup(
+      <CartProvider locale="es" currency="EUR" canOrder={canOrder}>
+        {Theme(props(overrides))}
+      </CartProvider>,
+    );
 
   it("pinta la pantalla de bienvenida cuando toca, con su enlace de entrada", () => {
     // El paso existe para TODOS. Lo que cada tema decide es cómo se ve, no si ocurre.
@@ -142,6 +151,25 @@ describe.each(nombres)("tema %s", (nombre) => {
       products: VIEW_HOJA.products.map((p) => ({ ...p, imageUrl: null })),
     };
     expect(render({ view: sinFoto })).not.toContain('data-testid="product-photo"');
+  });
+
+  it("deja pedir cada producto, con sus extras", () => {
+    // Pedir es FUNCIONALIDAD: la tienen todos los clientes. Un tema a medida escrito
+    // copiando otro y al que se le olvide el botón deja a ese cliente con una carta que no
+    // vende, y eso no se ve en ninguna captura.
+    const html = render({ view: VIEW_HOJA });
+
+    expect(html).toContain('data-testid="add-to-cart"');
+    expect(html).toContain('data-testid="extra-checkbox"');
+    expect(html).toContain("Copa extra");
+  });
+
+  it("sin haber escaneado el QR de la mesa, la carta se consulta pero no se pide", () => {
+    // La cookie del QR es lo único que demuestra que quien pide está sentado en esa mesa.
+    const html = render({ view: VIEW_HOJA }, false);
+
+    expect(html).toContain('data-testid="product"');
+    expect(html).not.toContain('data-testid="add-to-cart"');
   });
 
   it("ofrece la vuelta al primer nivel desde dentro de una categoría", () => {

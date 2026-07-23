@@ -1,7 +1,10 @@
 import { parseBranding } from "@suarex/config";
-import { getCategories, getProducts, getTenantSettings } from "@suarex/db";
+import { findTableByToken, getCategories, getProducts, getTenantSettings } from "@suarex/db";
 import { notFound } from "next/navigation";
+import { readMesaToken } from "@/lib/mesa-cookie";
 import { requireTenant } from "@/lib/tenant-context";
+import { CartBar } from "./cart/CartBar";
+import { CartProvider } from "./cart/CartProvider";
 import { buildMenuView } from "./menu-view";
 import { resolveTheme } from "./themes";
 
@@ -89,16 +92,38 @@ export default async function MenuPage({
     href: `/${mesa}?ver=carta`,
   };
 
+  // PEDIR EXIGE HABER ESCANEADO EL QR DE ESTA MESA. La cookie la fija `/m/{token}` (ver
+  // `lib/mesa-cookie.ts`) y aquí se comprueba que la mesa que designa es de ESTE cliente y
+  // es ESTA mesa: sin las dos comprobaciones, una cookie de otro restaurante -- o de la mesa
+  // 3 mientras se mira la carta de la 7 -- serviría para mandar comandas a donde no toca.
+  // Quien llega a `/{mesa}` sin escanear ve la carta igual, pero en consulta.
+  const mesaToken = await readMesaToken();
+  const mesaEscaneada = mesaToken ? await findTableByToken(mesaToken).catch(() => null) : null;
+  const canOrder =
+    mesaEscaneada?.isActive === true &&
+    mesaEscaneada.tenantId === tenant.id &&
+    mesaEscaneada.label === mesa;
+
   const Theme = resolveTheme(settings?.theme);
 
+  /* El carrito envuelve al tema y la barra de total la pinta la página, no el tema: es lo
+     último que ve el comensal antes de pagar, y un tema al que se le olvidara pintarla
+     dejaría a ese cliente con una carta que no cobra. */
   return (
-    <Theme
-      tenantSlug={tenant.slug}
-      businessName={businessName}
-      mesa={mesa}
-      branding={branding}
-      view={view}
-      welcome={welcome}
-    />
+    <CartProvider
+      locale={settings?.locale ?? "es"}
+      currency={settings?.currency ?? "EUR"}
+      canOrder={canOrder}
+    >
+      <Theme
+        tenantSlug={tenant.slug}
+        businessName={businessName}
+        mesa={mesa}
+        branding={branding}
+        view={view}
+        welcome={welcome}
+      />
+      <CartBar />
+    </CartProvider>
   );
 }

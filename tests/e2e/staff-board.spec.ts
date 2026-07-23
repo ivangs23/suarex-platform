@@ -1,5 +1,10 @@
 import { expect, type Page, test } from "@playwright/test";
-import { deleteOrder, findOrderByPublicToken, markOrderPaidForTest } from "./helpers/orders-db.js";
+import {
+  deleteOrder,
+  findOrderByPublicToken,
+  firstProductIdOfTenant,
+  markOrderPaidForTest,
+} from "./helpers/orders-db.js";
 
 // Igual que `REALTIME_READY_TIMEOUT_MS` en `tests/integration/realtime-isolation.test.ts`:
 // justo tras `supabase db reset` (o bajo varios workers de Playwright compitiendo por CPU
@@ -49,12 +54,10 @@ test("un pedido pagado aparece en el panel", async ({ page }) => {
   await expect(page).toHaveURL(/\/staff$/);
 
   // El pedido se crea por la API pública, como lo haría un comensal real.
-  const productId = await firstProductId(page, "garum.localhost", GARUM_TABLE_TOKEN);
+  const productId = await firstProductIdOfTenant("garum", "barra");
+  await escanearQr(page, "garum.localhost", GARUM_TABLE_TOKEN);
   const response = await page.request.post("http://garum.localhost:3000/api/orders", {
-    data: {
-      tableToken: GARUM_TABLE_TOKEN,
-      lines: [{ productId, quantity: 1, extraIds: [], notes: null }],
-    },
+    data: { lines: [{ productId, quantity: 1, extraIds: [], notes: null }] },
   });
   expect(response.ok()).toBeTruthy();
   const { publicToken } = (await response.json()) as { publicToken: string };
@@ -129,12 +132,10 @@ test("el personal de un tenant no ve los pedidos del otro (con control positivo)
     // 1. Pedido de garum. Control positivo (garum lo ve) Y aislamiento (manuela no ve
     // ESTE pedido concreto, sea lo que sea que hubiera antes en su tablero) en el mismo
     // paso.
-    const garumProductId = await firstProductId(garumPage, "garum.localhost", GARUM_TABLE_TOKEN);
+    const garumProductId = await firstProductIdOfTenant("garum");
+    await escanearQr(garumPage, "garum.localhost", GARUM_TABLE_TOKEN);
     const garumResponse = await garumPage.request.post("http://garum.localhost:3000/api/orders", {
-      data: {
-        tableToken: GARUM_TABLE_TOKEN,
-        lines: [{ productId: garumProductId, quantity: 1, extraIds: [], notes: null }],
-      },
+      data: { lines: [{ productId: garumProductId, quantity: 1, extraIds: [], notes: null }] },
     });
     expect(garumResponse.ok()).toBeTruthy();
     const { publicToken: garumToken } = (await garumResponse.json()) as { publicToken: string };
@@ -146,18 +147,12 @@ test("el personal de un tenant no ve los pedidos del otro (con control positivo)
     // 2. Pedido de manuela. Control positivo (manuela lo ve) Y aislamiento (garum no ve
     // ESTE pedido concreto -- si lo viera, el pedido de manuela se habría fugado a
     // garum).
-    const manuelaProductId = await firstProductId(
-      manuelaPage,
-      "manuela.localhost",
-      MANUELA_TABLE_TOKEN,
-    );
+    const manuelaProductId = await firstProductIdOfTenant("manuela");
+    await escanearQr(manuelaPage, "manuela.localhost", MANUELA_TABLE_TOKEN);
     const manuelaResponse = await manuelaPage.request.post(
       "http://manuela.localhost:3000/api/orders",
       {
-        data: {
-          tableToken: MANUELA_TABLE_TOKEN,
-          lines: [{ productId: manuelaProductId, quantity: 1, extraIds: [], notes: null }],
-        },
+        data: { lines: [{ productId: manuelaProductId, quantity: 1, extraIds: [], notes: null }] },
       },
     );
     expect(manuelaResponse.ok()).toBeTruthy();
@@ -216,14 +211,16 @@ async function loginAsStaff(
   await expect(page).toHaveURL(`http://${host}:3000/staff`, { timeout: 15_000 });
 }
 
-async function firstProductId(
+/**
+ * Deja este navegador sentado en la mesa, como haría el comensal al escanear su QR: la
+ * cookie que fija `/m/{token}` es lo que autoriza a crear el pedido, porque el endpoint lee
+ * la mesa de ahí y nunca del cuerpo (ver `apps/web/lib/mesa-cookie.ts`).
+ */
+async function escanearQr(
   page: import("@playwright/test").Page,
   host: string,
   tableToken: string,
-): Promise<string> {
+): Promise<void> {
   const response = await page.request.get(`http://${host}:3000/m/${tableToken}`);
-  const html = await response.text();
-  const match = html.match(/data-product-id="([0-9a-f-]{36})"/);
-  if (!match?.[1]) throw new Error("No se encontró ningún producto en la carta");
-  return match[1];
+  expect(response.ok()).toBeTruthy();
 }
