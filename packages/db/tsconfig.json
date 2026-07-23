@@ -1,6 +1,9 @@
 {
   "extends": "../../tsconfig.base.json",
-  "compilerOptions": { "noEmit": true },
+  // `allowJs`: `src/image.js` es JavaScript a propósito -- lo comparten la app (TypeScript) y
+  // `scripts/import-catalog.mjs` (Node a pelo). Ver su docstring: si la política de imágenes
+  // viviera en TS, el importador tendría su propia copia y se separarían.
+  "compilerOptions": { "noEmit": true, "allowJs": true, "checkJs": true },
   "include": ["src"],
   "exclude": ["src/__compile_fixtures__"]
 }

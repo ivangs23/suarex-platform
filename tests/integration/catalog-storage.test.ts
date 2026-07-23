@@ -41,7 +41,10 @@ describe("uploadProductImage", () => {
   });
 
   it("rechaza un fichero demasiado grande", async () => {
-    const big = new Uint8Array(6 * 1024 * 1024); // 6 MB
+    // 16 MB: por encima del tope de ENTRADA (15 MB). Ese tope ya no acota lo que se
+    // guarda -- de eso se encarga la optimización, que reescala a 900 px y WebP -- sino lo
+    // que se descarga y se descomprime en memoria.
+    const big = new Uint8Array(16 * 1024 * 1024);
     await expect(
       uploadProductImage(crypto.randomUUID(), { bytes: big, contentType: "image/png" }),
     ).rejects.toThrow(/tama/i);

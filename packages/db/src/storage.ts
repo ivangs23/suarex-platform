@@ -1,7 +1,18 @@
 import { catalogBucket } from "./client.js";
+import { MAX_SIDE_BRAND, optimizeImage } from "./image.js";
 
 const ALLOWED_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
-const MAX_BYTES = 5 * 1024 * 1024;
+
+/**
+ * Tope de lo que se ACEPTA, no de lo que se guarda.
+ *
+ * Eran 5 MB, y con eso una foto normal hecha con un móvil moderno se rechazaba de plano --
+ * justo la vía por la que un gestor sube la foto de un plato. Ya no hace falta ser tan
+ * estricto: lo que acaba en Storage lo decide `optimizeImage` (900 px de lado, WebP), así que
+ * el peso guardado no depende de lo que entre. El límite sigue existiendo para acotar lo que
+ * se descarga y se descomprime en memoria, no para acotar el bucket.
+ */
+const MAX_BYTES = 15 * 1024 * 1024;
 
 /** No hay validador de UUID compartido en el resto del paquete (las funciones
  * `tenantScoped`/RPC-bound de `client.ts` confían en que postgrest/la función SQL
@@ -44,12 +55,14 @@ export async function uploadProductImage(
     );
   }
 
-  const ext =
-    file.contentType === "image/png" ? "png" : file.contentType === "image/webp" ? "webp" : "jpg";
-  const path = `tenant/${tenantId}/products/${crypto.randomUUID()}.${ext}`;
+  // Se guarda la versión optimizada, NUNCA el original: la foto que sube un gestor desde su
+  // móvil son 3 MB y 4000 px para una tarjeta de 250. Ver `image.js`.
+  const optimizada = await optimizeImage(file.bytes);
 
-  const { error } = await catalogBucket().upload(path, file.bytes, {
-    contentType: file.contentType,
+  const path = `tenant/${tenantId}/products/${crypto.randomUUID()}.${optimizada.ext}`;
+
+  const { error } = await catalogBucket().upload(path, optimizada.bytes, {
+    contentType: optimizada.contentType,
     upsert: false,
   });
   if (error) throw error;
@@ -93,12 +106,14 @@ export async function uploadBrandingImage(
   const supabaseUrl = process.env.SUPABASE_URL;
   if (!supabaseUrl) throw new Error("SUPABASE_URL es obligatoria para componer la URL del logo");
 
-  const ext =
-    file.contentType === "image/png" ? "png" : file.contentType === "image/webp" ? "webp" : "jpg";
-  const path = `tenant/${tenantId}/branding/${crypto.randomUUID()}.${ext}`;
+  // La foto de bienvenida va a sangre completa detrás de todo, así que se le deja más lado
+  // que a una tarjeta -- pero tampoco los 6000 px del original.
+  const optimizada = await optimizeImage(file.bytes, { maxSide: MAX_SIDE_BRAND });
 
-  const { error } = await catalogBucket().upload(path, file.bytes, {
-    contentType: file.contentType,
+  const path = `tenant/${tenantId}/branding/${crypto.randomUUID()}.${optimizada.ext}`;
+
+  const { error } = await catalogBucket().upload(path, optimizada.bytes, {
+    contentType: optimizada.contentType,
     upsert: false,
   });
   if (error) throw error;

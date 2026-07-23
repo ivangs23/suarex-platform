@@ -40,7 +40,8 @@ describe("fotos de producto", () => {
       contentType: "image/png",
     });
     expect(path.startsWith(`tenant/${tenantA.tenantId}/products/`)).toBe(true);
-    expect(path.endsWith(".png")).toBe(true);
+    // Siempre `.webp`: se guarda la versión optimizada, no el original (ver `image.js`).
+    expect(path.endsWith(".webp")).toBe(true);
   });
 
   it("rechaza un tipo que no está permitido", async () => {

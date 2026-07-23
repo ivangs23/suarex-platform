@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
+import { optimizeImage } from "../packages/db/src/image.js";
 import { elegirAdaptador } from "./lib/source-adapters.mjs";
 
 /**
@@ -261,7 +262,11 @@ if (extrasAInsertar.length > 0) {
 // ---------------------------------------------------------------------------
 
 const TIPOS_IMAGEN = new Set(["image/png", "image/jpeg", "image/webp"]);
-const MAX_BYTES_IMAGEN = 5 * 1024 * 1024;
+
+/* Tope de lo que se DESCARGA, no de lo que se guarda: eso lo decide `optimizeImage`. Eran
+   5 MB y con eso se quedó fuera una foto de categoría de 10,5 MB del catálogo real, que es
+   precisamente el tipo de original que más falta hace reescalar. */
+const MAX_BYTES_IMAGEN = 15 * 1024 * 1024;
 
 let fotosSubidas = 0;
 let fotosConservadas = 0;
@@ -273,6 +278,8 @@ const fotosFallidas = [];
  * Común a productos y categorías: las dos vienen del Storage del cliente y las dos tienen
  * que dejar de depender de él.
  */
+let ahorrado = 0;
+
 async function migrarImagen(urlOrigen, subcarpeta) {
   const respuesta = await fetch(urlOrigen);
   if (!respuesta.ok) throw new Error(`HTTP ${respuesta.status}`);
@@ -289,12 +296,18 @@ async function migrarImagen(urlOrigen, subcarpeta) {
     throw new Error(`pesa ${(bytes.byteLength / 1024 / 1024).toFixed(1)} MB (máx 5)`);
   }
 
-  const ext = contentType === "image/png" ? "png" : contentType === "image/webp" ? "webp" : "jpg";
-  const ruta = `tenant/${tenantId}/${subcarpeta}/${crypto.randomUUID()}.${ext}`;
+  // MISMA optimización que el panel de administración (`packages/db/src/image.js`), no una
+  // copia: las fotos de una migración son las que más pesan -- del catálogo real de un
+  // cliente salieron 89 MB, con originales de 6250 px para tarjetas de 250 -- y son
+  // exactamente las que se quedan ahí para siempre si entran sin tocar.
+  const optimizada = await optimizeImage(bytes);
+  ahorrado += bytes.byteLength - optimizada.bytes.byteLength;
+
+  const ruta = `tenant/${tenantId}/${subcarpeta}/${crypto.randomUUID()}.${optimizada.ext}`;
 
   const { error } = await db.storage
     .from("catalog")
-    .upload(ruta, bytes, { contentType, upsert: false });
+    .upload(ruta, optimizada.bytes, { contentType: optimizada.contentType, upsert: false });
   if (error) throw error;
   return ruta;
 }
@@ -395,7 +408,8 @@ console.log(`  extras:      ${extrasAInsertar.length} nuevos`);
 console.log(
   `  fotos:       ${fotosSubidas} subidas` +
     (fotosConservadas ? `, ${fotosConservadas} ya estaban` : "") +
-    (fotosFallidas.length ? `, ${fotosFallidas.length} fallidas` : ""),
+    (fotosFallidas.length ? `, ${fotosFallidas.length} fallidas` : "") +
+    (ahorrado > 0 ? ` (${(ahorrado / 1048576).toFixed(1)} MB ahorrados al optimizar)` : ""),
 );
 console.log(`  idiomas:     ${[...idiomas].sort().join(", ") || "(ninguno)"}`);
 console.log(
