@@ -42,14 +42,44 @@
   cursor: pointer;
 }
 
-.badge {
-  min-width: 1.25rem;
-  padding: 0 0.35rem;
+/* Contador: quitar tiene que estar donde se puso. Bajar a la barra del total para
+   corregir un plato añadido de más es donde el comensal se rinde y llama al camarero. */
+.stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 45%, transparent);
   border-radius: 999px;
-  background: var(--color-primary);
-  color: var(--color-bg);
-  font-size: 0.75rem;
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  padding: 0.15rem;
+}
+
+.step {
+  /* 2.25rem: objetivo táctil cómodo con el dedo en una mesa, no un icono de escritorio. */
+  width: 2.25rem;
+  height: 2.25rem;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 1.15rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.step:hover {
+  background: color-mix(in srgb, var(--color-primary) 22%, transparent);
+}
+
+.units {
+  min-width: 1.5rem;
   text-align: center;
+  font-size: 0.9rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Barra fija abajo: el resumen tiene que seguir a la vista mientras se navega la carta,

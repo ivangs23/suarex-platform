@@ -29,6 +29,8 @@ type CartState = {
   /** `false` cuando este navegador no ha escaneado el QR de ninguna mesa. */
   canOrder: boolean;
   add: (product: CartProduct) => void;
+  /** Quita una unidad. Al llegar a cero el producto sale del carrito, con sus extras. */
+  remove: (productId: string) => void;
   toggleExtra: (productId: string, extraId: string) => void;
   checkout: () => void;
 };
@@ -144,6 +146,29 @@ export function CartProvider({
     setQuantities((actual) => ({ ...actual, [product.id]: (actual[product.id] ?? 0) + 1 }));
   }, []);
 
+  const remove = useCallback(
+    (productId: string) => {
+      const restantes = (quantities[productId] ?? 0) - 1;
+
+      if (restantes > 0) {
+        setQuantities((actual) => ({ ...actual, [productId]: restantes }));
+        return;
+      }
+
+      // Al llegar a cero el producto sale del carrito ENTERO, con sus extras: dejarlo a cero
+      // con las extras marcadas haría que volver a añadirlo trajera de vuelta una elección
+      // que el comensal ya había deshecho.
+      const sinEl = <T,>(mapa: Record<string, T>) => {
+        const { [productId]: _fuera, ...resto } = mapa;
+        return resto;
+      };
+      setQuantities(sinEl);
+      setEnCarrito(sinEl);
+      setSelectedExtras(sinEl);
+    },
+    [quantities],
+  );
+
   const toggleExtra = useCallback((productId: string, extraId: string) => {
     setSelectedExtras((actual) => {
       const elegidas = actual[productId] ?? [];
@@ -200,6 +225,7 @@ export function CartProvider({
       enviando,
       canOrder,
       add,
+      remove,
       toggleExtra,
       checkout,
     }),
@@ -213,6 +239,7 @@ export function CartProvider({
       enviando,
       canOrder,
       add,
+      remove,
       toggleExtra,
       checkout,
     ],

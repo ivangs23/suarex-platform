@@ -50,7 +50,12 @@ export type MenuView = {
   currentName: string | null;
   /** Ancestros del nodo actual, de la raíz hacia abajo, SIN incluir el actual. */
   breadcrumb: MenuCrumb[];
-  /** Enlace de vuelta al primer nivel. */
+  /**
+   * Enlace de vuelta al primer nivel de categorías.
+   *
+   * Lleva `?ver=carta` porque la raíz pelada es la pantalla de BIENVENIDA: sin él, "explorar
+   * otras categorías" echaba al comensal fuera de la carta y le hacía volver a entrar.
+   */
   rootHref: string;
   /** Subcategorías del nivel actual (vacío si es una hoja). */
   children: MenuNode[];
@@ -183,7 +188,7 @@ export function buildMenuView(params: {
   return {
     currentName: current ? categoryName(current) : null,
     breadcrumb,
-    rootHref: basePath,
+    rootHref: `${basePath}?ver=carta`,
     children,
     products: ownProducts.map((product) => ({
       id: product.id,

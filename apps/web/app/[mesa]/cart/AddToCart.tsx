@@ -39,16 +39,46 @@ export function AddToCart({ product }: { product: CartProduct }) {
         </ul>
       ) : null}
 
-      <button
-        type="button"
-        className={styles.addButton}
-        data-testid="add-to-cart"
-        data-product-id={product.id}
-        onClick={() => cart.add(product)}
-      >
-        Añadir
-        {unidades > 0 ? <span className={styles.badge}>{unidades}</span> : null}
-      </button>
+      {/* Con unidades en el carrito, el botón único da paso al contador. Quitar tiene que
+          estar donde se puso: obligar a bajar a la barra del total para corregir un plato
+          añadido de más es justo donde el comensal se rinde y llama al camarero. */}
+      {unidades === 0 ? (
+        <button
+          type="button"
+          className={styles.addButton}
+          data-testid="add-to-cart"
+          data-product-id={product.id}
+          onClick={() => cart.add(product)}
+        >
+          Añadir
+        </button>
+      ) : (
+        <div className={styles.stepper}>
+          <button
+            type="button"
+            className={styles.step}
+            data-testid="remove-from-cart"
+            data-product-id={product.id}
+            aria-label={`Quitar una unidad de ${product.name}`}
+            onClick={() => cart.remove(product.id)}
+          >
+            −
+          </button>
+          <span className={styles.units} data-testid="cart-units" data-product-id={product.id}>
+            {unidades}
+          </span>
+          <button
+            type="button"
+            className={styles.step}
+            data-testid="add-to-cart"
+            data-product-id={product.id}
+            aria-label={`Añadir una unidad de ${product.name}`}
+            onClick={() => cart.add(product)}
+          >
+            +
+          </button>
+        </div>
+      )}
     </div>
   );
 }

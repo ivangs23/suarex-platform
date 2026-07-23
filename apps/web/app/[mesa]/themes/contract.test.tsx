@@ -27,7 +27,7 @@ import type { MenuThemeProps, MenuView } from "./types";
 const VIEW_RAIZ: MenuView = {
   currentName: null,
   breadcrumb: [],
-  rootHref: "/5",
+  rootHref: "/5?ver=carta",
   children: [
     {
       id: "c1",
@@ -46,7 +46,7 @@ const VIEW_RAIZ: MenuView = {
 const VIEW_HOJA: MenuView = {
   currentName: "Tintos",
   breadcrumb: [{ name: "Vinos", href: "/5?cat=vinos" }],
-  rootHref: "/5",
+  rootHref: "/5?ver=carta",
   children: [],
   products: [
     {
@@ -175,7 +175,9 @@ describe.each(nombres)("tema %s", (nombre) => {
   it("ofrece la vuelta al primer nivel desde dentro de una categoría", () => {
     const html = render({ view: VIEW_HOJA });
 
-    expect(html).toContain('href="/5"');
+    // Con `?ver=carta`: la raíz pelada es la BIENVENIDA, así que un tema que compusiera su
+    // propio enlace a `/5` echaría al comensal fuera de la carta en vez de subirlo un nivel.
+    expect(html).toContain("/5?ver=carta");
     expect(html).toContain("Tintos");
   });
 });

@@ -54,6 +54,58 @@ test("elegir un extra suma su precio al total", async ({ page }) => {
   await expect(page.getByTestId("cart-total")).toHaveText("18,00 €");
 });
 
+test("desde la tarjeta se quitan unidades, y a cero el producto sale del carrito", async ({
+  page,
+}) => {
+  // Sin el menos, un plato añadido de más obligaba a llamar al camarero: la barra del total
+  // solo sumaba.
+  await page.goto(QR_MESA_1);
+  await page.goto(TINTOS);
+
+  const tarjeta = page.getByTestId("product").filter({ hasText: "Ribera del Duero" });
+  await tarjeta.getByTestId("add-to-cart").click();
+  await tarjeta.getByTestId("add-to-cart").click();
+  await expect(tarjeta.getByTestId("cart-units")).toHaveText("2");
+  await expect(page.getByTestId("cart-total")).toHaveText("36,00 €");
+
+  await tarjeta.getByTestId("remove-from-cart").click();
+  await expect(tarjeta.getByTestId("cart-units")).toHaveText("1");
+  await expect(page.getByTestId("cart-total")).toHaveText("18,00 €");
+
+  // A cero desaparece el contador y la barra entera: el carrito vuelve a estar vacío.
+  await tarjeta.getByTestId("remove-from-cart").click();
+  await expect(tarjeta.getByTestId("cart-units")).toHaveCount(0);
+  await expect(page.getByTestId("cart-bar")).toHaveCount(0);
+});
+
+test("quitar un producto olvida también sus extras", async ({ page }) => {
+  // Si las extras sobrevivieran a sacarlo del carrito, volver a añadirlo traería de vuelta
+  // una elección que el comensal ya había deshecho -- y la cobraría.
+  await page.goto(QR_MESA_1);
+  await page.goto(TINTOS);
+
+  const tarjeta = page.getByTestId("product").filter({ hasText: "Ribera del Duero" });
+  await tarjeta.getByTestId("add-to-cart").click();
+  await tarjeta.getByTestId("extra-checkbox").click();
+  await expect(page.getByTestId("cart-total")).toHaveText("21,00 €");
+
+  await tarjeta.getByTestId("remove-from-cart").click();
+  await tarjeta.getByTestId("add-to-cart").click();
+  await expect(page.getByTestId("cart-total")).toHaveText("18,00 €");
+});
+
+test("volver a explorar categorías no echa a la pantalla de bienvenida", async ({ page }) => {
+  // La raíz pelada ES la bienvenida: si el enlace de vuelta apuntara ahí, subir un nivel
+  // sacaría al comensal de la carta y le obligaría a entrar otra vez.
+  await page.goto(QR_MESA_1);
+  await page.goto(TINTOS);
+
+  await page.getByRole("link", { name: /explorar otras categorías/i }).click();
+
+  await expect(page.getByTestId("welcome-enter")).toHaveCount(0);
+  await expect(page.getByTestId("category").filter({ hasText: "Vinos" })).toBeVisible();
+});
+
 test("el total sobrevive a cambiar de categoría", async ({ page }) => {
   // Un pedido real cae en categorías distintas: si el carrito se vaciara al navegar, no se
   // podría pedir un vino y una tosta en la misma comanda.
