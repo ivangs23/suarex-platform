@@ -75,47 +75,49 @@ export const ManuelaTheme: MenuTheme = ({
 
   return (
     <main className={styles.page} data-theme="manuela">
-      {/* Su cabecera real: la foto de la pared de casetes de su local con la firma
-        manuscrita encima. Assets versionados con la app (no el logo por tenant de
-        Storage), servidos estáticos: <img> a propósito, sin optimizar. */}
-      {/* Cabecera compacta: el héroe grande es la pantalla de bienvenida, no esto. */}
-      {/* Su cabecera real, medida sobre manueladesayuna.com: barra blanca con la pastilla de
-          la mesa a la izquierda, las banderas de idioma en el centro y la bolsa del pedido
-          en marrón oscuro a la derecha. */}
+      {/* Cabecera en TRES zonas: la mesa a un lado, la firma centrada y a la derecha los
+          idiomas con la bolsa del pedido. La firma va suelta y centrada -- es la marca, no un
+          dato de la mesa -- y hace de enlace de vuelta al inicio.
+
+          Asset versionado con la app (no el logo por tenant de Storage), servido estático:
+          <img> a propósito, sin optimizar. */}
       <header className={styles.topbar}>
+        <span className={styles.mesaPill} data-testid="mesa">
+          {t.table} {mesa}
+        </span>
+
         <a
-          className={styles.mesaPill}
+          className={styles.brand}
           href={welcome.href.replace("?ver=carta", "")}
           aria-label="Volver al inicio"
         >
           <img className={styles.topbarLogo} src="/brands/manuela-logo.png" alt={businessName} />
-          <span className={styles.mesa} data-testid="mesa">
-            {t.table} {mesa}
-          </span>
         </a>
 
-        {langs.length > 1 ? (
-          <nav className={styles.langs} data-testid="lang-switch" aria-label="Idioma">
-            {langs.map((lang) => (
-              <a
-                key={lang.code}
-                className={styles.lang}
-                href={lang.href}
-                hrefLang={lang.code}
-                data-testid="lang-option"
-                data-lang={lang.code}
-                aria-current={lang.active ? "true" : undefined}
-              >
-                {LANG_FLAGS[lang.code] ? (
-                  <span aria-hidden="true">{LANG_FLAGS[lang.code]}</span>
-                ) : null}
-                {lang.label}
-              </a>
-            ))}
-          </nav>
-        ) : null}
+        <div className={styles.topbarEnd}>
+          {langs.length > 1 ? (
+            <nav className={styles.langs} data-testid="lang-switch" aria-label="Idioma">
+              {langs.map((lang) => (
+                <a
+                  key={lang.code}
+                  className={styles.lang}
+                  href={lang.href}
+                  hrefLang={lang.code}
+                  data-testid="lang-option"
+                  data-lang={lang.code}
+                  aria-current={lang.active ? "true" : undefined}
+                >
+                  {LANG_FLAGS[lang.code] ? (
+                    <span aria-hidden="true">{LANG_FLAGS[lang.code]}</span>
+                  ) : null}
+                  {lang.label}
+                </a>
+              ))}
+            </nav>
+          ) : null}
 
-        <CartButton className={styles.cartButton} />
+          <CartButton className={styles.cartButton} />
+        </div>
       </header>
 
       <div className={styles.inner}>
