@@ -29,6 +29,16 @@ export default defineConfig({
   },
   preload: {
     plugins: [externalizeDepsPlugin()],
+    // El preload DEBE emitirse como `index.js`, que es la ruta que pasa `main/index.ts` a
+    // `webPreferences.preload`. Con el paquete marcado `"type": "module"`, electron-vite
+    // lo emitía como `index.mjs`: Electron no encontraba el fichero, NO avisaba de nada, y
+    // la ventana se quedaba sin `window.agent` -- con la interfaz aparentemente bien pero
+    // sin ningún botón operativo. Un fallo silencioso que solo se ve al usar la app.
+    build: {
+      rollupOptions: {
+        output: { entryFileNames: "[name].js", format: "cjs" },
+      },
+    },
   },
   renderer: {
     define: bakedEnv,
