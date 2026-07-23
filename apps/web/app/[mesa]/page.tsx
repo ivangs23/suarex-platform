@@ -75,6 +75,10 @@ export default async function MenuPage({
     basePath: `/${mesa}`,
     locale: settings?.locale,
     currency: settings?.currency,
+    // El bucket `catalog` es público en lectura (20260722000007_catalog_storage.sql), así
+    // que basta el endpoint público; NEXT_PUBLIC_* se inlinea en build y no expone ninguna
+    // clave de servicio.
+    storageOrigin: process.env.NEXT_PUBLIC_SUPABASE_URL,
   });
 
   const Theme = resolveTheme(settings?.theme);

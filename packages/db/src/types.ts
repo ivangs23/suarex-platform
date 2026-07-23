@@ -45,6 +45,9 @@ export type Product = {
   nameI18n: Record<string, string>;
   descriptionI18n: Record<string, string>;
   price: number;
+  /** Ruta de la foto dentro del bucket `catalog`, o `null`. NO es una URL completa: el
+   * bucket es público en lectura y la carta le antepone el endpoint de Storage. */
+  imagePath: string | null;
   isAvailable: boolean;
   sortOrder: number;
   extras: ProductExtra[];

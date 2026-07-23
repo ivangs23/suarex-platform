@@ -190,6 +190,8 @@
   gap: 1rem;
 }
 
+/* Nombre y precio a la izquierda, foto a la derecha: la misma maqueta que su carta real
+   (medida sobre garumvinoteca.com -- miniatura de 88x88 con esquinas de 14 px). */
 .item {
   background: var(--garum-surface);
   border: 1px solid var(--garum-border);
@@ -197,8 +199,24 @@
   box-shadow: var(--garum-shadow);
   padding: 1.4rem 1.5rem;
   display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.itemText {
+  display: flex;
   flex-direction: column;
   gap: 1.75rem;
+  min-width: 0;
+}
+
+.itemPhoto {
+  flex: none;
+  width: 88px;
+  height: 88px;
+  object-fit: cover;
+  border-radius: 14px;
 }
 
 .itemName {

@@ -19,6 +19,9 @@ export type MenuProduct = {
   /** Precio ya formateado en la moneda y el idioma del tenant, p. ej. `18,00 €`. Lo
    * calcula la vista para que ningún tema tenga que saber de locales ni de monedas. */
   priceLabel: string;
+  /** URL pública completa de la foto, o `null`. Se compone aquí para que ningún tema
+   * tenga que conocer el endpoint de Storage ni el nombre del bucket. */
+  imageUrl: string | null;
 };
 
 export type MenuCrumb = { name: string; href: string };
@@ -75,8 +78,19 @@ export function buildMenuView(params: {
    * carta de pedido (`apps/web/app/m/[token]/page.tsx`). */
   locale?: string;
   currency?: string;
+  /** Endpoint público de Storage (`NEXT_PUBLIC_SUPABASE_URL`). Sin él las fotos no se
+   * pintan, en vez de componer una URL rota. */
+  storageOrigin?: string;
 }): MenuView {
-  const { categories, products, currentSlug, basePath, locale = "es", currency = "EUR" } = params;
+  const {
+    categories,
+    products,
+    currentSlug,
+    basePath,
+    locale = "es",
+    currency = "EUR",
+    storageOrigin = "",
+  } = params;
 
   const childrenByParent = new Map<string | null, Category[]>();
   for (const category of categories) {
@@ -157,6 +171,11 @@ export function buildMenuView(params: {
       name: product.nameI18n.es ?? "",
       price: product.price,
       priceLabel: formatCents(eurosToCents(product.price), locale, currency),
+      // Sin origen de Storage no se compone nada: mejor sin foto que con una URL rota.
+      imageUrl:
+        storageOrigin && product.imagePath
+          ? `${storageOrigin}/storage/v1/object/public/catalog/${product.imagePath}`
+          : null,
     })),
     totalProducts: products.length,
   };

@@ -80,8 +80,25 @@ export const GenericTheme: MenuTheme = ({ businessName, mesa, branding, view }) 
         <ul className={styles.items}>
           {view.products.map((product) => (
             <li key={product.id} className={styles.item} data-testid="product">
-              <span className={styles.itemName}>{product.name}</span>
-              <span className={styles.price}>{product.priceLabel}</span>
+              <div className={styles.itemText}>
+                <span className={styles.itemName}>{product.name}</span>
+                <span className={styles.price}>{product.priceLabel}</span>
+              </div>
+              {/* La foto es de Storage por tenant, una URL absoluta que next/image no puede
+                  optimizar sin configurar `remotePatterns` con un host que varía por
+                  despliegue: <img> a propósito. `loading="lazy"` porque una categoría puede
+                  traer decenas y casi ninguna entra en la primera pantalla. */}
+              {product.imageUrl ? (
+                <img
+                  className={styles.itemPhoto}
+                  data-testid="product-photo"
+                  src={product.imageUrl}
+                  alt=""
+                  loading="lazy"
+                  width={88}
+                  height={88}
+                />
+              ) : null}
             </li>
           ))}
         </ul>
