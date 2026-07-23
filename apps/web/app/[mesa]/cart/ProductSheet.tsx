@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import type { MenuProduct } from "../menu-view";
 import { useCart } from "./CartProvider";
 import styles from "./cart.module.css";
+import { useDialog } from "./useDialog";
 
 /**
  * FICHA DEL PRODUCTO: el paso entre ver un plato y añadirlo al pedido.
@@ -25,16 +26,8 @@ export function ProductSheet({ product, onClose }: { product: MenuProduct; onClo
   const tituloId = useId();
   const dialogo = useRef<HTMLDivElement>(null);
 
-  // Escape cierra, como cualquier diálogo. Sin esto, en un móvil sin botón atrás visible la
-  // única salida es la X, y en una mesa se toca fuera antes que buscarla.
-  useEffect(() => {
-    const alPulsar = (evento: KeyboardEvent) => {
-      if (evento.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", alPulsar);
-    dialogo.current?.focus();
-    return () => window.removeEventListener("keydown", alPulsar);
-  }, [onClose]);
+  // Escape cierra, el foco se atrapa dentro y vuelve al abrir/cerrar. Ver `useDialog`.
+  useDialog(dialogo, onClose);
 
   if (!cart) return null;
   const t = cart.strings;

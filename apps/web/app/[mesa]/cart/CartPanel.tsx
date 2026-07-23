@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useId, useRef } from "react";
+import { useId, useRef } from "react";
 import { useCart } from "./CartProvider";
 import styles from "./cart.module.css";
 import { PaymentStep } from "./PaymentStep";
+import { useDialog } from "./useDialog";
 
 /**
  * EL PEDIDO, ANTES DE PAGARLO.
@@ -23,14 +24,10 @@ export function CartPanel({ onClose }: { onClose: () => void }) {
   const tituloId = useId();
   const dialogo = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const alPulsar = (evento: KeyboardEvent) => {
-      if (evento.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", alPulsar);
-    dialogo.current?.focus();
-    return () => window.removeEventListener("keydown", alPulsar);
-  }, [onClose]);
+  // Escape cierra, el foco se atrapa dentro y vuelve al cerrar. El `resetKey` re-ancla el trap
+  // cuando el panel pasa de la lista del pedido al formulario de pago (mismo contenedor,
+  // contenido distinto). Ver `useDialog`.
+  useDialog(dialogo, onClose, cart?.pago ? "pago" : "pedido");
 
   if (!cart) return null;
   const t = cart.strings;
