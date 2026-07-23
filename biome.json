@@ -47,7 +47,11 @@
       "linter": { "rules": { "style": { "noRestrictedImports": "off" } } }
     },
     {
-      "includes": ["scripts/seed-staff.mjs", "scripts/import-catalog.mjs"],
+      "includes": [
+        "scripts/seed-staff.mjs",
+        "scripts/import-catalog.mjs",
+        "scripts/limpiar-storage.mjs"
+      ],
       "linter": { "rules": { "style": { "noRestrictedImports": "off" } } }
     },
     {
