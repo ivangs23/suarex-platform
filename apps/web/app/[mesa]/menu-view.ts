@@ -8,6 +8,9 @@ export type MenuNode = {
   name: string;
   /** Emoji de la categoría, o `null`. Los temas lo pintan si viene; ninguno depende de él. */
   icon: string | null;
+  /** URL pública de la foto de la categoría, o `null`. Manuela usa una por categoría en sus
+   * tiles; garum solo emoji. Un tema la pinta si viene y cae al emoji si no. */
+  imageUrl: string | null;
   productCount: number;
   href: string;
 };
@@ -155,6 +158,10 @@ export function buildMenuView(params: {
     slug: category.slug,
     name: categoryName(category),
     icon: category.icon,
+    imageUrl:
+      storageOrigin && category.imagePath
+        ? `${storageOrigin}/storage/v1/object/public/catalog/${category.imagePath}`
+        : null,
     productCount: countSubtree(category.id),
     href: hrefFor(category.slug),
   }));

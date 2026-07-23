@@ -16,7 +16,9 @@
   --manuela-surface: #fff8e7;
   --manuela-accent: #c28744;
   --manuela-text: #2c1a0f;
-  --manuela-border: rgba(194, 135, 68, 0.18);
+  --manuela-border: rgba(194, 135, 68, 0.4);
+  /* Verde de su insignia. Medido sobre su sitio: rgb(27, 77, 62). */
+  --manuela-green: #1b4d3e;
 
   min-height: 100vh;
   background-color: var(--manuela-bg);
@@ -25,33 +27,66 @@
   padding: 0 0 4.5rem;
 }
 
-/* Cabecera con la foto REAL de su local (la pared de casetes enmarcados sobre terrazo) y su
-   firma manuscrita encima, como en su sitio. La foto va difuminada y oscurecida: es el
-   fondo de su pantalla de espera, no un elemento que deba competir con la carta. */
-.topbar {
+/* HÉROE. Medido sobre manueladesayuna.com: foto de la pared de casetes de su local a
+   sangre completa, firma manuscrita encima, insignia verde con la taza y el saludo en
+   versales enormes. Es la primera pantalla de su carta, no un adorno. */
+.hero {
   position: relative;
-  padding: 2.25rem 1.25rem;
-  display: flex;
-  justify-content: center;
+  min-height: 68vh;
+  display: grid;
+  place-items: center;
+  padding: 2rem 1.25rem 2.5rem;
   overflow: hidden;
-  border-bottom: 1px solid var(--manuela-border);
 }
 
-.topbarPhoto {
+.heroPhoto {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
-  /* Sin esto, el trazo fino de la firma se pierde sobre las molduras oscuras de los marcos. */
-  filter: blur(3px) brightness(1.15) saturate(0.85);
-  opacity: 0.4;
+  /* A sangre y sin difuminar, como en su sitio. Se aclara un poco para que el trazo fino de
+     la firma y el texto marrón mantengan contraste sobre las molduras oscuras. */
+  filter: brightness(1.08);
+}
+
+.heroContent {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+  text-align: center;
 }
 
 .signature {
-  position: relative;
-  width: min(20rem, 70vw);
+  width: min(26rem, 82vw);
   height: auto;
+}
+
+/* Insignia verde con la taza: #1b4d3e, medido sobre su sitio. Es el único punto de ese
+   verde en toda la carta, y por eso ancla la pantalla. */
+.badge {
+  width: 5.5rem;
+  height: 5.5rem;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--manuela-green);
+  border: 3px solid rgba(255, 255, 255, 0.25);
+  font-size: 2.6rem;
+  line-height: 1;
+}
+
+.greeting {
+  margin: 0;
+  font-size: clamp(2.75rem, 13vw, 4.5rem);
+  /* 900 y -0.05em: los valores exactos de su titular. */
+  font-weight: 900;
+  letter-spacing: -0.05em;
+  line-height: 0.95;
+  text-transform: uppercase;
+  color: var(--manuela-text);
 }
 
 .inner {
@@ -92,10 +127,12 @@
 
 .mesa {
   display: inline-block;
-  margin: 0.9rem 0 0;
-  padding: 0.3rem 0.9rem;
+  margin: 0;
+  padding: 0.35rem 1rem;
   border-radius: 999px;
-  background: rgba(194, 135, 68, 0.14);
+  /* Sólida, no translúcida: va sobre la foto y tiene que leerse igual sobre una moldura
+     oscura que sobre el terrazo claro. */
+  background: #ffffff;
   color: var(--manuela-accent);
   font-size: 0.75rem;
   font-weight: 600;
@@ -155,16 +192,24 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  min-height: 8.5rem;
-  padding: 1.5rem 1rem;
+  justify-content: flex-start;
+  gap: 0.6rem;
+  padding: 0.75rem;
   text-align: center;
   text-decoration: none;
   color: inherit;
   background: #ffffff;
   border: 2px solid rgba(194, 135, 68, 0.4);
   border-radius: 1rem;
+}
+
+.cardPhoto {
+  width: 100%;
+  /* Cuadrada y recortada: sus fotos vienen en proporciones distintas y sin esto cada tile
+     tendría una altura y la rejilla quedaría dentada. */
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 0.75rem;
 }
 
 .cardIcon {

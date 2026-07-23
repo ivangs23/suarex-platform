@@ -8,7 +8,15 @@ function cat(
   name = slug,
   icon: string | null = null,
 ): Category {
-  return { id: `c-${slug}`, slug, parentId, nameI18n: { es: name }, icon, sortOrder: 0 };
+  return {
+    id: `c-${slug}`,
+    slug,
+    parentId,
+    nameI18n: { es: name },
+    icon,
+    imagePath: null,
+    sortOrder: 0,
+  };
 }
 
 function prod(id: string, categoryId: string, name: string, price: number): Product {

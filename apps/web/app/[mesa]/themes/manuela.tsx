@@ -12,31 +12,26 @@ export const ManuelaTheme: MenuTheme = ({ businessName, mesa, branding, view }) 
     {/* Su cabecera real: la foto de la pared de casetes de su local con la firma
         manuscrita encima. Assets versionados con la app (no el logo por tenant de
         Storage), servidos estáticos: <img> a propósito, sin optimizar. */}
-    <header className={styles.topbar}>
-      <img
-        className={styles.topbarPhoto}
-        src="/brands/manuela-fondo.png"
-        alt=""
-        aria-hidden="true"
-      />
-      <img className={styles.signature} src="/brands/manuela-logo.png" alt={businessName} />
-    </header>
-
-    <div className={styles.inner}>
-      <header className={styles.header}>
-        {/* Logo por tenant desde una URL absoluta de Storage, no un asset local
-            optimizable en build: <img> a propósito. */}
-        {branding.logoUrl ? (
-          <img className={styles.logo} src={branding.logoUrl} alt={businessName} />
-        ) : null}
-        <h1 className={styles.name} data-testid="tenant-name">
+    {/* Su héroe real, medido sobre manueladesayuna.com: la foto de la pared de casetes de
+        su local a sangre, la firma manuscrita encima, la insignia verde con la taza y el
+        saludo en versales enormes (72 px, peso 900, tracking -0.05em). */}
+    <header className={styles.hero}>
+      <img className={styles.heroPhoto} src="/brands/manuela-fondo.png" alt="" aria-hidden="true" />
+      <div className={styles.heroContent}>
+        <img className={styles.signature} src="/brands/manuela-logo.png" alt={businessName} />
+        <span className={styles.badge} aria-hidden="true">
+          ☕
+        </span>
+        <h1 className={styles.greeting} data-testid="tenant-name">
           {businessName}
         </h1>
         <p className={styles.mesa} data-testid="mesa">
           Mesa {mesa}
         </p>
-      </header>
+      </div>
+    </header>
 
+    <div className={styles.inner}>
       <p data-testid="product-count" hidden>
         {view.totalProducts}
       </p>
@@ -64,9 +59,18 @@ export const ManuelaTheme: MenuTheme = ({ businessName, mesa, branding, view }) 
           {view.children.map((node) => (
             <li key={node.id} data-testid="category">
               <a className={styles.card} href={node.href}>
-                {/* aria-hidden: el emoji es apoyo visual, el nombre de al lado ya dice qué
-                    es. Sin esto, un lector de pantalla anuncia "copa de vino Vinos". */}
-                {node.icon ? (
+                {/* Su carta usa una FOTO por categoría; el emoji queda de respaldo cuando no
+                    la hay. aria-hidden en ambos: el nombre de al lado ya dice qué es, y sin
+                    esto un lector de pantalla anunciaría "taza de café Cafés". */}
+                {node.imageUrl ? (
+                  <img
+                    className={styles.cardPhoto}
+                    src={node.imageUrl}
+                    alt=""
+                    aria-hidden="true"
+                    loading="lazy"
+                  />
+                ) : node.icon ? (
                   <span className={styles.cardIcon} aria-hidden="true">
                     {node.icon}
                   </span>

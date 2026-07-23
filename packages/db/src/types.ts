@@ -30,6 +30,8 @@ export type Category = {
    * navega por niveles es lo que permite reconocer una categoría de un vistazo antes de
    * leerla. Opcional: sin icono, el tema simplemente no pinta nada. */
   icon: string | null;
+  /** Ruta de la foto de la categoría dentro del bucket `catalog`, o `null`. */
+  imagePath: string | null;
   sortOrder: number;
 };
 

@@ -9,7 +9,7 @@ type ProductExtraRow = {
 
 export async function getCategories(tenantId: string): Promise<Category[]> {
   const { data, error } = await tenantScoped("categories", tenantId)
-    .select("id, slug, name_i18n, icon, sort_order, parent_id")
+    .select("id, slug, name_i18n, icon, image_url, sort_order, parent_id")
     .order("sort_order", { ascending: true });
 
   if (error) throw error;
@@ -19,6 +19,7 @@ export async function getCategories(tenantId: string): Promise<Category[]> {
     slug: row.slug as string,
     nameI18n: row.name_i18n as Record<string, string>,
     icon: (row.icon as string | null) ?? null,
+    imagePath: (row.image_url as string | null) ?? null,
     sortOrder: row.sort_order as number,
     // `categories.parent_id` (FK auto-referenciada, ver 20260721000002_catalog.sql)
     // permite cartas en ÁRBOL: una carta grande se navega por niveles en vez de volcar
