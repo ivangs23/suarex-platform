@@ -56,7 +56,16 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
 
   ipcMain.handle("get-status", async () => {
     const creds = loadCredentials(realConfigBackend());
-    return { paired: creds !== null, running: isAgentRunning(), deviceId: creds?.deviceId ?? null };
+    return {
+      paired: creds !== null,
+      running: isAgentRunning(),
+      deviceId: creds?.deviceId ?? null,
+      // La interfaz lo usa para AVISAR de que la impresión USB (winspool) solo existe en
+      // Windows, en vez de dejar que el usuario lo descubra al pulsar "Imprimir prueba" y
+      // recibir un error. `process` no está disponible en el renderer (contextIsolation),
+      // así que viaja por aquí.
+      platform: process.platform,
+    };
   });
 
   ipcMain.handle("unpair", async () => {

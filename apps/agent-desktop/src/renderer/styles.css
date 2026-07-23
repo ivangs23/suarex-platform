@@ -1,0 +1,284 @@
+/* Estilos del agente de impresión.
+ *
+ * Es una herramienta de fondo, no una web: vive minimizada en la bandeja de un PC que está
+ * en la barra de un bar y solo se abre cuando algo va mal o hay que configurar. El diseño
+ * se ordena en consecuencia -- lo primero y más grande es el ESTADO ("¿está imprimiendo?"),
+ * que es a lo que se viene el 90% de las veces; lo demás son acciones puntuales.
+ *
+ * Sigue el tema del sistema (`prefers-color-scheme`). En una barra iluminada el modo claro
+ * se lee mejor, y en una cocina a media luz el oscuro cansa menos: imponer uno solo obliga
+ * a la mitad de las instalaciones a la opción mala.
+ */
+
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface-alt: #eef0f4;
+  --border: #d8dce4;
+  --text: #1a1d23;
+  --text-muted: #5c6470;
+  --accent: #4f46e5;
+  --accent-text: #ffffff;
+  --ok: #128a4d;
+  --ok-bg: #e6f4ec;
+  --warn: #9a6200;
+  --warn-bg: #fdf3e2;
+  --danger: #b42318;
+  --shadow: 0 1px 2px rgb(16 24 40 / 6%), 0 1px 3px rgb(16 24 40 / 10%);
+  --radius: 10px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14161a;
+    --surface: #1c1f25;
+    --surface-alt: #23272e;
+    --border: #31363f;
+    --text: #e8eaed;
+    --text-muted: #9aa3af;
+    --accent: #7c74ff;
+    --accent-text: #10121a;
+    --ok: #4ade80;
+    --ok-bg: #12291d;
+    --warn: #fbbf24;
+    --warn-bg: #2a2113;
+    --danger: #f87171;
+    --shadow: none;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 1.25rem;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  /* La ventana no se redimensiona a lo ancho en la práctica; un límite evita que en un
+     monitor grande los campos se estiren hasta ser incómodos de recorrer con la vista. */
+  max-width: 46rem;
+  margin-inline: auto;
+}
+
+.appbar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.appbar h1 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.appbar .version {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* --- Estado: la pieza principal ------------------------------------------------------ */
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 1.125rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  margin-bottom: 1.25rem;
+}
+
+/* El punto lleva ADEMÁS el texto de al lado: el color por sí solo no comunica el estado a
+   quien no distingue rojo y verde, que es ~8% de los hombres. */
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--text-muted);
+}
+
+.status[data-state="running"] .dot {
+  background: var(--ok);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 22%, transparent);
+}
+
+.status[data-state="paired"] .dot {
+  background: var(--warn);
+}
+
+.status[data-state="error"] .dot {
+  background: var(--danger);
+}
+
+.status-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.status-title {
+  font-weight: 600;
+}
+
+.status[data-state="running"] .status-title {
+  color: var(--ok);
+}
+
+.status[data-state="paired"] .status-title {
+  color: var(--warn);
+}
+
+.status[data-state="error"] .status-title {
+  color: var(--danger);
+}
+
+.status-detail {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  /* El id del dispositivo es un UUID: no debe romper el ancho de la ventana. */
+  overflow-wrap: anywhere;
+}
+
+/* --- Tarjetas ------------------------------------------------------------------------ */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 1rem 1.125rem;
+  margin-bottom: 1rem;
+}
+
+.card h2 {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin: 0 0 0.75rem;
+}
+
+.hint {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin: 0.5rem 0 0;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.grow {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+/* --- Controles ----------------------------------------------------------------------- */
+
+input,
+select {
+  font: inherit;
+  color: var(--text);
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.5rem 0.7rem;
+}
+
+input:focus-visible,
+select:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+button {
+  font: inherit;
+  font-weight: 500;
+  color: var(--text);
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.5rem 0.9rem;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+button.danger {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 35%, var(--border));
+}
+
+/* Los botones deshabilitados se ven claramente inertes: en esta app un botón que no
+   funciona casi siempre significa "todavía no has emparejado", y eso hay que poder
+   deducirlo mirando, no pulsando. */
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* --- Aviso de plataforma ------------------------------------------------------------- */
+
+.note {
+  display: flex;
+  gap: 0.6rem;
+  padding: 0.7rem 0.85rem;
+  background: var(--warn-bg);
+  border: 1px solid color-mix(in srgb, var(--warn) 30%, transparent);
+  border-radius: 8px;
+  font-size: 0.82rem;
+  color: var(--text);
+  margin-bottom: 0.75rem;
+}
+
+.note[hidden] {
+  display: none;
+}
+
+/* --- Registro ------------------------------------------------------------------------ */
+
+.log {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 0.7rem 0.85rem;
+  height: 11rem;
+  overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, "Cascadia Mono", Menlo, monospace;
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
+
+.log:empty::before {
+  content: "Sin actividad todavía.";
+  color: var(--text-muted);
+}

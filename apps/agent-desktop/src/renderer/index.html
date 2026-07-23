@@ -3,36 +3,78 @@
   <head>
     <meta charset="utf-8" />
     <title>SuarEx — Agente de impresión</title>
-    <style>
-      body { font-family: system-ui, sans-serif; margin: 1.5rem; }
-      section { margin-bottom: 1.25rem; }
-      #log { white-space: pre-wrap; background: #111; color: #0f0; padding: .75rem; height: 12rem; overflow: auto; font-family: monospace; }
-      button { margin: .25rem 0; }
-    </style>
+    <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <h1>SuarEx — Agente de impresión</h1>
-    <section id="status">Estado: cargando…</section>
-    <section>
+    <header class="appbar">
+      <h1>SuarEx · Agente de impresión</h1>
+      <span class="version">Este equipo</span>
+    </header>
+
+    <!-- Lo primero y más grande: a esto se viene el 90% de las veces. -->
+    <section class="status" id="status" data-state="loading" aria-live="polite">
+      <span class="dot" aria-hidden="true"></span>
+      <span class="status-text">
+        <span class="status-title" id="status-title">Cargando…</span>
+        <span class="status-detail" id="status-detail"></span>
+      </span>
+    </section>
+
+    <section class="card">
       <h2>Emparejamiento</h2>
-      <input id="code" placeholder="Código de emparejamiento" />
-      <button id="pair" type="button">Emparejar</button>
-      <button id="unpair" type="button">Des-emparejar</button>
+      <div class="row">
+        <input
+          class="grow"
+          id="code"
+          type="text"
+          autocomplete="off"
+          placeholder="Código de emparejamiento"
+          aria-label="Código de emparejamiento"
+        />
+        <button id="pair" class="primary" type="button">Emparejar</button>
+        <button id="unpair" class="danger" type="button">Des-emparejar</button>
+      </div>
+      <p class="hint">
+        El código se genera en el panel de administración, en Dispositivos. Caduca a los
+        pocos minutos.
+      </p>
     </section>
-    <section>
-      <h2>Gestión de la carta</h2>
-      <button id="admin" type="button">Abrir gestión de catálogo</button>
+
+    <section class="card">
+      <h2>Impresoras de este equipo</h2>
+      <!-- Solo fuera de Windows: la impresión USB usa winspool. Decirlo aquí evita que
+           alguien pulse "Imprimir prueba" y solo entonces descubra por qué no funciona. -->
+      <div class="note" id="platform-note" hidden>
+        <span aria-hidden="true">⚠️</span>
+        <span
+          >La impresión por USB solo está disponible en Windows. En este equipo puedes
+          emparejar y gestionar la carta, pero no listar impresoras ni imprimir.</span
+        >
+      </div>
+      <div class="row">
+        <select class="grow" id="printers" aria-label="Impresora"></select>
+        <button id="refresh" type="button">Actualizar</button>
+        <button id="test" type="button">Imprimir prueba</button>
+      </div>
     </section>
-    <section>
-      <h2>Impresoras locales</h2>
-      <select id="printers"></select>
-      <button id="refresh" type="button">Actualizar lista</button>
-      <button id="test" type="button">Imprimir ticket de prueba</button>
+
+    <section class="card">
+      <h2>Carta</h2>
+      <div class="row">
+        <button id="admin" type="button">Gestionar catálogo</button>
+      </div>
+      <p class="hint">
+        Se abre el panel de la plataforma en otra ventana. Hay que entrar con una cuenta de
+        propietario o administrador: este dispositivo, por sí solo, únicamente puede
+        imprimir.
+      </p>
     </section>
-    <section>
+
+    <section class="card">
       <h2>Registro</h2>
-      <div id="log"></div>
+      <div class="log" id="log" role="log" aria-live="polite"></div>
     </section>
+
     <script type="module" src="./main.ts"></script>
   </body>
 </html>
