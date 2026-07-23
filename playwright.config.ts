@@ -30,6 +30,17 @@ export default defineConfig({
    * que es donde cabe una compilación que no es lo que ningún test está probando.
    */
   timeout: 60_000,
+  /**
+   * Reintenta un test que falla, hasta 2 veces más.
+   *
+   * El `next dev` compila cada ruta la primera vez que se pide, y con la máquina cargada esa
+   * compilación puede pasarse del techo del test o dejar Realtime sin calentar. Son flakes de
+   * ENTORNO, no del comportamiento: al reintentar, la ruta ya está compilada y el consumidor
+   * caliente. Playwright vuelve a correr solo el test que falló, y su `afterEach` de limpieza
+   * corre también tras cada intento fallido, así que un reintento no arranca de una base
+   * sucia. Un fallo real -- una aserción que el código incumple -- falla los tres intentos.
+   */
+  retries: 2,
   use: {
     baseURL: "http://garum.localhost:3000",
     // `*.localhost` lo resuelve el sistema a 127.0.0.1 solo, pero un DOMINIO PROPIO de
