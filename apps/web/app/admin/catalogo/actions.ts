@@ -9,6 +9,7 @@ import {
   deleteExtra,
   deleteProduct,
   deleteTenantAllergen,
+  listCategoryParents,
   removeProductImage,
   setProductAvailability,
   updateCategory,
@@ -17,7 +18,13 @@ import {
 } from "@suarex/db";
 import { revalidatePath } from "next/cache";
 import { parseAllergenId, parseAvailability } from "@/lib/catalog-action-input";
-import { optionalString, requiredString } from "@/lib/form-parse";
+import { wouldCreateCycle } from "@/lib/category-move";
+import {
+  InvalidFormFieldError,
+  optionalString,
+  parseOptionalInt,
+  requiredString,
+} from "@/lib/form-parse";
 import { managerAction } from "@/lib/require-manager";
 
 /**
@@ -178,6 +185,47 @@ export const updateCategoryAction = managerAction(async (session, formData: Form
     destination: parseDestination(formData),
   });
   revalidatePath("/admin/catalogo");
+});
+
+/**
+ * Mueve una categoría bajo otro padre (o a la raíz) y/o cambia su orden.
+ *
+ * Comprueba ANTES que el movimiento no cree un ciclo. Postgres no lo impide -- `parent_id`
+ * es una clave ajena a la propia tabla -- y un ciclo no da error: deja una rama del
+ * catálogo inalcanzable desde la raíz, con sus productos fuera de la carta sin que nadie
+ * los haya borrado. Ver `wouldCreateCycle`.
+ */
+export const moveCategoryAction = managerAction(async (session, formData: FormData) => {
+  const categoryId = requiredString(formData, "category_id");
+  // `""` significa "a la raíz": un `<select>` no puede llevar `null` como valor.
+  const nuevoPadre = optionalString(formData, "parent_id") ?? null;
+
+  if (nuevoPadre !== null || formData.get("parent_id") !== null) {
+    const arbol = await listCategoryParents(session.tenantId);
+    if (wouldCreateCycle(arbol, categoryId, nuevoPadre)) {
+      throw new InvalidFormFieldError(
+        "No se puede mover una categoría dentro de sí misma ni de una de sus subcategorías.",
+      );
+    }
+  }
+
+  await updateCategory(session.tenantId, categoryId, {
+    parentId: nuevoPadre,
+    sortOrder: parseOptionalInt(formData, "sort_order"),
+  });
+  revalidatePath("/admin/catalogo");
+  revalidatePath("/", "layout");
+});
+
+/** Mueve un producto a otra categoría y/o cambia su orden dentro de ella. */
+export const moveProductAction = managerAction(async (session, formData: FormData) => {
+  const productId = requiredString(formData, "product_id");
+  await updateProduct(session.tenantId, productId, {
+    categoryId: optionalString(formData, "category_id"),
+    sortOrder: parseOptionalInt(formData, "sort_order"),
+  });
+  revalidatePath("/admin/catalogo");
+  revalidatePath("/", "layout");
 });
 
 export const deleteCategoryAction = managerAction(async (session, formData: FormData) => {
