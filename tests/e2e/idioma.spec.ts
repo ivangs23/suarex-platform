@@ -36,7 +36,9 @@ test("el idioma sobrevive a entrar en una categoría", async ({ page }) => {
   await page.getByTestId("category").filter({ hasText: "Toasts" }).getByRole("link").click();
 
   await expect(page.getByTestId("product").filter({ hasText: "Ham toast" })).toBeVisible();
-  await expect(page.locator("body")).toContainText("Browse other categories");
+  // La pastilla de vuelta lleva el nombre de la categoría, también traducido: si el idioma se
+  // hubiera perdido al entrar, aquí pondría "Tostas".
+  await expect(page.getByTestId("breadcrumb")).toContainText("Toasts");
 });
 
 test("cambiar de idioma conserva dónde estabas", async ({ page }) => {

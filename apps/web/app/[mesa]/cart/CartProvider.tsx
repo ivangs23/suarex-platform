@@ -62,6 +62,12 @@ type CartState = {
   /** Textos de la plataforma en el idioma elegido. El carrito es compartido, así que sus
    *  cadenas tampoco pueden quedarse escritas en español a pelo. */
   strings: Strings;
+  /** Panel del pedido abierto. Vive aquí, y no dentro del botón, porque QUIEN lo abre lo
+   *  coloca cada tema (la bolsa de la cabecera en uno, una barra abajo en otro) mientras que
+   *  el panel lo pinta siempre la página: es el paso del dinero. */
+  panelOpen: boolean;
+  openPanel: () => void;
+  closePanel: () => void;
   checkout: () => void;
 };
 
@@ -111,6 +117,7 @@ export function CartProvider({
   const [lines, setLines] = useState<CartLine[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(false);
 
   /* EL CARRITO SOBREVIVE A LA NAVEGACIÓN. La carta se navega por niveles con enlaces
      normales, así que cada categoría es una carga de página nueva y el estado de React se
@@ -244,6 +251,9 @@ export function CartProvider({
     );
   }, []);
 
+  const abrirPanel = useCallback(() => setPanelOpen(true), []);
+  const cerrarPanel = useCallback(() => setPanelOpen(false), []);
+
   const checkout = useCallback(async () => {
     setError(null);
     setEnviando(true);
@@ -294,6 +304,9 @@ export function CartProvider({
       setLineQuantity,
       formatCents: (cents: number) => formatCents(cents, locale, currency),
       strings,
+      panelOpen,
+      openPanel: abrirPanel,
+      closePanel: cerrarPanel,
       checkout,
     }),
     [
@@ -311,6 +324,9 @@ export function CartProvider({
       removeOne,
       setLineQuantity,
       strings,
+      panelOpen,
+      abrirPanel,
+      cerrarPanel,
       checkout,
     ],
   );

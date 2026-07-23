@@ -84,6 +84,7 @@ export function availableLangs(
  */
 export type Strings = {
   enter: string;
+  menuTitle: string;
   explore: string;
   backToCategories: string;
   dish: string;
@@ -112,6 +113,7 @@ export type Strings = {
 
 const ES: Strings = {
   enter: "Toca para empezar",
+  menuTitle: "Menú",
   explore: "¿Qué te apetece hoy?",
   backToCategories: "← Explorar otras categorías",
   dish: "plato",
@@ -141,6 +143,7 @@ const ES: Strings = {
 
 const EN: Strings = {
   enter: "Tap to start",
+  menuTitle: "Menu",
   explore: "What do you fancy today?",
   backToCategories: "← Browse other categories",
   dish: "dish",
@@ -170,6 +173,7 @@ const EN: Strings = {
 
 const PT: Strings = {
   enter: "Toque para começar",
+  menuTitle: "Menu",
   explore: "O que lhe apetece hoje?",
   backToCategories: "← Ver outras categorias",
   dish: "prato",

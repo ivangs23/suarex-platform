@@ -1,4 +1,5 @@
 import { AddToCart } from "../cart/AddToCart";
+import { CartButton } from "../cart/CartButton";
 import styles from "./garum.module.css";
 import type { MenuTheme } from "./types";
 
@@ -69,6 +70,7 @@ export const GarumTheme: MenuTheme = ({
         {/* Asset de marca versionado con la app (no es el logo por tenant de Storage), pero
           se sirve estático: <img> a propósito, sin optimizar. */}
         <img className={styles.logo} src="/brands/garum-logo.png" alt={businessName} />
+        <CartButton className={styles.cartButton} />
       </header>
       {langs.length > 1 ? (
         <nav className={styles.langs} data-testid="lang-switch" aria-label="Idioma">

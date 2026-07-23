@@ -1,4 +1,5 @@
 import { AddToCart } from "../cart/AddToCart";
+import { CartButton } from "../cart/CartButton";
 import styles from "./manuela.module.css";
 import type { MenuTheme } from "./types";
 
@@ -8,6 +9,11 @@ import type { MenuTheme } from "./types";
  * CSS; recibe el MISMO contrato de props que el resto y conserva los `data-testid`
  * compartidos.
  */
+/* Banderas del selector, como en su sitio. Son DECORACIÓN (`aria-hidden`): una bandera no
+   identifica un idioma -- el portugués de Brasil no lleva la de Portugal -- así que el que
+   manda es el código de al lado, que es lo que lee un lector de pantalla. */
+const LANG_FLAGS: Record<string, string> = { es: "🇪🇸", en: "🇬🇧", pt: "🇵🇹" };
+
 export const ManuelaTheme: MenuTheme = ({
   businessName,
   mesa,
@@ -73,31 +79,44 @@ export const ManuelaTheme: MenuTheme = ({
         manuscrita encima. Assets versionados con la app (no el logo por tenant de
         Storage), servidos estáticos: <img> a propósito, sin optimizar. */}
       {/* Cabecera compacta: el héroe grande es la pantalla de bienvenida, no esto. */}
+      {/* Su cabecera real, medida sobre manueladesayuna.com: barra blanca con la pastilla de
+          la mesa a la izquierda, las banderas de idioma en el centro y la bolsa del pedido
+          en marrón oscuro a la derecha. */}
       <header className={styles.topbar}>
-        <a href={welcome.href.replace("?ver=carta", "")} aria-label="Volver al inicio">
+        <a
+          className={styles.mesaPill}
+          href={welcome.href.replace("?ver=carta", "")}
+          aria-label="Volver al inicio"
+        >
           <img className={styles.topbarLogo} src="/brands/manuela-logo.png" alt={businessName} />
+          <span className={styles.mesa} data-testid="mesa">
+            {t.table} {mesa}
+          </span>
         </a>
-        <span className={styles.mesa} data-testid="mesa">
-          {t.table} {mesa}
-        </span>
+
+        {langs.length > 1 ? (
+          <nav className={styles.langs} data-testid="lang-switch" aria-label="Idioma">
+            {langs.map((lang) => (
+              <a
+                key={lang.code}
+                className={styles.lang}
+                href={lang.href}
+                hrefLang={lang.code}
+                data-testid="lang-option"
+                data-lang={lang.code}
+                aria-current={lang.active ? "true" : undefined}
+              >
+                {LANG_FLAGS[lang.code] ? (
+                  <span aria-hidden="true">{LANG_FLAGS[lang.code]}</span>
+                ) : null}
+                {lang.label}
+              </a>
+            ))}
+          </nav>
+        ) : null}
+
+        <CartButton className={styles.cartButton} />
       </header>
-      {langs.length > 1 ? (
-        <nav className={styles.langs} data-testid="lang-switch" aria-label="Idioma">
-          {langs.map((lang) => (
-            <a
-              key={lang.code}
-              className={styles.lang}
-              href={lang.href}
-              hrefLang={lang.code}
-              data-testid="lang-option"
-              data-lang={lang.code}
-              aria-current={lang.active ? "true" : undefined}
-            >
-              {lang.label}
-            </a>
-          ))}
-        </nav>
-      ) : null}
 
       <div className={styles.inner}>
         <p data-testid="product-count" hidden>
@@ -108,23 +127,26 @@ export const ManuelaTheme: MenuTheme = ({
           {businessName}
         </h1>
 
-        {view.currentName ? (
-          <nav className={styles.nav} data-testid="breadcrumb">
+        {/* Pastilla del nivel actual, como en su carta: "Menu" en la raíz y, dentro de una
+            categoría, su nombre precedido de la flecha de vuelta. */}
+        <nav className={styles.nav} data-testid="breadcrumb">
+          {view.currentName ? (
             <a className={styles.back} href={view.rootHref}>
-              {t.backToCategories}
+              <span aria-hidden="true">‹</span> {view.currentName}
             </a>
+          ) : (
+            <span className={styles.back}>{t.menuTitle}</span>
+          )}
+          {view.breadcrumb.length > 0 ? (
             <p className={styles.crumbs}>
               {view.breadcrumb.map((crumb) => (
-                <span key={crumb.href}>
-                  <a href={crumb.href}>{crumb.name}</a> ›{" "}
-                </span>
+                <a key={crumb.href} href={crumb.href}>
+                  {crumb.name}
+                </a>
               ))}
-              <strong>{view.currentName}</strong>
             </p>
-          </nav>
-        ) : (
-          <p className={styles.lead}>{t.explore}</p>
-        )}
+          ) : null}
+        </nav>
 
         {view.children.length > 0 ? (
           <ul className={styles.grid}>
@@ -161,26 +183,28 @@ export const ManuelaTheme: MenuTheme = ({
           <ul className={styles.items}>
             {view.products.map((product) => (
               <li key={product.id} className={styles.item} data-testid="product">
-                <div className={styles.itemText}>
-                  <span className={styles.itemName}>{product.name}</span>
+                {/* Su tarjeta real: la foto arriba con el precio en una pastilla encima, y
+                    debajo el nombre y el botón a todo el ancho. La foto es de Storage por
+                    tenant, una URL absoluta que next/image no puede optimizar sin configurar
+                    `remotePatterns` con un host que varía por despliegue: <img> a propósito.
+                    `loading="lazy"` porque una categoría puede traer decenas y casi ninguna
+                    entra en la primera pantalla. */}
+                <div className={styles.itemMedia}>
+                  {product.imageUrl ? (
+                    <img
+                      className={styles.itemPhoto}
+                      data-testid="product-photo"
+                      src={product.imageUrl}
+                      alt=""
+                      loading="lazy"
+                    />
+                  ) : null}
                   <span className={styles.price}>{product.priceLabel}</span>
                 </div>
-                {/* La foto es de Storage por tenant, una URL absoluta que next/image no puede
-                  optimizar sin configurar `remotePatterns` con un host que varía por
-                  despliegue: <img> a propósito. `loading="lazy"` porque una categoría puede
-                  traer decenas y casi ninguna entra en la primera pantalla. */}
-                {product.imageUrl ? (
-                  <img
-                    className={styles.itemPhoto}
-                    data-testid="product-photo"
-                    src={product.imageUrl}
-                    alt=""
-                    loading="lazy"
-                    width={88}
-                    height={88}
-                  />
-                ) : null}
-                <AddToCart product={product} />
+                <div className={styles.itemBody}>
+                  <span className={styles.itemName}>{product.name}</span>
+                  <AddToCart product={product} />
+                </div>
               </li>
             ))}
           </ul>

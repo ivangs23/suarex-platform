@@ -2,6 +2,17 @@ import { expect, test } from "@playwright/test";
 import { deleteOrder, findOrderByPublicToken, orderLineNotes } from "./helpers/orders-db.js";
 
 /**
+ * El total vive en el PANEL del pedido, no en una barra siempre visible: el último gesto
+ * antes de pagar tiene que ocurrir con el pedido a la vista. Este ayudante lo abre, comprueba
+ * y lo cierra, para no repetir esos tres pasos en cada test.
+ */
+async function esperaTotal(page: import("@playwright/test").Page, total: string) {
+  await page.getByTestId("cart-open").click();
+  await expect(page.getByTestId("cart-panel").getByTestId("cart-panel-total")).toHaveText(total);
+  await page.getByTestId("cart-panel-close").click();
+}
+
+/**
  * El recorrido del comensal: escanea el QR de su mesa y pide.
  *
  * El QR impreso codifica `/m/{token}` y ahí sigue, para siempre: hay mesas con ese código ya
@@ -55,7 +66,7 @@ test("la ficha del producto declara alérgenos, opciones y total antes de añadi
 
   await ficha.getByTestId("sheet-add").click();
   await expect(ficha).toHaveCount(0);
-  await expect(page.getByTestId("cart-total")).toHaveText("42,00 €");
+  await esperaTotal(page, "42,00 €");
 });
 
 test("la ficha dice lo que sabe de los alérgenos, sin afirmar de más", async ({ page }) => {
@@ -91,7 +102,6 @@ test("una nota de la ficha llega a la comanda", async ({ page }) => {
   const ficha = page.getByTestId("product-sheet");
   await ficha.getByTestId("sheet-notes").fill("Sin hielo, por favor");
   await ficha.getByTestId("sheet-add").click();
-  await expect(page.getByTestId("cart-total")).toHaveText("18,00 €");
 
   await page.getByTestId("cart-open").click();
   await page.getByTestId("cart-panel").getByTestId("cart-pay").click();
@@ -180,16 +190,17 @@ test("desde la tarjeta se quitan unidades, y a cero el producto sale del carrito
   await page.getByTestId("product-sheet").getByTestId("sheet-add").click();
   await tarjeta.getByTestId("add-to-cart").click();
   await expect(tarjeta.getByTestId("cart-units")).toHaveText("2");
-  await expect(page.getByTestId("cart-total")).toHaveText("36,00 €");
+  await esperaTotal(page, "36,00 €");
 
   await tarjeta.getByTestId("remove-from-cart").click();
   await expect(tarjeta.getByTestId("cart-units")).toHaveText("1");
-  await expect(page.getByTestId("cart-total")).toHaveText("18,00 €");
+  await esperaTotal(page, "18,00 €");
 
-  // A cero desaparece el contador y la barra entera: el carrito vuelve a estar vacío.
+  // A cero desaparece el contador de la tarjeta y el pedido se queda vacío.
   await tarjeta.getByTestId("remove-from-cart").click();
   await expect(tarjeta.getByTestId("cart-units")).toHaveCount(0);
-  await expect(page.getByTestId("cart-bar")).toHaveCount(0);
+  await page.getByTestId("cart-open").click();
+  await expect(page.getByTestId("cart-panel").getByTestId("cart-empty")).toBeVisible();
 });
 
 test("quitar un producto olvida también sus extras", async ({ page }) => {
@@ -203,14 +214,14 @@ test("quitar un producto olvida también sus extras", async ({ page }) => {
   const ficha = page.getByTestId("product-sheet");
   await ficha.getByTestId("extra-checkbox").click();
   await ficha.getByTestId("sheet-add").click();
-  await expect(page.getByTestId("cart-total")).toHaveText("21,00 €");
+  await esperaTotal(page, "21,00 €");
 
   // Quitarlo se lleva la línea entera, con su extra: volver a añadirlo sin personalizar
   // vuelve al precio base y no arrastra una elección ya deshecha.
   await tarjeta.getByTestId("remove-from-cart").click();
   await tarjeta.getByTestId("open-product-sheet").click();
   await page.getByTestId("product-sheet").getByTestId("sheet-add").click();
-  await expect(page.getByTestId("cart-total")).toHaveText("18,00 €");
+  await esperaTotal(page, "18,00 €");
 });
 
 test("volver a explorar categorías no echa a la pantalla de bienvenida", async ({ page }) => {
@@ -232,10 +243,10 @@ test("el total sobrevive a cambiar de categoría", async ({ page }) => {
   await page.goto(TINTOS);
   await page.getByTestId("open-product-sheet").first().click();
   await page.getByTestId("product-sheet").getByTestId("sheet-add").click();
-  await expect(page.getByTestId("cart-total")).toHaveText("18,00 €");
+  await esperaTotal(page, "18,00 €");
 
   await page.goto("http://garum.localhost:3000/1?cat=blancos");
-  await expect(page.getByTestId("cart-total")).toHaveText("18,00 €");
+  await esperaTotal(page, "18,00 €");
 });
 
 test("sin escanear el QR, la carta se consulta pero no se pide", async ({ page }) => {

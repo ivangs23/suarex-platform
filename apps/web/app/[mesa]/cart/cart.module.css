@@ -383,3 +383,19 @@
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
+
+/* Aspecto por defecto de la puerta al pedido, para un tema que no le pase el suyo: se pinta
+   con las variables de marca, así que un cliente nuevo la tiene digna sin escribir CSS. */
+.cartButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.2rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--color-primary);
+  color: var(--color-bg);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}

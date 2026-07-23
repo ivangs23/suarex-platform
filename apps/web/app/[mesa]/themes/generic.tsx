@@ -1,4 +1,5 @@
 import { AddToCart } from "../cart/AddToCart";
+import { CartButton } from "../cart/CartButton";
 import styles from "./generic.module.css";
 import type { MenuTheme } from "./types";
 
@@ -84,6 +85,7 @@ export const GenericTheme: MenuTheme = ({
           <p className={styles.mesa} data-testid="mesa">
             {t.table} {mesa}
           </p>
+          <CartButton className={styles.cartButton} />
         </header>
         {langs.length > 1 ? (
           <nav className={styles.langs} data-testid="lang-switch" aria-label="Idioma">

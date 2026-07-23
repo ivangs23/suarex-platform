@@ -12,6 +12,10 @@
    distingue un tema a medida del genérico. */
 
 .page {
+  /* Terrazo de su local: es el fondo de TODA su carta, repetido. Descargado de su sitio
+     (assets/fondo) y servido con la app. */
+  background-image: url("/brands/manuela-terrazo.png");
+  background-repeat: repeat;
   --manuela-bg: #f9f7f2;
   --manuela-surface: #fff8e7;
   --manuela-accent: #c28744;
@@ -60,8 +64,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  padding: 0.85rem 1.25rem;
+  gap: 0.75rem;
+  padding: 0.7rem 0.85rem;
   background: #ffffff;
   border-bottom: 1px solid var(--manuela-border);
   position: sticky;
@@ -69,10 +73,45 @@
   z-index: 10;
 }
 
+/* Pastilla blanca con la firma y el número de mesa, como en su cabecera. */
+.mesaPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.45rem 0.9rem;
+  border: 1px solid var(--manuela-border);
+  border-radius: 0.9rem;
+  background: #ffffff;
+  text-decoration: none;
+  color: inherit;
+}
+
 .topbarLogo {
-  height: 2.1rem;
+  height: 1.5rem;
   width: auto;
   display: block;
+}
+
+/* Bolsa del pedido: marrón oscuro, el único elemento así de contrastado de la cabecera --
+   es la acción que remata la visita. */
+.cartButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem 1.1rem;
+  border: 0;
+  border-radius: 0.9rem;
+  background: var(--manuela-text);
+  color: #fff8e7;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.cartButton::after {
+  content: "🛍";
+  font-size: 1rem;
 }
 
 /* Solo para lectores de pantalla y para el contrato de los tests: en esta vista el nombre
@@ -153,7 +192,7 @@
 }
 
 .inner {
-  padding: 1.5rem 1.25rem 0;
+  padding: 0.75rem 0.75rem 2rem;
 }
 
 .header {
@@ -186,14 +225,19 @@
 .mesa {
   display: inline-block;
   margin: 0;
+  color: var(--manuela-text);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+/* En la BIENVENIDA la mesa va suelta sobre la foto: ahí sí necesita fondo propio para
+   leerse igual sobre una moldura oscura que sobre el terrazo claro. */
+.welcome .mesa {
   padding: 0.35rem 1rem;
   border-radius: 999px;
-  /* Sólida, no translúcida: va sobre la foto y tiene que leerse igual sobre una moldura
-     oscura que sobre el terrazo claro. */
   background: #ffffff;
   color: var(--manuela-accent);
   font-size: 0.75rem;
-  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.12em;
 }
@@ -211,13 +255,15 @@
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.65rem 1.3rem;
+  padding: 0.5rem 1.2rem;
   border-radius: 999px;
-  background: var(--manuela-accent);
-  color: #fff8e7;
+  background: #ffffff;
+  border: 1px solid var(--manuela-border);
+  color: var(--manuela-text);
   text-decoration: none;
+  font-family: var(--font-playfair), Georgia, serif;
   font-weight: 700;
-  font-size: 0.9rem;
+  font-size: 1.05rem;
 }
 
 .crumbs {
@@ -237,37 +283,55 @@
 }
 
 /* Tiles grandes de categoría, heredados del kiosko táctil. */
+/* Rejilla medida sobre su carta: 2 columnas en móvil y 3 a partir de tableta, con 12 px de
+   hueco. Antes era `auto-fill minmax(11rem)`, que en un móvil daba UNA columna y convertía su
+   carta de un vistazo en un desfile de tarjetas gigantes. */
 .grid {
   list-style: none;
-  margin: 0 0 2rem;
+  margin: 0 0 1.5rem;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
-  gap: 0.9rem;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+}
+
+@media (min-width: 40rem) {
+  .grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 64rem) {
+  .grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
 }
 
 .card {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
-  gap: 0.6rem;
-  padding: 0.75rem;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  min-height: 10rem;
   text-align: center;
   text-decoration: none;
   color: inherit;
   background: #ffffff;
-  border: 2px solid rgba(194, 135, 68, 0.4);
+  /* `border-2 border-[#c28744]/30` y `rounded-2xl`, literalmente los suyos. */
+  border: 2px solid rgba(194, 135, 68, 0.3);
   border-radius: 1rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
 }
 
 .cardPhoto {
-  width: 100%;
-  /* Cuadrada y recortada: sus fotos vienen en proporciones distintas y sin esto cada tile
-     tendría una altura y la rejilla quedaría dentada. */
-  aspect-ratio: 1;
-  object-fit: cover;
-  border-radius: 0.75rem;
+  /* 80 px de alto y CONTAIN, como en su carta: sus fotos son productos recortados sobre
+     fondo claro, y recortarlas a un cuadrado les corta la taza por la mitad. */
+  height: 5rem;
+  width: auto;
+  max-width: 100%;
+  object-fit: contain;
 }
 
 .cardIcon {
@@ -276,49 +340,110 @@
 }
 
 .cardName {
-  font-size: 1.1rem;
+  font-size: 0.95rem;
   font-weight: 800;
-  line-height: 1.2;
+  line-height: 1.15;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   color: var(--manuela-text);
 }
 
 .cardCount {
-  font-size: 0.75rem;
+  font-size: 0.68rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: var(--manuela-accent);
 }
 
+/* Sus platos también van en rejilla, no en lista: es una carta para tocar, y una fila de
+   texto con una miniatura al lado no invita a nada. */
 .items {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
-  gap: 0.9rem;
+  grid-template-columns: repeat(1, 1fr);
+  gap: 0.75rem;
+}
+
+@media (min-width: 30rem) {
+  .items {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 48rem) {
+  .items {
+    grid-template-columns: repeat(3, 1fr);
+  }
 }
 
 .item {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  background: #ffffff;
-  border: 2px solid rgba(194, 135, 68, 0.4);
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--manuela-surface);
+  border: 2px solid rgba(194, 135, 68, 0.3);
   border-radius: 1rem;
-  padding: 1.1rem 1.25rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+/* Foto arriba, a todo el ancho, con el precio en una pastilla oscura encima -- como en su
+   carta. La franja existe aunque no haya foto para que la rejilla no quede dentada. */
+.itemMedia {
+  position: relative;
+  height: 9rem;
+  background: #ffffff;
+  display: grid;
+  place-items: center;
+}
+
+.itemBody {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.9rem;
+  flex: 1;
 }
 
 .itemName {
-  font-weight: 600;
-  line-height: 1.3;
+  font-family: var(--font-playfair), Georgia, serif;
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+/* El botón de pedir ocupa el ancho de la tarjeta y va en su marrón oscuro con letra dorada:
+   es la acción principal de cada plato, y el resto de la tarjeta es claro.
+   Se ata al `data-testid` del botón concreto y no a `button` a secas: dentro de la tarjeta
+   hay más botones -- el menos y el más del contador -- y ponerlos a todo el ancho reventaría
+   el contador. El testid es contrato compartido y estable; la estructura del componente, no. */
+.itemBody [data-testid="open-product-sheet"] {
+  width: 100%;
+  justify-content: center;
+  padding: 0.75rem 1rem;
+  border: 0;
+  border-radius: 0.7rem;
+  background: var(--manuela-text);
+  color: var(--manuela-accent);
+  font-weight: 700;
+}
+
+.itemBody > div {
+  align-items: stretch;
 }
 
 .price {
+  position: absolute;
+  right: 0.6rem;
+  bottom: 0.6rem;
+  padding: 0.35rem 0.8rem;
+  border-radius: 0.6rem;
+  background: var(--manuela-text);
+  color: var(--manuela-accent);
   font-weight: 800;
   font-variant-numeric: tabular-nums;
-  color: var(--manuela-accent);
 }
 
 .empty {
@@ -337,11 +462,9 @@
 }
 
 .itemPhoto {
-  flex: none;
-  width: 72px;
-  height: 72px;
-  object-fit: cover;
-  border-radius: 1rem;
+  max-height: 100%;
+  max-width: 100%;
+  object-fit: contain;
 }
 
 /* Selector de idioma. Enlaces normales, no un desplegable: en una mesa se toca una vez, y
@@ -350,11 +473,15 @@
   display: flex;
   gap: 0.35rem;
   justify-content: center;
-  padding: 0.6rem 0 0;
+  padding: 0;
 }
 
 .lang {
-  padding: 0.3rem 0.7rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: #fff8e7;
+  padding: 0.35rem 0.7rem;
   border-radius: 999px;
   font-size: 0.75rem;
   font-weight: 700;

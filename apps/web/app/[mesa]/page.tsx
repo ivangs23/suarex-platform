@@ -10,7 +10,7 @@ import { notFound } from "next/navigation";
 import { availableLangs, LANG_LABELS, resolveLang, strings } from "@/lib/i18n";
 import { readMesaToken } from "@/lib/mesa-cookie";
 import { requireTenant } from "@/lib/tenant-context";
-import { CartBar } from "./cart/CartBar";
+import { CartPanelHost } from "./cart/CartPanelHost";
 import { CartProvider } from "./cart/CartProvider";
 import { buildMenuView } from "./menu-view";
 import { resolveTheme } from "./themes";
@@ -150,9 +150,9 @@ export default async function MenuPage({
 
   const Theme = resolveTheme(settings?.theme);
 
-  /* El carrito envuelve al tema y la barra de total la pinta la página, no el tema: es lo
-     último que ve el comensal antes de pagar, y un tema al que se le olvidara pintarla
-     dejaría a ese cliente con una carta que no cobra. */
+  /* El carrito envuelve al tema. El PANEL lo monta la página (es el paso del dinero, y un
+     tema que se lo saltara dejaría a ese cliente sin forma de pagar); el BOTÓN que lo abre lo
+     coloca cada tema donde encaje en su diseño. */
   return (
     <CartProvider
       locale={settings?.locale ?? "es"}
@@ -170,7 +170,7 @@ export default async function MenuPage({
         langs={langs}
         strings={strings(lang)}
       />
-      <CartBar />
+      <CartPanelHost />
     </CartProvider>
   );
 }

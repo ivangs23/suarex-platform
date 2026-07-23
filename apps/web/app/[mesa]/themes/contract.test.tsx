@@ -95,12 +95,16 @@ describe.each(nombres)("tema %s", (nombre) => {
   if (!Theme) throw new Error(`tema '${nombre}' registrado pero vacío`);
   // El carrito es un componente de cliente con su propio contexto: el tema se envuelve en el
   // proveedor, igual que hace la página, o el botón de añadir no tendría de dónde salir.
-  const render = (overrides: Partial<MenuThemeProps>, canOrder = true) =>
-    renderToStaticMarkup(
-      <CartProvider locale="es" currency="EUR" canOrder={canOrder} strings={strings("es")}>
-        {Theme(props(overrides))}
+  const render = (overrides: Partial<MenuThemeProps>, canOrder = true) => {
+    // El carrito recibe los MISMOS textos que el tema: en la app los dos salen de
+    // `strings(lang)`, y separarlos aquí probaría una situación que no ocurre.
+    const p = props(overrides);
+    return renderToStaticMarkup(
+      <CartProvider locale="es" currency="EUR" canOrder={canOrder} strings={p.strings}>
+        {Theme(p)}
       </CartProvider>,
     );
+  };
 
   it("pinta la pantalla de bienvenida cuando toca, con su enlace de entrada", () => {
     // El paso existe para TODOS. Lo que cada tema decide es cómo se ve, no si ocurre.
@@ -173,12 +177,20 @@ describe.each(nombres)("tema %s", (nombre) => {
     expect(html).toContain('data-testid="open-product-sheet"');
   });
 
+  it("coloca la puerta al pedido en algún sitio de su carta", () => {
+    // DÓNDE va es del tema (la bolsa de la cabecera en Manuela, un botón en otro); QUE esté,
+    // no: sin ella, ese cliente tendría una carta en la que se puede añadir y no se puede
+    // pagar. El panel que abre lo pinta la página, así que ningún tema puede saltárselo.
+    expect(render({ view: VIEW_HOJA })).toContain('data-testid="cart-open"');
+  });
+
   it("sin haber escaneado el QR de la mesa, la carta se consulta pero no se pide", () => {
     // La cookie del QR es lo único que demuestra que quien pide está sentado en esa mesa.
     const html = render({ view: VIEW_HOJA }, false);
 
     expect(html).toContain('data-testid="product"');
     expect(html).not.toContain('data-testid="open-product-sheet"');
+    expect(html).not.toContain('data-testid="cart-open"');
   });
 
   it("ofrece cambiar de idioma cuando el cliente tiene carta en más de uno", () => {
@@ -213,8 +225,12 @@ describe.each(nombres)("tema %s", (nombre) => {
     // de idioma, y eso vuelve a ser una diferencia de funcionalidad según quién lo escribió.
     const html = render({ view: VIEW_HOJA, strings: strings("en") });
 
-    expect(html).toContain("Browse other categories");
+    // La puerta al pedido la pinta todo tema, así que sirve de sonda: si el idioma no llegara
+    // hasta ahí, aquí seguiría poniendo "Tu pedido".
+    expect(html).toContain("Your order");
+    expect(html).not.toContain("Tu pedido");
     expect(html).not.toContain("Explorar otras categorías");
+    expect(html).not.toContain("Añadir / Personalizar");
   });
 
   it("traduce también la bienvenida y el recuento de platos", () => {

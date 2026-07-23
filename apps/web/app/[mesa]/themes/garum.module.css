@@ -317,3 +317,18 @@
   color: var(--color-bg, #ffffff);
   opacity: 1;
 }
+
+/* Puerta al pedido. Cada tema la coloca donde encaje -- aquí, en la cabecera. */
+.cartButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.2rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--color-primary, #7b4f96);
+  color: var(--color-bg, #ffffff);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
