@@ -1,5 +1,5 @@
-import type { OpenAdminResult } from "../main/admin-window.js";
 import type { PairIpcResult } from "../main/ipc.js";
+import type { ShowWebPanelResult } from "../main/web-panel.js";
 
 type AgentStatus = {
   paired: boolean;
@@ -14,7 +14,7 @@ type AgentApi = {
   testPrint(printerName: string): Promise<{ ok: boolean }>;
   getStatus(): Promise<AgentStatus>;
   unpair(): Promise<{ ok: boolean }>;
-  openAdmin(): Promise<OpenAdminResult>;
+  showSection(section: string): Promise<ShowWebPanelResult>;
 };
 
 /**
@@ -74,12 +74,43 @@ function renderStatus(status: AgentStatus): void {
   setDisabled(["refresh", "test"], !esWindows);
 }
 
+const navItems = [...document.querySelectorAll<HTMLButtonElement>(".nav-item")];
+
+/**
+ * Cambia de sección.
+ *
+ * SIEMPRE avisa al proceso principal, incluso para las secciones locales: la vista
+ * incrustada de la plataforma se SUPERPONE a esta zona, así que sin ese aviso seguiría
+ * tapando Configuración e Impresoras al volver de Productos.
+ */
+async function irA(section: string): Promise<void> {
+  for (const boton of navItems) {
+    boton.setAttribute("aria-selected", String(boton.dataset.section === section));
+  }
+  for (const panel of document.querySelectorAll<HTMLElement>(".panel")) {
+    panel.hidden = panel.dataset.panel !== section;
+  }
+
+  if (!agent) return;
+  const r = await agent.showSection(section);
+  if (!r.ok) {
+    // La sección web no puede cargarse: se dice en su propio panel, que queda a la vista
+    // justamente porque la vista incrustada no llegó a superponerse.
+    const destino = document.getElementById(`web-fallback-${section}`);
+    if (destino) {
+      destino.textContent =
+        "Este instalador se generó sin PLATFORM_WEB_ORIGIN, así que no sabe a qué " +
+        "plataforma conectarse. Hay que reconstruirlo con esa variable.";
+    }
+  }
+}
+
 function renderSinPuente(): void {
   $("status").dataset.state = "error";
   $("status-title").textContent = "No se pudo iniciar";
   $("status-detail").textContent =
     "El puente interno de la aplicación no está disponible. Cierra y vuelve a abrirla; si sigue igual, reinstálala.";
-  setDisabled(["pair", "unpair", "refresh", "test", "admin"], true);
+  setDisabled(["pair", "unpair", "refresh", "test"], true);
 }
 
 async function refreshStatus(): Promise<void> {
@@ -155,21 +186,15 @@ if (!agent) {
     }
   });
 
-  // La gestión de la carta se abre en su propia ventana con el panel web de la plataforma
-  // (ver `admin-window.ts`): mismas validaciones y mismos permisos que en el navegador, y
-  // la sesión es de la PERSONA que entra, no del dispositivo -- que solo puede imprimir.
-  $("admin").addEventListener("click", async () => {
-    const r = await agent.openAdmin();
-    if (r.ok) {
-      log("Gestión de catálogo abierta. Inicia sesión con tu cuenta de propietario o admin.");
-      return;
-    }
-    log(
-      "No se puede abrir la gestión: este instalador se generó sin PLATFORM_WEB_ORIGIN, " +
-        "así que no sabe a qué plataforma conectarse. Hay que reconstruirlo con esa variable.",
-    );
-  });
+  // Navegación. Productos y Pedidos los pinta una vista incrustada del panel de la
+  // plataforma (`main/web-panel.ts`), que se superpone a esta zona: mismas validaciones y
+  // mismos permisos que en el navegador, y la sesión es de la PERSONA que entra, no del
+  // dispositivo -- que solo puede imprimir. Config e Impresoras son locales.
+  for (const boton of navItems) {
+    boton.addEventListener("click", () => void irA(boton.dataset.section as string));
+  }
 
+  void irA("config");
   void refreshStatus();
   void refreshPrinters();
 }

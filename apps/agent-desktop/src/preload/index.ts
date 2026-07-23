@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { OpenAdminResult } from "../main/admin-window.js";
 import type { PairIpcResult } from "../main/ipc.js";
+import type { ShowWebPanelResult } from "../main/web-panel.js";
 
 /** Puente seguro: el renderer solo ve estas funciones, nunca Node/Electron directo
  * (contextIsolation + nodeIntegration:false). Cada una invoca un handler `ipcMain.handle`. */
@@ -12,5 +12,6 @@ contextBridge.exposeInMainWorld("agent", {
   getStatus: (): Promise<{ paired: boolean; running: boolean; deviceId: string | null }> =>
     ipcRenderer.invoke("get-status"),
   unpair: (): Promise<{ ok: boolean }> => ipcRenderer.invoke("unpair"),
-  openAdmin: (): Promise<OpenAdminResult> => ipcRenderer.invoke("open-admin"),
+  showSection: (section: string): Promise<ShowWebPanelResult> =>
+    ipcRenderer.invoke("show-section", section),
 });
