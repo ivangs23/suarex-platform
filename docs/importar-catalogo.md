@@ -48,6 +48,8 @@ curl -sS "https://<proyecto>.supabase.co/rest/v1/categories?select=*,products(*,
 node scripts/import-catalog.mjs .import/<cliente>-catalogo.json <slug-del-cliente> --reemplazar
 ```
 
+Añade `--sin-imagenes` para saltarte la descarga de fotos mientras iteras sobre los datos.
+
 Necesita `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` en el entorno (en local salen de
 `.env.test`; contra el VPS, del `.env` de la stack de Supabase).
 
@@ -60,10 +62,28 @@ enseña categorías que el cliente no tiene. Sin la bandera, el script es idempo
 
 | Se importa | No se importa |
 |---|---|
-| Árbol de categorías (`parent_id`), slug, orden, destino | `icon` (emoji por categoría) |
-| Productos: nombre, descripción, precio, disponibilidad, orden | `image_url` (habría que subirlas a Storage) |
-| Extras de producto | Metadatos de vino (`wine_*`, notas de cata) |
-| Alérgenos, solo si el origen los codifica como enteros | `is_featured` |
+| Árbol de categorías (`parent_id`), slug, orden, destino, emoji | `categories.image_url` |
+| Productos: nombre, descripción, precio, disponibilidad, orden | Metadatos de vino (`wine_*`, notas de cata) |
+| **Fotos de producto** (se descargan y se resuben) | `is_featured` |
+| Extras de producto | |
+| Alérgenos, solo si el origen los codifica como enteros | |
+
+### Las fotos
+
+Se **descargan del Storage público del cliente y se vuelven a subir al nuestro**. Copiar sus
+URLs tal cual dejaría la carta dependiendo para siempre del servidor del que se está
+migrando: el día que lo apague, todas las fotos desaparecen.
+
+Descargar es leer una URL pública — exactamente lo que hace el navegador de cualquiera que
+abra su carta. No se toca su base de datos.
+
+Un producto que ya tiene foto **nuestra** se salta, así que reimportar no duplica objetos en
+el bucket. Para forzar la actualización de una foto concreta, quítala desde el panel y
+reimporta.
+
+Una foto que falle (404, tipo raro, más de 5 MB) **no aborta la importación**: se listan
+todas al final para poder reintentarlas. Perder una imagen es recuperable; dejar el catálogo
+a medias, no.
 
 El script **lista al final lo que ha descartado**. Un importador que calla lo que deja fuera
 parece completo cuando no lo es.
