@@ -322,3 +322,64 @@
   text-transform: uppercase;
   opacity: 0.7;
 }
+
+/* Distintivo de unidades en la barra del pedido. */
+.badge {
+  min-width: 1.35rem;
+  margin-left: 0.6rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  background: var(--color-bg);
+  color: var(--color-primary);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* LÍNEAS DEL PEDIDO. Cada una se lee entera de un vistazo -- plato, extras, nota y lo que
+   suma -- porque para eso existe el panel: revisar antes de pagar. */
+.lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.line {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding-bottom: 0.9rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-primary) 18%, transparent);
+}
+
+.line:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.lineText {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.lineName {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.lineDetail {
+  font-size: 0.82rem;
+  opacity: 0.75;
+}
+
+.linePrice {
+  margin-top: 0.2rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}

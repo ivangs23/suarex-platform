@@ -93,7 +93,8 @@ test("una nota de la ficha llega a la comanda", async ({ page }) => {
   await ficha.getByTestId("sheet-add").click();
   await expect(page.getByTestId("cart-total")).toHaveText("18,00 €");
 
-  await page.getByTestId("cart-pay").click();
+  await page.getByTestId("cart-open").click();
+  await page.getByTestId("cart-panel").getByTestId("cart-pay").click();
   // `commit`: basta con que la navegación arranque, que es cuando la URL ya trae el token.
   // Esperar al `load` metía en el reloj la creación del PaymentIntent en Stripe y, en dev, la
   // primera compilación de `/pedido/[publicToken]` -- dos esperas que no son de este test y
@@ -108,6 +109,62 @@ test("una nota de la ficha llega a la comanda", async ({ page }) => {
   } finally {
     await deleteOrder(orderId);
   }
+});
+
+test("el panel del pedido enseña cada línea como se pidió, y deja corregirla", async ({ page }) => {
+  // Pagar sin poder revisar qué llevas es donde se llama al camarero. El panel tiene que
+  // enseñar lo que DISTINGUE una línea de otra del mismo plato: sus extras y su nota.
+  await page.goto(QR_MESA_1);
+  await page.goto(TINTOS);
+
+  const tarjeta = page.getByTestId("product").filter({ hasText: "Ribera del Duero" });
+  await tarjeta.getByTestId("open-product-sheet").click();
+  const ficha = page.getByTestId("product-sheet");
+  await ficha.getByTestId("extra-checkbox").click();
+  await ficha.getByTestId("sheet-notes").fill("Poco frío");
+  await ficha.getByTestId("sheet-add").click();
+
+  await page.getByTestId("cart-open").click();
+  const panel = page.getByTestId("cart-panel");
+  const linea = panel.getByTestId("cart-line");
+
+  await expect(linea).toHaveCount(1);
+  await expect(linea).toContainText("Ribera del Duero");
+  await expect(linea.getByTestId("cart-line-extras")).toContainText("Copa extra");
+  await expect(linea.getByTestId("cart-line-notes")).toContainText("Poco frío");
+  await expect(panel.getByTestId("cart-panel-total")).toHaveText("21,00 €");
+
+  // Se corrige desde aquí, sin volver a la carta.
+  await linea.getByTestId("cart-line-more").click();
+  await expect(linea.getByTestId("cart-line-units")).toHaveText("2");
+  await expect(panel.getByTestId("cart-panel-total")).toHaveText("42,00 €");
+
+  // Y a cero la línea desaparece: el panel se queda vacío y lo dice.
+  await linea.getByTestId("cart-line-less").click();
+  await linea.getByTestId("cart-line-less").click();
+  await expect(panel.getByTestId("cart-empty")).toBeVisible();
+});
+
+test("el mismo plato pedido de dos formas son dos líneas distintas", async ({ page }) => {
+  // Un café con avena y otro sin nada no son el mismo pedido: si se agruparan, una de las
+  // dos elecciones se perdería por el camino y llegaría mal a la barra.
+  await page.goto(QR_MESA_1);
+  await page.goto(TINTOS);
+
+  const tarjeta = page.getByTestId("product").filter({ hasText: "Ribera del Duero" });
+
+  await tarjeta.getByTestId("open-product-sheet").click();
+  await page.getByTestId("product-sheet").getByTestId("extra-checkbox").click();
+  await page.getByTestId("product-sheet").getByTestId("sheet-add").click();
+
+  await tarjeta.getByTestId("open-product-sheet").click();
+  await page.getByTestId("product-sheet").getByTestId("sheet-add").click();
+
+  await page.getByTestId("cart-open").click();
+  await expect(page.getByTestId("cart-panel").getByTestId("cart-line")).toHaveCount(2);
+  await expect(page.getByTestId("cart-panel").getByTestId("cart-panel-total")).toHaveText(
+    "39,00 €",
+  );
 });
 
 test("desde la tarjeta se quitan unidades, y a cero el producto sale del carrito", async ({

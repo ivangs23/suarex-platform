@@ -1,42 +1,58 @@
 "use client";
 
+import { useState } from "react";
+import { CartPanel } from "./CartPanel";
 import { useCart } from "./CartProvider";
 import styles from "./cart.module.css";
 
 /**
- * Resumen del carrito y botón de pagar.
+ * Barra del pedido: cuántas cosas llevas, cuánto suman y la puerta al panel donde se
+ * revisa y se paga.
  *
- * Lo pinta la PÁGINA, no el tema. Es lo último que ve el comensal antes de gastarse el
- * dinero, y un tema al que se le olvidara pintarlo dejaría a ese cliente con una carta que
- * no cobra. Los temas lo visten con las variables de marca; su sitio (barra fija abajo) es
- * el mismo para todos a propósito.
+ * La pinta la PÁGINA, no el tema. Es el paso del dinero, y un tema al que se le olvidara
+ * dejaría a ese cliente con una carta que no cobra. Los temas la visten con las variables de
+ * marca; su sitio (barra fija abajo) es el mismo para todos a propósito.
  *
  * No ocupa nada mientras el carrito está vacío: la carta se navega sin una barra tapando el
  * último plato de cada pantalla.
+ *
+ * Pagar NO está aquí, sino dentro del panel: el último gesto antes de gastarse el dinero
+ * tiene que ocurrir con el pedido a la vista, no junto a una cifra suelta que no dice de qué
+ * se compone.
  */
 export function CartBar() {
   const cart = useCart();
-  if (!cart?.canOrder || cart.totalCents === 0) return null;
+  const [panelAbierto, setPanelAbierto] = useState(false);
+
+  if (!cart?.canOrder) return null;
 
   return (
-    <div className={styles.bar} data-testid="cart-bar">
-      <p className={styles.total} data-testid="cart-total">
-        {cart.totalLabel}
-      </p>
-      {cart.error ? (
-        <p className={styles.error} role="alert">
-          {cart.error}
-        </p>
+    <>
+      {/* La barra solo existe con algo dentro: navegar la carta con una barra vacía tapando
+          el último plato de cada pantalla no ayuda a nadie. */}
+      {cart.totalCents > 0 ? (
+        <div className={styles.bar} data-testid="cart-bar">
+          <p className={styles.total} data-testid="cart-total">
+            {cart.totalLabel}
+          </p>
+          <button
+            type="button"
+            className={styles.pay}
+            data-testid="cart-open"
+            onClick={() => setPanelAbierto(true)}
+          >
+            Ver pedido
+            <span className={styles.badge} data-testid="cart-units-total">
+              {cart.totalUnits}
+            </span>
+          </button>
+        </div>
       ) : null}
-      <button
-        type="button"
-        className={styles.pay}
-        data-testid="cart-pay"
-        disabled={cart.enviando}
-        onClick={cart.checkout}
-      >
-        {cart.enviando ? "Enviando…" : "Pagar"}
-      </button>
-    </div>
+
+      {/* El panel NO cuelga de que haya algo en el carrito: quitando la última línea desde
+          dentro se quedaría sin barra y desaparecería bajo el dedo, sin decir qué ha pasado.
+          Abierto y vacío, lo dice y se cierra cuando el comensal quiera. */}
+      {panelAbierto ? <CartPanel onClose={() => setPanelAbierto(false)} /> : null}
+    </>
   );
 }
