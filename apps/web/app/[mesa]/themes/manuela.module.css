@@ -395,8 +395,8 @@
   position: relative;
   height: 9rem;
   background: #ffffff;
-  display: grid;
-  place-items: center;
+  /* Cinturón: aunque algo se salga, no puede desbordar sobre el nombre y el botón. */
+  overflow: hidden;
 }
 
 .itemBody {
@@ -461,9 +461,21 @@
   min-width: 0;
 }
 
-.itemPhoto {
-  max-height: 100%;
-  max-width: 100%;
+/* La foto se posiciona ABSOLUTA dentro de la franja, no como hijo en flujo.
+   Con `max-height: 100%` en una rejilla, el porcentaje se resuelve contra la fila, la fila es
+   automática y crece hasta la altura natural de la imagen: el tope acababa valiendo la propia
+   altura de la foto y no limitaba nada. Con fotos verticales -- las de su pared de ladrillo --
+   la imagen salía a 246 px sobre una franja de 144 y tapaba el nombre y el botón de añadir.
+   En absoluto, la caja de referencia es la franja, que SÍ tiene altura fija. */
+.itemPhoto,
+/* Atado al MARCO y no solo a la clase: lo que tiene que ser imposible es que una foto se
+   salga de esa franja, venga de donde venga. Con la regla colgando de `.itemPhoto`, una
+   imagen puesta ahí sin esa clase volvía a taparlo todo. */
+.itemMedia img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   object-fit: contain;
 }
 
