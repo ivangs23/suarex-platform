@@ -5,5 +5,10 @@ export {
   signInAndPersistSession,
 } from "./agent-client.js";
 export { unprintedPaidOrdersForDevice } from "./device-orders.js";
-export type { AgentTickResult, PrintFailure } from "./run-agent.js";
-export { runAgent, runAgentTick } from "./run-agent.js";
+export type {
+  AgentHandle,
+  AgentTickResult,
+  NetworkPrinterProbe,
+  PrintFailure,
+} from "./run-agent.js";
+export { probeNetworkPrinters, runAgent, runAgentTick } from "./run-agent.js";

@@ -1,6 +1,12 @@
 import { parseBranding } from "@suarex/config";
 import { type PrintableOrder, selectUnprintedOrders } from "@suarex/db";
-import { deviceKey, enqueueByDevice, type PrinterConfig, printToPrinter } from "@suarex/printing";
+import {
+  deviceKey,
+  enqueueByDevice,
+  type PrinterConfig,
+  printToPrinter,
+  probeTcp,
+} from "@suarex/printing";
 import { subscribeToOrders } from "@suarex/realtime";
 import { buildTicketLines, type TicketBranding, type TicketOrder } from "@suarex/ticket";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -119,6 +125,51 @@ function resolvePrintersFromRows(rows: PrinterRowDb[], deviceId: string | null):
     }
   }
   return resolved;
+}
+
+/** Estado de una impresora de RED tras sondear su conexión (#12): `ok` si aceptó la conexión. */
+export type NetworkPrinterProbe = {
+  id: string;
+  label: string;
+  host: string;
+  port: number;
+  destination: "cocina" | "barra" | "all";
+  ok: boolean;
+  reason?: string;
+};
+
+type NetworkPrinterRow = {
+  id: string;
+  name: string;
+  destination: "cocina" | "barra" | "all";
+  connection: { type?: string; host?: string; port?: number };
+};
+
+/**
+ * Sondea la conexión de TODAS las impresoras de RED habilitadas del tenant y devuelve su estado.
+ * Diagnóstico MANUAL que dispara el owner desde el desktop: usa el MISMO cliente del agente (no
+ * uno nuevo -- eso competiría por la rotación del refresh token, #11), y `probeTcp` no compite
+ * con la entrega porque el owner lo lanza cuando no se está imprimiendo. Las USB no salen aquí:
+ * su prueba es "Imprimir prueba" (winspool), que ya existe.
+ */
+export async function probeNetworkPrinters(client: SupabaseClient): Promise<NetworkPrinterProbe[]> {
+  const { data, error } = await client
+    .from("printers")
+    .select("id, name, destination, connection")
+    .eq("enabled", true);
+  if (error) throw error;
+
+  const network = (data as unknown as NetworkPrinterRow[]).filter(
+    (p) => p.connection?.type === "network" && typeof p.connection.host === "string",
+  );
+  return Promise.all(
+    network.map(async (p) => {
+      const host = p.connection.host as string;
+      const port = p.connection.port as number;
+      const { ok, reason } = await probeTcp(host, port);
+      return { id: p.id, label: p.name, host, port, destination: p.destination, ok, reason };
+    }),
+  );
 }
 
 function toTicketOrder(order: PrintableOrder): TicketOrder {
@@ -254,7 +305,7 @@ export async function runAgent(
      *  tick que revienta llega aquí con `error` puesto, nunca se traga en silencio. */
     onTick?: (result: AgentTickResult) => void;
   },
-): Promise<() => void> {
+): Promise<AgentHandle> {
   const client = await createDeviceClient(creds);
   const pollMs = opts?.pollMs ?? DEFAULT_POLL_MS;
   const appVersion = opts?.appVersion ?? null;
@@ -314,8 +365,19 @@ export async function runAgent(
     });
   }
 
-  return () => {
-    clearInterval(timer);
-    unsubscribe?.();
+  return {
+    stop: () => {
+      clearInterval(timer);
+      unsubscribe?.();
+    },
+    // Reusa el cliente ya autenticado del agente para el diagnóstico manual de red (#12).
+    probeNetworkPrinters: () => probeNetworkPrinters(client),
   };
 }
+
+/** Lo que devuelve `runAgent`: parar el agente, y sondear las impresoras de red bajo demanda
+ *  (con el cliente ya autenticado del agente). */
+export type AgentHandle = {
+  stop: () => void;
+  probeNetworkPrinters: () => Promise<NetworkPrinterProbe[]>;
+};

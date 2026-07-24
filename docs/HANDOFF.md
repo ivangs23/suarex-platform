@@ -70,7 +70,9 @@ Priorizado por valor/coste. Detalle en el hilo; resumen:
   supabase-js, que re-persiste la rotación solo); la contraseña ya no toca disco. Login único al
   emparejar/migrar. Devices viejos se auto-migran en el primer arranque. Si el token se revoca
   (`resetDevice`→`deleteUser`) o caduca → re-emparejar.
-- **12. Estado de impresoras de red** en el desktop (probar conexión, no solo test USB).
+- ✅ **12. Estado de impresoras de red** en el desktop — HECHO. Botón "Probar impresoras de red" en
+  la sección Impresoras: sondea la conexión TCP (`probeTcp`) de cada impresora de red configurada,
+  con el cliente del agente en marcha (no uno nuevo, por la rotación del refresh token de #11).
 - ✅ **13. Query duplicada por tick** — HECHO. `runAgentTick` lee `printers` UNA vez y la comparte
   entre `selectUnprintedOrders` y `resolvePrintersFromRows`; las 4 lecturas del tick van en
   paralelo (1 RTT, antes 2). Sin cambio de comportamiento (lo cubren los tests `agent-*`).
