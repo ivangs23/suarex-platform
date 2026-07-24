@@ -136,7 +136,10 @@ function toTicketOrder(order: PrintableOrder): TicketOrder {
  * fallo entre ambos reimprime en el siguiente tick, nunca pierde el ticket. La marca es por
  * impresora, así que un pedido con una impresora ok y otra caída solo reintenta la caída.
  */
-export async function runAgentTick(client: SupabaseClient): Promise<AgentTickResult> {
+export async function runAgentTick(
+  client: SupabaseClient,
+  appVersion: string | null = null,
+): Promise<AgentTickResult> {
   const [orders, printers, branding] = await Promise.all([
     unprintedPaidOrdersForDevice(client),
     resolvePrinters(client),
@@ -199,7 +202,7 @@ export async function runAgentTick(client: SupabaseClient): Promise<AgentTickRes
   // PostgrestBuilder que solo implementa `PromiseLike` (tiene `.then`, no `.catch`), así que
   // se envuelve en try/await/catch en vez de encadenar `.catch` directamente.
   try {
-    await client.rpc("device_heartbeat", { p_app_version: null });
+    await client.rpc("device_heartbeat", { p_app_version: appVersion });
   } catch {
     // informativo: un fallo aquí no debe derribar el tick de impresión.
   }
@@ -216,6 +219,10 @@ export async function runAgent(
   creds: AgentCredentials,
   opts?: {
     pollMs?: number;
+    /** Versión de la app de escritorio, para el heartbeat: así el panel sabe qué locales
+     *  están en una build vieja (relevante con el auto-update). La conoce la cáscara Electron
+     *  (`app.getVersion()`), no este paquete, así que llega por aquí. */
+    appVersion?: string;
     /** Se llama tras CADA tick con su resultado -- la cáscara Electron lo usa para dar
      *  visibilidad (cuántos impresos, qué impresora cayó) en vez de ser una caja negra. Un
      *  tick que revienta llega aquí con `error` puesto, nunca se traga en silencio. */
@@ -224,12 +231,13 @@ export async function runAgent(
 ): Promise<() => void> {
   const client = await createDeviceClient(creds);
   const pollMs = opts?.pollMs ?? DEFAULT_POLL_MS;
+  const appVersion = opts?.appVersion ?? null;
   let running = false;
   const timer = setInterval(async () => {
     if (running) return; // no solapar ticks
     running = true;
     try {
-      const result = await runAgentTick(client);
+      const result = await runAgentTick(client, appVersion);
       opts?.onTick?.(result);
     } catch (error) {
       console.error("[agent] tick falló:", error);
