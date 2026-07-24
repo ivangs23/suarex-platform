@@ -1,7 +1,7 @@
 # Sub-proyecto 4: Modo totem (canal `kiosko`), de extremo a extremo
 
 Fecha: 2026-07-24
-Estado: borrador, pendiente de aprobación
+Estado: aprobado, pendiente de plan de implementación
 
 ## Contexto
 
