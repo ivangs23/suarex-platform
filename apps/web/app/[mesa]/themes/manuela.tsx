@@ -58,9 +58,13 @@ export const ManuelaTheme: MenuTheme = ({
             <span className={styles.greeting} data-testid="tenant-name">
               {businessName}
             </span>
-            <span className={styles.mesa} data-testid="mesa">
-              {t.table} {mesa}
-            </span>
+            {/* Sin mesa (canal totem: aún no se ha elegido) no se pinta la pastilla, que si no
+                saldría vacía. En la mesa (canal QR) siempre hay número, así que se ve igual. */}
+            {mesa ? (
+              <span className={styles.mesa} data-testid="mesa">
+                {t.table} {mesa}
+              </span>
+            ) : null}
             <span className={styles.enter}>{t.enter}</span>
           </span>
         </a>
@@ -94,9 +98,14 @@ export const ManuelaTheme: MenuTheme = ({
           Asset versionado con la app (no el logo por tenant de Storage), servido estático:
           <img> a propósito, sin optimizar. */}
       <header className={styles.topbar}>
-        <span className={styles.mesaPill} data-testid="mesa">
-          {t.table} {mesa}
-        </span>
+        {/* Sin mesa (totem) la columna del grid queda vacía y la marca sigue centrada. */}
+        {mesa ? (
+          <span className={styles.mesaPill} data-testid="mesa">
+            {t.table} {mesa}
+          </span>
+        ) : (
+          <span />
+        )}
 
         <a
           className={styles.brand}
