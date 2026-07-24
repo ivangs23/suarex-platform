@@ -18,6 +18,7 @@ import { realLogSink } from "./real-log-backend.js";
 import { realSessionStore } from "./real-session-store.js";
 import { TRAY_ICON_DATA_URL } from "./tray-icon.js";
 import { startAutoUpdate } from "./updater.js";
+import { ensureWatchdogTask } from "./watchdog.js";
 import { destroyWebPanel, layoutWebPanel } from "./web-panel.js";
 
 let mainWindow: BrowserWindow | null = null;
@@ -136,6 +137,13 @@ if (!gotLock) {
 
     // Auto-arranque en el login de Windows (desatendido, oculto en bandeja).
     app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true });
+
+    // Watchdog del SISTEMA: una tarea programada resucita el proceso si muere del TODO (crash
+    // duro/kill) -- el watchdog interno solo cubre errores del proceso vivo. Solo en un build
+    // empaquetado de Windows: en dev el exe es electron.exe y registraría una tarea basura.
+    if (process.platform === "win32" && app.isPackaged) {
+      ensureWatchdogTask(app.getPath("userData"), app.getPath("exe"), reportMain);
+    }
 
     createWindow();
     createTray();

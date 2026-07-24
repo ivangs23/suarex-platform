@@ -76,8 +76,10 @@ Priorizado por valor/coste. Detalle en el hilo; resumen:
 - ✅ **13. Query duplicada por tick** — HECHO. `runAgentTick` lee `printers` UNA vez y la comparte
   entre `selectUnprintedOrders` y `resolvePrintersFromRows`; las 4 lecturas del tick van en
   paralelo (1 RTT, antes 2). Sin cambio de comportamiento (lo cubren los tests `agent-*`).
-- **Watchdog del SISTEMA** (scheduled task / servicio Windows): la caída del propio proceso
-  principal no se recupera desde dentro.
+- ✅ **Watchdog del SISTEMA** — HECHO. La app registra al arrancar (empaquetada+win32,
+  idempotente, per-user) una tarea programada `SuarEx Agente Watchdog` que cada 5 min relanza el
+  proceso si murió (el single-instance lock deduplica). `build/installer.nsh` la borra al
+  desinstalar. **Pendiente de validar en un build empaquetado real** (en dev no se registra).
 
 ## Pendiente — infra (tareas de Iván, no código)
 
