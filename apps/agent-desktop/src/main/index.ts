@@ -3,12 +3,14 @@ import { app, BrowserWindow, Menu, Notification, nativeImage, Tray } from "elect
 import { type ActivityAlerts, type AgentActivity, INITIAL_ACTIVITY } from "./agent-activity.js";
 import {
   establishSessionFromPassword,
+  getDeviceClient,
   onAgentActivity,
   setAppVersion,
   setPrintersProvider,
   startAgent,
   stopAgent,
 } from "./agent-runner.js";
+import { PLATFORM_WEB_ORIGIN } from "./baked-config.js";
 import { loadCredentials, saveCredentials } from "./config-store.js";
 import { registerIpc } from "./ipc.js";
 import { createLogger, type Logger } from "./logger.js";
@@ -16,6 +18,7 @@ import { listLocalPrinters } from "./printers.js";
 import { realConfigBackend } from "./real-config-backend.js";
 import { realLogSink } from "./real-log-backend.js";
 import { realSessionStore } from "./real-session-store.js";
+import { openKioskWindow, registerTotemIpc } from "./totem-window.js";
 import { TRAY_ICON_DATA_URL } from "./tray-icon.js";
 import { startAutoUpdate } from "./updater.js";
 import { ensureWatchdogTask } from "./watchdog.js";
@@ -184,6 +187,7 @@ if (!gotLock) {
         }
         logger.info(`Emparejado (dispositivo ${creds.deviceId}). Arrancando el agente…`);
         await startAgent(store, creds.tenantId);
+        await maybeStartKiosk();
       } catch (e) {
         // La sesión no se pudo restaurar/renovar (token revocado o caducado), o falló la
         // migración. No se borra la metadata: la ventana muestra "Emparejado, agente parado" y el
@@ -200,6 +204,36 @@ if (!gotLock) {
     stopAgent();
     destroyWebPanel();
   });
+}
+
+/**
+ * Si este dispositivo es un TOTEM (rol `kiosko`), abre su ventana kiosko con la carta
+ * `/totem/<totem_token>`. El token se lee del PROPIO device con su JWT (`devices_select_own` solo
+ * devuelve su fila). Un device que solo imprime (rol `agente`) no abre nada: sigue oculto en
+ * bandeja imprimiendo. Nunca lanza: un fallo aquí no debe tumbar el arranque del agente.
+ */
+async function maybeStartKiosk(): Promise<void> {
+  try {
+    const client = getDeviceClient();
+    if (!client || !PLATFORM_WEB_ORIGIN) return;
+    const { data } = await client.from("devices").select("roles, totem_token").maybeSingle();
+    const roles = (data?.roles as string[] | null) ?? [];
+    const token = data?.totem_token as string | undefined;
+    if (!token || !roles.includes("kiosko")) return;
+
+    registerTotemIpc(getDeviceClient);
+    const kioskWindow = openKioskWindow(`${PLATFORM_WEB_ORIGIN}/totem/${token}`);
+    kioskWindow.on("close", (e) => {
+      // El totem no se cierra a mano: si alguien lo intenta, se vuelve a mostrar (salvo al salir).
+      if (!quitting) {
+        e.preventDefault();
+        kioskWindow.show();
+      }
+    });
+    logger?.info("Modo totem: ventana kiosko abierta.");
+  } catch (e) {
+    reportMain("[agent-desktop] no se pudo abrir el modo totem:", e);
+  }
 }
 
 function createWindow(): void {

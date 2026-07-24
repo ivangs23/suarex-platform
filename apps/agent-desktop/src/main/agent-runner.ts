@@ -1,3 +1,4 @@
+import type { SupabaseClient } from "@suarex/agent";
 import {
   type AgentHandle,
   type NetworkPrinterProbe,
@@ -107,6 +108,12 @@ export function stopAgent(): void {
 
 export function isAgentRunning(): boolean {
   return handle !== null;
+}
+
+/** El cliente del device del agente en marcha (para que el totem cobre con la MISMA sesión, sin un
+ *  segundo bucle de refresh que rotaría el token por debajo del agente). `null` si no arrancó. */
+export function getDeviceClient(): SupabaseClient | null {
+  return handle?.client ?? null;
 }
 
 /** Sondea las impresoras de red bajo demanda, reusando el cliente del agente en marcha (#12).

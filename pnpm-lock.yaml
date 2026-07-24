@@ -63,6 +63,9 @@ importers:
       '@suarex/agent':
         specifier: workspace:*
         version: link:../../packages/agent
+      '@suarex/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@suarex/printing':
         specifier: workspace:*
         version: link:../../packages/printing

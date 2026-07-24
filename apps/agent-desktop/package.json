@@ -17,6 +17,7 @@
   },
   "devDependencies": {
     "@suarex/agent": "workspace:*",
+    "@suarex/db": "workspace:*",
     "@suarex/printing": "workspace:*",
     "@types/node": "^26.1.1",
     "electron": "^33.0.0",
