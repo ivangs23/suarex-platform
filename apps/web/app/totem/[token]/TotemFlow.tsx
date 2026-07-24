@@ -29,19 +29,20 @@ type FlowState = { step: Step; mode: Mode | null; tableLabel: string | null };
 export function TotemFlow({
   token,
   businessName,
-  hasHero,
   locale,
   currency,
   strings,
+  welcomeNode,
   children,
 }: {
   token: string;
   businessName: string;
-  /** El cliente subió foto de bienvenida: si no, la bienvenida cae al color de marca. */
-  hasHero: boolean;
   locale: string;
   currency: string;
   strings: Strings;
+  /** La pantalla de bienvenida del TEMA del cliente (la misma que la web). El totem la muestra y
+   *  captura el toque para avanzar a "para llevar / en mesa" en vez de ir directo a la carta. */
+  welcomeNode: ReactNode;
   children: ReactNode;
 }) {
   const [hydrated, setHydrated] = useState(false);
@@ -91,7 +92,7 @@ export function TotemFlow({
         flow={flow}
         setFlow={setFlow}
         businessName={businessName}
-        hasHero={hasHero}
+        welcomeNode={welcomeNode}
         strings={strings}
         basePath={`/totem/${token}`}
         onReset={() => {
@@ -116,7 +117,7 @@ function TotemChrome({
   flow,
   setFlow,
   businessName,
-  hasHero,
+  welcomeNode,
   strings: t,
   basePath,
   onReset,
@@ -125,7 +126,7 @@ function TotemChrome({
   flow: FlowState;
   setFlow: (next: FlowState) => void;
   businessName: string;
-  hasHero: boolean;
+  welcomeNode: ReactNode;
   strings: Strings;
   basePath: string;
   onReset: () => void;
@@ -187,23 +188,22 @@ function TotemChrome({
     );
   }
 
-  // BIENVENIDA.
+  // BIENVENIDA: la MISMA pantalla que la web (la del tema del cliente, `welcomeNode`). Encima, un
+  // capturador transparente a pantalla completa convierte el toque en "avanzar a modo" en vez de
+  // ir directo a la carta (que es a donde iría el enlace del tema). Así el aspecto es idéntico al
+  // de la web y el flujo del totem sigue siendo el suyo.
   if (flow.step === "welcome") {
     return (
-      <section
-        className={hasHero ? styles.overlayHero : styles.overlay}
-        data-testid="totem-welcome"
-      >
-        <span className={styles.brand}>{businessName}</span>
+      <div className={styles.welcomeHost} data-testid="totem-welcome">
+        {welcomeNode}
         <button
           type="button"
-          className={styles.bigButton}
+          className={styles.welcomeCatcher}
           data-testid="totem-start"
+          aria-label={t.totemStart}
           onClick={() => setFlow({ ...flow, step: "mode" })}
-        >
-          {t.totemStart}
-        </button>
-      </section>
+        />
+      </div>
     );
   }
 

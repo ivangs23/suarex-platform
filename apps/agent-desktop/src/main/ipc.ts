@@ -38,7 +38,11 @@ function isPairError(e: unknown): e is PairError {
 /** Registra los canales IPC. El renderer nunca toca Node/Electron directo: todo pasa por
  * estos handlers vía el puente contextBridge del preload. `readLog` vuelca el registro en disco
  * (inyectado desde el sink real) para el diagnóstico exportable. */
-export function registerIpc(getWindow: () => BrowserWindow | null, readLog: () => string): void {
+export function registerIpc(
+  getWindow: () => BrowserWindow | null,
+  readLog: () => string,
+  afterPair: () => void | Promise<void> = () => {},
+): void {
   // Navegación de la barra lateral. El renderer manda solo un NOMBRE de sección; la ruta y
   // el origen salen de `WEB_SECTIONS` y del origen horneado en el build, nunca de una
   // cadena que el renderer pueda componer -- de lo contrario, un XSS en la interfaz local
@@ -86,6 +90,13 @@ export function registerIpc(getWindow: () => BrowserWindow | null, readLog: () =
       tenantId: creds.tenantId,
     });
     await startAgent(store, creds.tenantId);
+    // Si el device recién emparejado es un totem (rol kiosko), entra en modo kiosko en el acto,
+    // sin reiniciar. Un fallo aquí no debe tumbar el emparejamiento (ya está hecho y guardado).
+    try {
+      await afterPair();
+    } catch {
+      // el propio `afterPair` (maybeStartKiosk) ya registra su error; no rebota al emparejar.
+    }
     return { ok: true, deviceId: creds.deviceId, tenantId: creds.tenantId };
   });
 

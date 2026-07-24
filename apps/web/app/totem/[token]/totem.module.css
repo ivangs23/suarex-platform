@@ -5,6 +5,30 @@
  * pelo, así que el mismo componente sirve para todos y solo cambia el aspecto.
  */
 
+/* BIENVENIDA del totem: la pantalla del tema del cliente (misma que la web) a pantalla completa,
+   con un capturador transparente encima que convierte cualquier toque en "empezar" (avanzar a
+   para llevar / en mesa) sin seguir el enlace del tema, que iría directo a la carta. */
+.welcomeHost {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  overflow-y: auto;
+}
+
+.welcomeCatcher {
+  position: fixed;
+  inset: 0;
+  z-index: 51;
+  width: 100%;
+  height: 100%;
+  border: none;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  appearance: none;
+}
+
 .overlay,
 .overlayHero {
   position: fixed;
