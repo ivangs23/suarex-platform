@@ -1,4 +1,4 @@
-import { type BrowserWindow, ipcMain } from "electron";
+import { type BrowserWindow, dialog, ipcMain } from "electron";
 import { getActivity, isAgentRunning, startAgent, stopAgent } from "./agent-runner.js";
 import { PLATFORM_WEB_ORIGIN } from "./baked-config.js";
 import { loadCredentials, saveCredentials } from "./config-store.js";
@@ -80,6 +80,27 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
       // más abrirse (sin esperar al primer tick que llegue por `agent-activity`).
       activity: getActivity(),
     };
+  });
+
+  // Confirmación nativa antes de des-emparejar: un clic accidental dejaría la cocina sin
+  // imprimir hasta re-emparejar con un código nuevo. Devuelve si el usuario confirmó; el
+  // borrado real lo hace `unpair`, que se queda puro y testeable.
+  ipcMain.handle("confirm-unpair", async (): Promise<boolean> => {
+    const win = getWindow();
+    const opciones = {
+      type: "warning" as const,
+      buttons: ["Cancelar", "Des-emparejar"],
+      defaultId: 0,
+      cancelId: 0,
+      title: "Des-emparejar dispositivo",
+      message: "¿Seguro que quieres des-emparejar este equipo?",
+      detail:
+        "Dejará de recibir e imprimir pedidos hasta que lo vuelvas a emparejar con un código nuevo.",
+    };
+    const { response } = win
+      ? await dialog.showMessageBox(win, opciones)
+      : await dialog.showMessageBox(opciones);
+    return response === 1;
   });
 
   ipcMain.handle("unpair", async () => {
