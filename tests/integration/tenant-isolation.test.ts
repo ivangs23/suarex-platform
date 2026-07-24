@@ -107,6 +107,19 @@ const WRITE_FIXTURES: Record<string, WriteFixture> = {
     updateColumn: "locale",
     updateValue: "en",
   },
+  // Config de pago (sub-proyecto 4): solo owner/admin de su tenant la escribe; A no puede tocar
+  // la de B. El `secret_key` además ni se lee por SELECT (device), cubierto en
+  // `totem-payment-config.test.ts`.
+  tenant_payment_config: {
+    insertPayload: ({ tenantB }) => ({
+      tenant_id: tenantB.tenantId,
+      access_key: "intruso",
+      secret_key: "intruso",
+    }),
+    expectedInsertRejection: RLS_REJECTION,
+    updateColumn: "mock",
+    updateValue: false,
+  },
   products: {
     // category_id apunta a la categoría real de B: para que el trigger la aceptase
     // haría falta verla, y como A no tiene visibilidad de datos de B bajo su propia RLS,

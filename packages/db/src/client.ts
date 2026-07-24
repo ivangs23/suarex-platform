@@ -46,6 +46,10 @@ export type TenantScopedTable =
   | "order_items"
   | "order_item_extras"
   | "printers"
+  // Sub-proyecto 4 (modo totem): config de pago del tenant. `tenant_id` es su PK, encaja en la
+  // unión. La lectura del secreto por el device NO pasa por aquí (RPC acotada); esto es solo
+  // para que owner/admin la gestionen desde el panel (misma vía service-role acotada por tenant).
+  | "tenant_payment_config"
   // Task 3 (D2, generación del código de emparejamiento, `src/admin-devices.ts`):
   // `devices` tiene `tenant_id` igual que el resto de esta unión y encaja sin más.
   // NO sustituye a `devicesTableForPairing` (quinta exención más abajo): esa sigue
