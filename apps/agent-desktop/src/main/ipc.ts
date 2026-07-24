@@ -1,10 +1,11 @@
 import { writeFileSync } from "node:fs";
-import { DEVICE_SESSION_STORAGE_KEY } from "@suarex/agent";
+import { DEVICE_SESSION_STORAGE_KEY, type NetworkPrinterProbe } from "@suarex/agent";
 import { app, type BrowserWindow, dialog, ipcMain } from "electron";
 import {
   establishSessionFromPassword,
   getActivity,
   isAgentRunning,
+  probeNetworkPrinters,
   startAgent,
   stopAgent,
 } from "./agent-runner.js";
@@ -25,6 +26,10 @@ export type ExportDiagnosticsResult =
   | { ok: true; path: string }
   | { ok: false; canceled: true }
   | { ok: false; error: string };
+
+export type ProbeNetworkPrintersResult =
+  | { ok: true; printers: NetworkPrinterProbe[] }
+  | { ok: false; reason: "agent-not-running" };
 
 function isPairError(e: unknown): e is PairError {
   return typeof e === "object" && e !== null && "kind" in e;
@@ -87,6 +92,16 @@ export function registerIpc(getWindow: () => BrowserWindow | null, readLog: () =
   ipcMain.handle("test-print", async (_e, printerName: string) => {
     await printTestTicket(printerName);
     return { ok: true };
+  });
+
+  // Estado de las impresoras de RED (#12): sondea su conexión TCP con el cliente del agente en
+  // marcha. Distinto del "Imprimir prueba" USB (winspool). Si el agente no corre, no hay cliente
+  // ni impresoras que resolver -> se lo decimos a la UI en vez de devolver una lista vacía
+  // ambigua.
+  ipcMain.handle("probe-network-printers", async (): Promise<ProbeNetworkPrintersResult> => {
+    const printers = await probeNetworkPrinters();
+    if (printers === null) return { ok: false, reason: "agent-not-running" };
+    return { ok: true, printers };
   });
 
   ipcMain.handle("get-status", async () => {

@@ -1,4 +1,10 @@
-import { runAgent, type SessionStore, signInAndPersistSession } from "@suarex/agent";
+import {
+  type AgentHandle,
+  type NetworkPrinterProbe,
+  runAgent,
+  type SessionStore,
+  signInAndPersistSession,
+} from "@suarex/agent";
 import { registerUsbRawSink } from "@suarex/printing";
 import {
   type ActivityAlerts,
@@ -9,7 +15,7 @@ import {
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./baked-config.js";
 import { loadWinspoolBinding, makeUsbSink } from "./usb-sink-winspool.js";
 
-let stop: (() => void) | null = null;
+let handle: AgentHandle | null = null;
 let activity: AgentActivity = INITIAL_ACTIVITY;
 let appVersion: string | undefined;
 let printersProvider: (() => string[] | Promise<string[]>) | undefined;
@@ -71,7 +77,7 @@ export async function startAgent(store: SessionStore, tenantId: string): Promise
   if (process.platform === "win32") {
     registerUsbRawSink(makeUsbSink(await loadWinspoolBinding()));
   }
-  stop = await runAgent(
+  handle = await runAgent(
     {
       supabaseUrl: SUPABASE_URL,
       anonKey: SUPABASE_ANON_KEY,
@@ -93,12 +99,19 @@ export async function startAgent(store: SessionStore, tenantId: string): Promise
 
 /** Detiene el agente si está corriendo (lo llama el cierre de la app / el des-emparejar). */
 export function stopAgent(): void {
-  if (stop) {
-    stop();
-    stop = null;
+  if (handle) {
+    handle.stop();
+    handle = null;
   }
 }
 
 export function isAgentRunning(): boolean {
-  return stop !== null;
+  return handle !== null;
+}
+
+/** Sondea las impresoras de red bajo demanda, reusando el cliente del agente en marcha (#12).
+ *  `null` si el agente no está corriendo (no emparejado o sesión sin restaurar): la UI lo
+ *  distingue de "no hay impresoras de red". */
+export async function probeNetworkPrinters(): Promise<NetworkPrinterProbe[] | null> {
+  return handle ? handle.probeNetworkPrinters() : null;
 }

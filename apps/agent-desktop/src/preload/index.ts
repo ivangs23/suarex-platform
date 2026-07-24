@@ -1,6 +1,10 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { AgentActivity } from "../main/agent-activity.js";
-import type { ExportDiagnosticsResult, PairIpcResult } from "../main/ipc.js";
+import type {
+  ExportDiagnosticsResult,
+  PairIpcResult,
+  ProbeNetworkPrintersResult,
+} from "../main/ipc.js";
 import type { ShowWebPanelResult } from "../main/web-panel.js";
 
 /** Puente seguro: el renderer solo ve estas funciones, nunca Node/Electron directo
@@ -10,6 +14,8 @@ contextBridge.exposeInMainWorld("agent", {
   pair: (code: string): Promise<PairIpcResult> => ipcRenderer.invoke("pair", code),
   testPrint: (printerName: string): Promise<{ ok: boolean }> =>
     ipcRenderer.invoke("test-print", printerName),
+  probeNetworkPrinters: (): Promise<ProbeNetworkPrintersResult> =>
+    ipcRenderer.invoke("probe-network-printers"),
   getStatus: (): Promise<{
     paired: boolean;
     running: boolean;
