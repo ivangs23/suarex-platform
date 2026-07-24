@@ -1,6 +1,17 @@
 import { join } from "node:path";
 import { app, BrowserWindow, Menu, Notification, nativeImage, Tray } from "electron";
+import { WebSocket as WsWebSocket } from "ws";
 import { type ActivityAlerts, type AgentActivity, INITIAL_ACTIVITY } from "./agent-activity.js";
+
+// Electron 33 corre sobre Node 20, que NO expone `WebSocket` global (estable desde Node 22).
+// Supabase Realtime (`@suarex/realtime` -> subscribeToOrders, la vía rápida del agente ante un
+// pedido nuevo) lo exige y, sin él, `startAgent` lanza en el arranque. Se rellena con `ws` antes
+// de que nada toque Realtime. Cuando el Electron empaquetado suba a un Node >= 22, el guard lo
+// deja pasar sin pisar el nativo.
+if (typeof (globalThis as { WebSocket?: unknown }).WebSocket === "undefined") {
+  (globalThis as { WebSocket?: unknown }).WebSocket = WsWebSocket;
+}
+
 import {
   establishSessionFromPassword,
   getDeviceClient,
@@ -153,6 +164,8 @@ if (!gotLock) {
     registerIpc(
       () => mainWindow,
       () => logSink.read(),
+      // Un totem recién emparejado entra en modo kiosko sin reiniciar.
+      () => maybeStartKiosk(),
     );
     onAgentActivity(handleAgentActivity);
     // La versión de la build viaja al heartbeat (para saber qué locales están desactualizados).

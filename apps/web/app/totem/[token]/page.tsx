@@ -101,9 +101,8 @@ export default async function TotemPage({
   const Theme = resolveTheme(settings?.theme);
   const t = strings(lang);
 
-  // La carta se pinta con el tema del cliente, SIN su pantalla de bienvenida (el totem tiene la
-  // suya, con los pasos previos) y con la mesa vacía: en el totem la mesa la elige el comensal en
-  // el flujo, no viene fijada. El envoltorio del totem (pasos + pago) lo pone `TotemFlow`.
+  // La CARTA (fondo, paso de menú): el tema del cliente sin su bienvenida, con la mesa vacía (en
+  // el totem la mesa la elige el comensal en el flujo, no viene fijada).
   const carta = (
     <Theme
       tenantSlug={tenant.slug}
@@ -117,14 +116,30 @@ export default async function TotemPage({
     />
   );
 
+  // La BIENVENIDA del totem es la MISMA que la de la web: la pantalla de bienvenida del tema del
+  // cliente (`welcome.active`), con su foto y su marca. El totem solo intercepta el toque para
+  // avanzar a "para llevar / en mesa" en vez de ir directo a la carta (lo hace `TotemFlow`).
+  const bienvenida = (
+    <Theme
+      tenantSlug={tenant.slug}
+      businessName={businessName}
+      mesa=""
+      branding={branding}
+      view={view}
+      welcome={{ active: true, href: basePath }}
+      langs={langs}
+      strings={t}
+    />
+  );
+
   return (
     <TotemFlow
       token={token}
       businessName={businessName}
-      hasHero={branding.heroUrl !== null}
       locale={settings?.locale ?? "es"}
       currency={settings?.currency ?? "EUR"}
       strings={t}
+      welcomeNode={bienvenida}
     >
       {carta}
     </TotemFlow>
