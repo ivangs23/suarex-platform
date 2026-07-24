@@ -1,10 +1,17 @@
 import { join } from "node:path";
 import { app, BrowserWindow, Menu, Notification, nativeImage, Tray } from "electron";
 import { type ActivityAlerts, type AgentActivity, INITIAL_ACTIVITY } from "./agent-activity.js";
-import { onAgentActivity, setAppVersion, startAgent, stopAgent } from "./agent-runner.js";
+import {
+  onAgentActivity,
+  setAppVersion,
+  setPrintersProvider,
+  startAgent,
+  stopAgent,
+} from "./agent-runner.js";
 import { loadCredentials } from "./config-store.js";
 import { registerIpc } from "./ipc.js";
 import { createLogger, type Logger } from "./logger.js";
+import { listLocalPrinters } from "./printers.js";
 import { realConfigBackend } from "./real-config-backend.js";
 import { realLogSink } from "./real-log-backend.js";
 import { TRAY_ICON_DATA_URL } from "./tray-icon.js";
@@ -137,6 +144,9 @@ if (!gotLock) {
     onAgentActivity(handleAgentActivity);
     // La versión de la build viaja al heartbeat (para saber qué locales están desactualizados).
     setAppVersion(app.getVersion());
+    // Las impresoras que ve el SO también viajan al heartbeat, para el desplegable del panel
+    // admin. `getPrintersAsync` es de `webContents`; sin ventana viva, lista vacía.
+    setPrintersProvider(() => (mainWindow ? listLocalPrinters(mainWindow) : Promise.resolve([])));
     // Auto-update en segundo plano (no hace nada sin feed configurado, p. ej. en dev).
     startAutoUpdate(
       (title, body) => {

@@ -139,6 +139,7 @@ function toTicketOrder(order: PrintableOrder): TicketOrder {
 export async function runAgentTick(
   client: SupabaseClient,
   appVersion: string | null = null,
+  osPrinters: string[] | null = null,
 ): Promise<AgentTickResult> {
   const [orders, printers, branding] = await Promise.all([
     unprintedPaidOrdersForDevice(client),
@@ -202,7 +203,9 @@ export async function runAgentTick(
   // PostgrestBuilder que solo implementa `PromiseLike` (tiene `.then`, no `.catch`), así que
   // se envuelve en try/await/catch en vez de encadenar `.catch` directamente.
   try {
-    await client.rpc("device_heartbeat", { p_app_version: appVersion });
+    // `p_printers` null (fuera de Electron, o si enumerar falló) NO borra las ya reportadas:
+    // la RPC hace `coalesce(p_printers, printers)`.
+    await client.rpc("device_heartbeat", { p_app_version: appVersion, p_printers: osPrinters });
   } catch {
     // informativo: un fallo aquí no debe derribar el tick de impresión.
   }
@@ -223,6 +226,12 @@ export async function runAgent(
      *  están en una build vieja (relevante con el auto-update). La conoce la cáscara Electron
      *  (`app.getVersion()`), no este paquete, así que llega por aquí. */
     appVersion?: string;
+    /** Nombres de impresoras que ve el SO, para reportarlos en el heartbeat y que el panel
+     *  admin los ofrezca en un desplegable. Los enumera la cáscara Electron
+     *  (`getPrintersAsync`), no este paquete, así que llega por aquí y se resuelve en CADA tick
+     *  (las impresoras se enchufan/desenchufan). Si falla o no se pasa, el heartbeat va sin
+     *  lista y no borra las ya reportadas. */
+    getPrinters?: () => string[] | Promise<string[]>;
     /** Se llama tras CADA tick con su resultado -- la cáscara Electron lo usa para dar
      *  visibilidad (cuántos impresos, qué impresora cayó) en vez de ser una caja negra. Un
      *  tick que revienta llega aquí con `error` puesto, nunca se traga en silencio. */
@@ -237,7 +246,17 @@ export async function runAgent(
     if (running) return; // no solapar ticks
     running = true;
     try {
-      const result = await runAgentTick(client, appVersion);
+      let osPrinters: string[] | null = null;
+      if (opts?.getPrinters) {
+        // Enumerar las impresoras nunca debe derribar un tick de impresión: si falla, se manda
+        // el heartbeat sin lista (que conserva la anterior).
+        try {
+          osPrinters = await opts.getPrinters();
+        } catch {
+          osPrinters = null;
+        }
+      }
+      const result = await runAgentTick(client, appVersion, osPrinters);
       opts?.onTick?.(result);
     } catch (error) {
       console.error("[agent] tick falló:", error);
