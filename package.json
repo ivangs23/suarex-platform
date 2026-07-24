@@ -25,6 +25,7 @@
     "@suarex/agent": "workspace:*",
     "@suarex/db": "workspace:*",
     "@suarex/printing": "workspace:*",
+    "@suarex/realtime": "workspace:*",
     "@suarex/ticket": "workspace:*",
     "@supabase/supabase-js": "^2.110.7",
     "@types/node": "^26.1.1",

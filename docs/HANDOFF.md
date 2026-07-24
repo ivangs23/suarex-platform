@@ -62,7 +62,9 @@ Priorizado por valor/coste. Detalle en el hilo; resumen:
 - ✅ **7. Desplegable de impresoras** — HECHO. El device reporta sus impresoras en el heartbeat
   (`devices.printers`, migración `20260724000001`), y `PrinterForm` ofrece un `<select>` de esas
   impresoras (con escape "escribir a mano" si el device aún no reportó). Adiós al typo silencioso.
-- **8. Realtime** además del polling de 4 s (menos latencia y carga; polling como respaldo).
+- ✅ **8. Realtime** además del polling de 4 s — HECHO. `runAgent` se suscribe a `orders`
+  (`subscribeToOrders`) y dispara un tick al instante ante un pedido `paid`; el poll sigue de
+  respaldo (at-least-once). Guard `running`/`pending` coalesce ráfagas.
 - **11. Guardar refresh token** en vez de la contraseña (menor superficie si se rompe DPAPI).
 - **12. Estado de impresoras de red** en el desktop (probar conexión, no solo test USB).
 - **13. Query duplicada por tick** (`printers` se consulta 2×: `device-orders` y `resolvePrinters`).

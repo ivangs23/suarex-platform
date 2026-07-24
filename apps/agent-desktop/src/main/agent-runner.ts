@@ -61,6 +61,8 @@ export async function startAgent(creds: StoredCredentials): Promise<void> {
       anonKey: SUPABASE_ANON_KEY,
       email: creds.email,
       password: creds.password,
+      // Para el canal de Realtime (vía rápida ante un pedido nuevo). El aislamiento lo da RLS.
+      tenantId: creds.tenantId,
     },
     {
       appVersion,

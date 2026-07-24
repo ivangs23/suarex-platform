@@ -1,6 +1,7 @@
 import { parseBranding } from "@suarex/config";
 import type { PrintableOrder } from "@suarex/db";
 import { deviceKey, enqueueByDevice, type PrinterConfig, printToPrinter } from "@suarex/printing";
+import { subscribeToOrders } from "@suarex/realtime";
 import { buildTicketLines, type TicketBranding, type TicketOrder } from "@suarex/ticket";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { type AgentCredentials, createDeviceClient } from "./agent-client.js";
@@ -214,9 +215,13 @@ export async function runAgentTick(
 }
 
 /**
- * Arranca el agente: crea el cliente del dispositivo y sondea cada `pollMs`. Devuelve una
- * función para detenerlo (la usará la cáscara Electron de C2b al cerrarse). Un error en un
- * tick se registra pero no derriba el bucle -- el siguiente tick reintenta.
+ * Arranca el agente: crea el cliente del dispositivo, sondea cada `pollMs` Y se suscribe a
+ * Realtime para reaccionar a un pedido nuevo al instante en vez de esperar hasta 4 s. El poll
+ * NO desaparece: es el respaldo (at-least-once). Si Realtime se cae, se reconecta tarde o
+ * pierde un evento, el siguiente poll lo recoge -- la garantía de que un ticket acaba
+ * imprimiéndose sigue siendo el poll, no Realtime. Devuelve una función que para AMBOS.
+ *
+ * Un error en un tick se registra pero no derriba el bucle -- el siguiente tick reintenta.
  */
 export async function runAgent(
   creds: AgentCredentials,
@@ -241,9 +246,18 @@ export async function runAgent(
   const client = await createDeviceClient(creds);
   const pollMs = opts?.pollMs ?? DEFAULT_POLL_MS;
   const appVersion = opts?.appVersion ?? null;
+
+  // `running` evita solapar ticks; `pending` recuerda que llegó un disparo (poll o Realtime)
+  // MIENTRAS uno corría, para relanzar UNO al terminar en vez de perderlo. Juntos coalescen
+  // una ráfaga de eventos de Realtime en el mínimo de ticks sin perder ninguno.
   let running = false;
-  const timer = setInterval(async () => {
-    if (running) return; // no solapar ticks
+  let pending = false;
+
+  const tick = async (): Promise<void> => {
+    if (running) {
+      pending = true;
+      return;
+    }
     running = true;
     try {
       let osPrinters: string[] | null = null;
@@ -269,7 +283,27 @@ export async function runAgent(
       });
     } finally {
       running = false;
+      if (pending) {
+        pending = false;
+        void tick();
+      }
     }
-  }, pollMs);
-  return () => clearInterval(timer);
+  };
+
+  const timer = setInterval(() => void tick(), pollMs);
+
+  // Vía rápida: un pedido que pasa a `paid` dispara un tick al instante (los cambios de
+  // kitchen_status/bar_status que hace el personal NO -- no cambian qué hay que imprimir).
+  // Sin tenantId (tests que llaman a runAgentTick directo) no hay canal; el poll basta.
+  let unsubscribe: (() => void) | null = null;
+  if (creds.tenantId) {
+    unsubscribe = subscribeToOrders(client, creds.tenantId, (order) => {
+      if (order.status === "paid") void tick();
+    });
+  }
+
+  return () => {
+    clearInterval(timer);
+    unsubscribe?.();
+  };
 }

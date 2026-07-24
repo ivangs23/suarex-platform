@@ -5,6 +5,10 @@ export type AgentCredentials = {
   anonKey: string;
   email: string;
   password: string;
+  /** Tenant del dispositivo. Solo lo usa `runAgent` para nombrar el canal de Realtime; el
+   *  aislamiento real lo da RLS, no el nombre. Opcional: los tests que crean el cliente para
+   *  llamar a `runAgentTick` directamente no lo necesitan. */
+  tenantId?: string;
 };
 
 /**
