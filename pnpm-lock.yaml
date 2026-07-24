@@ -160,6 +160,9 @@ importers:
       '@suarex/db':
         specifier: workspace:*
         version: link:../db
+      '@suarex/domain':
+        specifier: workspace:*
+        version: link:../domain
       '@suarex/printing':
         specifier: workspace:*
         version: link:../printing
@@ -257,6 +260,10 @@ importers:
         version: 5.9.3
 
   packages/ticket:
+    dependencies:
+      '@suarex/domain':
+        specifier: workspace:*
+        version: link:../domain
     devDependencies:
       typescript:
         specifier: ^5.9.3

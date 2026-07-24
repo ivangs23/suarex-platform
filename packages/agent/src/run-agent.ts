@@ -1,5 +1,6 @@
 import { parseBranding } from "@suarex/config";
 import { type PrintableOrder, selectUnprintedOrders } from "@suarex/db";
+import { pickupCodeFromToken } from "@suarex/domain";
 import {
   deviceKey,
   enqueueByDevice,
@@ -8,7 +9,13 @@ import {
   probeTcp,
 } from "@suarex/printing";
 import { subscribeToOrders } from "@suarex/realtime";
-import { buildTicketLines, type TicketBranding, type TicketOrder } from "@suarex/ticket";
+import {
+  buildReceiptLines,
+  buildTicketLines,
+  type ReceiptOrder,
+  type TicketBranding,
+  type TicketOrder,
+} from "@suarex/ticket";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { type AgentCredentials, createDeviceClient } from "./agent-client.js";
 import { paidUnprintedOrderRows } from "./device-orders.js";
@@ -19,7 +26,7 @@ const DEFAULT_POLL_MS = 4000;
 export type PrintFailure = {
   printerId: string;
   orderNumber: number;
-  destination: "cocina" | "barra" | "all";
+  destination: "cocina" | "barra" | "all" | "recibo";
   reason: string;
 };
 
@@ -41,24 +48,28 @@ type PrinterRowDb = {
   id: string;
   venue_id: string;
   device_id: string | null;
-  destination: "cocina" | "barra" | "all";
+  destination: "cocina" | "barra" | "all" | "recibo";
   connection: { type?: string; host?: string; port?: number; printerName?: string };
 };
 
 type ResolvedPrinter = {
   id: string;
   venueId: string;
-  destination: "cocina" | "barra" | "all";
+  destination: "cocina" | "barra" | "all" | "recibo";
   config: PrinterConfig;
 };
 
 /** Cabecera del ticket a partir de la marca del tenant (nombre comercial), leída con el
  * JWT del device (la RLS le permite leer `tenant_settings`). Nunca lanza: si no hay marca,
  * la cabecera queda vacía. */
-async function ticketBranding(client: SupabaseClient): Promise<TicketBranding> {
-  const { data } = await client.from("tenant_settings").select("branding").maybeSingle();
+async function ticketBranding(
+  client: SupabaseClient,
+): Promise<{ branding: TicketBranding; locale: string }> {
+  const { data } = await client.from("tenant_settings").select("branding, locale").maybeSingle();
   const name = parseBranding(data?.branding).name;
-  return { header: name ?? "" };
+  // `locale` solo lo usa el recibo, para formatear los importes ("18,00 €"). El texto de la
+  // comanda no lleva dinero. Sin ajuste, `es` (Intl lo acepta igual que la carta).
+  return { branding: { header: name ?? "" }, locale: (data?.locale as string | undefined) ?? "es" };
 }
 
 /** Impresora id del PROPIO dispositivo del agente, leída con su JWT (`devices_select_own`
@@ -133,7 +144,7 @@ export type NetworkPrinterProbe = {
   label: string;
   host: string;
   port: number;
-  destination: "cocina" | "barra" | "all";
+  destination: "cocina" | "barra" | "all" | "recibo";
   ok: boolean;
   reason?: string;
 };
@@ -141,7 +152,7 @@ export type NetworkPrinterProbe = {
 type NetworkPrinterRow = {
   id: string;
   name: string;
-  destination: "cocina" | "barra" | "all";
+  destination: "cocina" | "barra" | "all" | "recibo";
   connection: { type?: string; host?: string; port?: number };
 };
 
@@ -186,6 +197,28 @@ function toTicketOrder(order: PrintableOrder): TicketOrder {
   };
 }
 
+/** El pedido como RECIBO de cliente (con importes y código de recogida). El código sale del token
+ *  público con la MISMA regla que la pantalla del totem (`pickupCodeFromToken`), para que cuadren. */
+function toReceiptOrder(order: PrintableOrder, locale: string): ReceiptOrder {
+  return {
+    orderNumber: order.orderNumber,
+    tableLabel: order.tableLabel,
+    createdAt: order.createdAt,
+    items: order.items.map((item) => ({
+      name: item.name,
+      quantity: item.quantity,
+      extras: item.extras,
+      lineCents: item.lineCents,
+    })),
+    subtotalCents: order.subtotalCents,
+    taxCents: order.taxCents,
+    totalCents: order.totalCents,
+    currency: order.currency,
+    locale,
+    pickupCode: pickupCodeFromToken(order.publicToken),
+  };
+}
+
 /**
  * UNA pasada del agente: lee los pedidos pendientes con el JWT del device, y por cada
  * pedido y cada impresora de RED de destino que aún no conste en `printedTargets`, entrega
@@ -202,7 +235,7 @@ export async function runAgentTick(
   // Una sola lectura de `printers` por tick, compartida entre "qué falta imprimir"
   // (`selectUnprintedOrders`) y "a qué impresora" (`resolvePrintersFromRows`) -- antes se
   // consultaba dos veces (#13). Las cuatro lecturas van en paralelo (1 RTT).
-  const [printerRows, orderRows, branding, deviceId] = await Promise.all([
+  const [printerRows, orderRows, { branding, locale }, deviceId] = await Promise.all([
     enabledPrinterRows(client),
     paidUnprintedOrderRows(client),
     ticketBranding(client),
@@ -224,11 +257,20 @@ export async function runAgentTick(
       // imprime en las impresoras de su propio local (ver Finding 1 de C2a).
       if (printer.venueId !== order.venueId) continue;
       const dest = printer.destination;
-      const applies = dest === "all" || neededDestinations.has(dest);
+      // El recibo del cliente sale SOLO en pedidos de totem (canal kiosko); las de estación
+      // (cocina/barra/all) imprimen la comanda como siempre. Debe casar con `targetPrinterIds`
+      // y con el SQL `reserve_printed`, que deciden cuándo el pedido queda del todo impreso.
+      const applies =
+        dest === "recibo"
+          ? order.channel === "kiosko"
+          : dest === "all" || neededDestinations.has(dest);
       if (!applies) continue;
       if (Object.hasOwn(order.printedTargets, printer.id)) continue;
 
-      const lines = buildTicketLines(ticketOrder, branding, dest);
+      const lines =
+        dest === "recibo"
+          ? buildReceiptLines(toReceiptOrder(order, locale), branding)
+          : buildTicketLines(ticketOrder, branding, dest);
       const result = await enqueueByDevice(deviceKey(printer.config), () =>
         printToPrinter(lines, printer.config),
       );

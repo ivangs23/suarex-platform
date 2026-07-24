@@ -14,6 +14,7 @@
   "dependencies": {
     "@suarex/config": "workspace:*",
     "@suarex/db": "workspace:*",
+    "@suarex/domain": "workspace:*",
     "@suarex/printing": "workspace:*",
     "@suarex/realtime": "workspace:*",
     "@suarex/ticket": "workspace:*",

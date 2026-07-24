@@ -26,7 +26,9 @@ export async function paidUnprintedOrderRows(client: SupabaseClient): Promise<Pa
     .from("orders")
     .select(
       "id, order_number, created_at, printed_targets, venue_id, kitchen_status, bar_status, " +
-        "tables(label), order_items(name_snapshot, quantity, destination, notes)",
+        "channel, public_token, subtotal, tax_amount, total, currency, table_label, tables(label), " +
+        "order_items(name_snapshot, quantity, destination, notes, line_total, " +
+        "order_item_extras(name_snapshot))",
     )
     .not("paid_at", "is", null)
     .is("printed_at", null)

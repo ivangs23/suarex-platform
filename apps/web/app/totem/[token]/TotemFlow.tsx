@@ -1,5 +1,6 @@
 "use client";
 
+import { pickupCodeFromToken } from "@suarex/domain";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import type { Strings } from "@/lib/i18n";
 import { CartPanelHost } from "../../[mesa]/cart/CartPanelHost";
@@ -179,7 +180,7 @@ function TotemChrome({
         onApproved={() => {
           setPaid({
             tableLabel: flow.tableLabel,
-            pickup: publicToken.slice(0, 6).toUpperCase(),
+            pickup: pickupCodeFromToken(publicToken),
           });
         }}
       />
