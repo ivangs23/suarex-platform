@@ -15,16 +15,14 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * duplica: se delega en `selectUnprintedOrders`, la misma función pura que usa la ruta
  * service-role.
  */
-export async function unprintedPaidOrdersForDevice(
-  client: SupabaseClient,
-): Promise<PrintableOrder[]> {
-  const { data: printerRows, error: printersError } = await client
-    .from("printers")
-    .select("id, venue_id, destination")
-    .eq("enabled", true);
-  if (printersError) throw printersError;
-
-  const { data: orderRows, error: ordersError } = await client
+/**
+ * Solo la query de pedidos pagados-sin-imprimir (sin combinar con impresoras). Se expone
+ * aparte para que `runAgentTick` pueda pedir las impresoras UNA sola vez por tick y compartir
+ * esa lista entre "qué falta imprimir" y "a qué impresora imprimir" (antes se consultaba
+ * `printers` dos veces por tick, #13), en vez de encadenar aquí printers→orders.
+ */
+export async function paidUnprintedOrderRows(client: SupabaseClient): Promise<PaidOrderRow[]> {
+  const { data, error } = await client
     .from("orders")
     .select(
       "id, order_number, created_at, printed_targets, venue_id, kitchen_status, bar_status, " +
@@ -33,10 +31,20 @@ export async function unprintedPaidOrdersForDevice(
     .not("paid_at", "is", null)
     .is("printed_at", null)
     .order("created_at", { ascending: true });
-  if (ordersError) throw ordersError;
+  if (error) throw error;
+  return data as unknown as PaidOrderRow[];
+}
 
-  return selectUnprintedOrders(
-    orderRows as unknown as PaidOrderRow[],
-    printerRows as unknown as EnabledPrinterRow[],
-  );
+export async function unprintedPaidOrdersForDevice(
+  client: SupabaseClient,
+): Promise<PrintableOrder[]> {
+  // Las dos lecturas en paralelo (antes eran secuenciales). Uso autónomo (tests): el tick de
+  // producción usa la ruta deduplicada de `runAgentTick`, no esta.
+  const [printerResult, orderRows] = await Promise.all([
+    client.from("printers").select("id, venue_id, destination").eq("enabled", true),
+    paidUnprintedOrderRows(client),
+  ]);
+  if (printerResult.error) throw printerResult.error;
+
+  return selectUnprintedOrders(orderRows, printerResult.data as unknown as EnabledPrinterRow[]);
 }

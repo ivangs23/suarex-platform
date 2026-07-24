@@ -67,7 +67,9 @@ Priorizado por valor/coste. Detalle en el hilo; resumen:
   respaldo (at-least-once). Guard `running`/`pending` coalesce ráfagas.
 - **11. Guardar refresh token** en vez de la contraseña (menor superficie si se rompe DPAPI).
 - **12. Estado de impresoras de red** en el desktop (probar conexión, no solo test USB).
-- **13. Query duplicada por tick** (`printers` se consulta 2×: `device-orders` y `resolvePrinters`).
+- ✅ **13. Query duplicada por tick** — HECHO. `runAgentTick` lee `printers` UNA vez y la comparte
+  entre `selectUnprintedOrders` y `resolvePrintersFromRows`; las 4 lecturas del tick van en
+  paralelo (1 RTT, antes 2). Sin cambio de comportamiento (lo cubren los tests `agent-*`).
 - **Watchdog del SISTEMA** (scheduled task / servicio Windows): la caída del propio proceso
   principal no se recupera desde dentro.
 
