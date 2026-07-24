@@ -8,6 +8,25 @@ Una conversación de Claude no transfiere sola; lee esto + `git log` + `CLAUDE.m
 `main` estable. Toda la suite en verde (lint · typecheck · unit · integración · e2e). Sin PRs
 abiertas al cerrar esta sesión.
 
+### Portado a Windows (Mac -> Windows)
+
+El proyecto se retomó en Windows. Cuatro fricciones de portabilidad resueltas (detalle en
+`CLAUDE.md` -> "En Windows"):
+
+1. **CLI de Supabase** desactualizada (scoop 2.62.10) no parseaba `config.toml`; subida a
+   2.109.1.
+2. **Grants perdidos**: el stack nuevo de Supabase dejó de auto-conceder DML/EXECUTE a
+   anon/authenticated/service_role en objetos creados por `postgres`. Nueva migración
+   `20260721000000_api_role_baseline_grants.sql` (timestamp más bajo, solo `alter default
+   privileges`) restaura el baseline. **Afecta a producción**: al actualizar el stack oficial
+   del VPS, esta migración es la que evita que se rompa igual.
+3. **CRLF**: nuevo `.gitattributes` (`* text=auto eol=lf`) para que Biome pase en Windows.
+4. **`tsc` en `tenant-filter-structural.test.ts`**: invocaba `.bin/tsc` (no existe sin
+   extensión en Windows); ahora lanza el `.js` con `process.execPath`.
+
+Paso de setup por máquina Windows: añadir `garum.localhost`/`manuela.localhost` al `hosts`
+(ver CLAUDE.md); sin ello el e2e no arranca el `webServer`.
+
 ## Lo hecho recientemente (esta tanda)
 
 Flujo del comensal, pulido a partir de pruebas en vivo sobre el tenant **manuela**:
