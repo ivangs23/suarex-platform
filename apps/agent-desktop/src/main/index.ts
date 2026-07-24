@@ -1,10 +1,12 @@
 import { join } from "node:path";
 import { app, BrowserWindow, Menu, Notification, nativeImage, Tray } from "electron";
-import type { ActivityAlerts, AgentActivity } from "./agent-activity.js";
+import { type ActivityAlerts, type AgentActivity, INITIAL_ACTIVITY } from "./agent-activity.js";
 import { onAgentActivity, setAppVersion, startAgent, stopAgent } from "./agent-runner.js";
 import { loadCredentials } from "./config-store.js";
 import { registerIpc } from "./ipc.js";
+import { createLogger, type Logger } from "./logger.js";
 import { realConfigBackend } from "./real-config-backend.js";
+import { realLogSink } from "./real-log-backend.js";
 import { TRAY_ICON_DATA_URL } from "./tray-icon.js";
 import { startAutoUpdate } from "./updater.js";
 import { destroyWebPanel, layoutWebPanel } from "./web-panel.js";
@@ -12,6 +14,15 @@ import { destroyWebPanel, layoutWebPanel } from "./web-panel.js";
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let quitting = false;
+
+// El logger a fichero se crea en `whenReady` (necesita `app.getPath("userData")`). Hasta
+// entonces, y por si un fallo salta antes, `reportMain` cae en `console.error`. La app corre
+// oculta en bandeja, así que sin este fichero un crash no dejaba ningún rastro.
+let logger: Logger | null = null;
+function reportMain(msg: string, err?: unknown): void {
+  if (logger) logger.error(msg, err);
+  else console.error(msg, err);
+}
 
 const TRAY_BASE_TOOLTIP = "SuarEx — Agente de impresión";
 
@@ -21,10 +32,10 @@ const TRAY_BASE_TOOLTIP = "SuarEx — Agente de impresión";
 // que sobrevivir aquí es lo que mantiene la impresión en marcha. (La caída del PROPIO proceso
 // principal no se recupera desde dentro; para eso haría falta un watchdog del sistema.)
 process.on("uncaughtException", (err) => {
-  console.error("[main] excepción no capturada (se sigue):", err);
+  reportMain("[main] excepción no capturada (se sigue):", err);
 });
 process.on("unhandledRejection", (reason) => {
-  console.error("[main] promesa rechazada sin manejar (se sigue):", reason);
+  reportMain("[main] promesa rechazada sin manejar (se sigue):", reason);
 });
 
 /**
@@ -34,8 +45,29 @@ process.on("unhandledRejection", (reason) => {
  * mismo aviso cada 4 s. Sin esto, un fallo de impresión era invisible: la cocina se quedaba
  * sin comandas y nadie se enteraba.
  */
+let prevActivity: AgentActivity = INITIAL_ACTIVITY;
 function handleAgentActivity(activity: AgentActivity, alerts: ActivityAlerts): void {
   mainWindow?.webContents.send("agent-activity", activity);
+
+  // Log a fichero SOLO de lo que cambió en este tick, no del estado en cada uno de los ~4 s: los
+  // tickets recién impresos, las impresoras que acaban de caer o volver, y las transiciones de
+  // conexión. Un tick vacío no escribe nada, así el registro cuenta la historia sin inundarse.
+  const printed = activity.printedTotal - prevActivity.printedTotal;
+  if (printed > 0) logger?.info(`Impresos ${printed} ticket(s) (total ${activity.printedTotal}).`);
+  for (const f of alerts.newlyDown) {
+    logger?.warn(
+      `Impresora de ${f.destination} sin responder (pedido #${f.orderNumber}): ${f.reason}.`,
+    );
+  }
+  if (alerts.recovered.length > 0) {
+    logger?.info(`Impresora(s) recuperada(s): ${alerts.recovered.join(", ")}.`);
+  }
+  if (activity.lastError && activity.lastError !== prevActivity.lastError) {
+    logger?.error(`Sin conexión con la plataforma: ${activity.lastError}`);
+  } else if (!activity.lastError && prevActivity.lastError) {
+    logger?.info("Conexión con la plataforma recuperada.");
+  }
+  prevActivity = activity;
 
   if (tray) {
     const caidas = activity.downPrinters.length;
@@ -82,31 +114,46 @@ if (!gotLock) {
   // Si el proceso del renderer se cae (no el agente, que vive en el main y sigue imprimiendo),
   // se recarga la ventana en vez de dejarla en blanco. Al salir no se recarga: se está cerrando.
   app.on("render-process-gone", (_e, contents, details) => {
-    console.error("[main] el renderer se cayó:", details.reason);
+    reportMain("[main] el renderer se cayó:", details.reason);
     if (!quitting && contents === mainWindow?.webContents) mainWindow.reload();
   });
 
   app.whenReady().then(async () => {
+    // Logger a fichero rotativo en userData. Se crea aquí (ya hay `app`) y a partir de este punto
+    // el watchdog y los eventos importantes quedan en disco, no solo en un stdout invisible.
+    const logSink = realLogSink();
+    logger = createLogger(logSink, () => new Date().toISOString());
+    logger.info(`Arranque. Versión ${app.getVersion()}, plataforma ${process.platform}.`);
+
     // Auto-arranque en el login de Windows (desatendido, oculto en bandeja).
     app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true });
 
     createWindow();
     createTray();
-    registerIpc(() => mainWindow);
+    registerIpc(
+      () => mainWindow,
+      () => logSink.read(),
+    );
     onAgentActivity(handleAgentActivity);
     // La versión de la build viaja al heartbeat (para saber qué locales están desactualizados).
     setAppVersion(app.getVersion());
     // Auto-update en segundo plano (no hace nada sin feed configurado, p. ej. en dev).
-    startAutoUpdate((title, body) => {
-      if (Notification.isSupported()) new Notification({ title, body }).show();
-    });
+    startAutoUpdate(
+      (title, body) => {
+        if (Notification.isSupported()) new Notification({ title, body }).show();
+      },
+      (msg, err) => reportMain(msg, err),
+    );
 
     // Si ya está emparejado, arranca el agente al iniciar (imprime sin abrir la ventana).
     const creds = loadCredentials(realConfigBackend());
     if (creds) {
+      logger.info(`Emparejado (dispositivo ${creds.deviceId}). Arrancando el agente…`);
       await startAgent(creds).catch((e) =>
-        console.error("[agent-desktop] no se pudo arrancar el agente:", e),
+        reportMain("[agent-desktop] no se pudo arrancar el agente:", e),
       );
+    } else {
+      logger.info("Sin emparejar. El agente no arranca hasta introducir un código.");
     }
   });
 

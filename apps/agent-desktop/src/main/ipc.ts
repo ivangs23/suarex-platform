@@ -1,7 +1,9 @@
-import { type BrowserWindow, dialog, ipcMain } from "electron";
+import { writeFileSync } from "node:fs";
+import { app, type BrowserWindow, dialog, ipcMain } from "electron";
 import { getActivity, isAgentRunning, startAgent, stopAgent } from "./agent-runner.js";
 import { PLATFORM_WEB_ORIGIN } from "./baked-config.js";
 import { loadCredentials, saveCredentials } from "./config-store.js";
+import { formatDiagnostics } from "./diagnostics.js";
 import { type PairError, pairDevice } from "./pairing.js";
 import { listLocalPrinters, printTestTicket } from "./printers.js";
 import { realConfigBackend } from "./real-config-backend.js";
@@ -11,13 +13,19 @@ export type PairIpcResult =
   | { ok: true; deviceId: string; tenantId: string }
   | { ok: false; kind: PairError["kind"] };
 
+export type ExportDiagnosticsResult =
+  | { ok: true; path: string }
+  | { ok: false; canceled: true }
+  | { ok: false; error: string };
+
 function isPairError(e: unknown): e is PairError {
   return typeof e === "object" && e !== null && "kind" in e;
 }
 
 /** Registra los canales IPC. El renderer nunca toca Node/Electron directo: todo pasa por
- * estos handlers vía el puente contextBridge del preload. */
-export function registerIpc(getWindow: () => BrowserWindow | null): void {
+ * estos handlers vía el puente contextBridge del preload. `readLog` vuelca el registro en disco
+ * (inyectado desde el sink real) para el diagnóstico exportable. */
+export function registerIpc(getWindow: () => BrowserWindow | null, readLog: () => string): void {
   // Navegación de la barra lateral. El renderer manda solo un NOMBRE de sección; la ruta y
   // el origen salen de `WEB_SECTIONS` y del origen horneado en el build, nunca de una
   // cadena que el renderer pueda componer -- de lo contrario, un XSS en la interfaz local
@@ -107,5 +115,44 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     stopAgent();
     realConfigBackend().write(JSON.stringify({})); // deja el store vacío -> loadCredentials null
     return { ok: true };
+  });
+
+  // Exportar diagnóstico: la app corre oculta en bandeja, así que su registro vive en un
+  // fichero al que el owner no llega solo. Esto lo vuelca -- metadatos, estado de impresión y el
+  // log -- a un fichero de texto que elige, para poder enviárnoslo cuando algo va mal.
+  ipcMain.handle("export-diagnostics", async (): Promise<ExportDiagnosticsResult> => {
+    const creds = loadCredentials(realConfigBackend());
+    const contenido = formatDiagnostics(
+      {
+        generatedAt: new Date().toISOString(),
+        appVersion: app.getVersion(),
+        platform: process.platform,
+        paired: creds !== null,
+        deviceId: creds?.deviceId ?? null,
+        running: isAgentRunning(),
+      },
+      getActivity(),
+      readLog(),
+    );
+
+    // Nombre por defecto sin ':' (inválido en rutas de Windows).
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const win = getWindow();
+    const opciones = {
+      title: "Exportar diagnóstico",
+      defaultPath: `suarex-diagnostico-${stamp}.txt`,
+      filters: [{ name: "Texto", extensions: ["txt"] }],
+    };
+    const { canceled, filePath } = win
+      ? await dialog.showSaveDialog(win, opciones)
+      : await dialog.showSaveDialog(opciones);
+    if (canceled || !filePath) return { ok: false, canceled: true };
+
+    try {
+      writeFileSync(filePath, contenido, "utf8");
+      return { ok: true, path: filePath };
+    } catch (e) {
+      return { ok: false, error: (e as Error).message };
+    }
   });
 }
