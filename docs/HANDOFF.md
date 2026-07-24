@@ -5,8 +5,12 @@ Una conversación de Claude no transfiere sola; lee esto + `git log` + `CLAUDE.m
 
 ## Estado
 
-`main` estable. Toda la suite en verde (lint · typecheck · unit · integración · e2e). Sin PRs
-abiertas al cerrar esta sesión.
+`main` estable, suite completa en verde (lint · typecheck · unit · integración 303 · e2e 72). El
+**backlog de código del repaso Electron está COMPLETO** (items 7, 8, 9, 11, 12, 13 + watchdog del
+sistema; ver "Pendiente — código" abajo, todos ✅). Lo único sin ejercitar: el registro real de la
+tarea programada del watchdog, que solo ocurre en un build EMPAQUETADO (`app.isPackaged`), no en
+dev — queda validarlo en un instalador real. `electron-vite build` sí pasa; el `package` completo
+necesita `UPDATE_FEED_URL` (tarea de infra, ver abajo). Sin PRs abiertas.
 
 ### Portado a Windows (Mac -> Windows)
 
