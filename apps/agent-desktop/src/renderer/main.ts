@@ -1,5 +1,5 @@
 import type { AgentActivity } from "../main/agent-activity.js";
-import type { PairIpcResult } from "../main/ipc.js";
+import type { ExportDiagnosticsResult, PairIpcResult } from "../main/ipc.js";
 import type { ShowWebPanelResult } from "../main/web-panel.js";
 import { setupNavigation } from "./navigation.js";
 
@@ -18,6 +18,7 @@ type AgentApi = {
   getStatus(): Promise<AgentStatus>;
   confirmUnpair(): Promise<boolean>;
   unpair(): Promise<{ ok: boolean }>;
+  exportDiagnostics(): Promise<ExportDiagnosticsResult>;
   showSection(section: string): Promise<ShowWebPanelResult>;
   onActivity(cb: (activity: AgentActivity) => void): () => void;
 };
@@ -211,6 +212,21 @@ if (!agent) {
       log("Ticket de prueba enviado. ¿Salió por la impresora?");
     } catch (e) {
       log(`Error al imprimir la prueba: ${(e as Error).message}`);
+    }
+  });
+
+  $("export-diagnostics").addEventListener("click", async () => {
+    try {
+      const r = await agent.exportDiagnostics();
+      if (r.ok) {
+        log(`Diagnóstico guardado en: ${r.path}`);
+      } else if ("canceled" in r) {
+        log("Exportación cancelada.");
+      } else {
+        log(`No se pudo guardar el diagnóstico: ${r.error}`);
+      }
+    } catch (e) {
+      log(`Error al exportar el diagnóstico: ${(e as Error).message}`);
     }
   });
 

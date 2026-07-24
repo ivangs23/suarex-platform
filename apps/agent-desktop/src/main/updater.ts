@@ -14,9 +14,13 @@ const SEIS_HORAS_MS = 6 * 60 * 60 * 1000;
  *
  * No hace nada si no hay feed (dev, o build sin configurar): la app arranca igual, solo que no
  * comprueba actualizaciones. `notify` lo inyecta la cáscara para avisar en español cuando una
- * actualización queda lista, sin que este módulo dependa de la UI.
+ * actualización queda lista, sin que este módulo dependa de la UI. `logError` lleva los fallos
+ * del updater al registro en fichero (además de la consola), para que se vean en el diagnóstico.
  */
-export function startAutoUpdate(notify: (title: string, body: string) => void): void {
+export function startAutoUpdate(
+  notify: (title: string, body: string) => void,
+  logError: (msg: string, err?: unknown) => void,
+): void {
   if (import.meta.env.DEV || !UPDATE_FEED_URL) return;
 
   autoUpdater.setFeedURL({ provider: "generic", url: UPDATE_FEED_URL });
@@ -32,11 +36,11 @@ export function startAutoUpdate(notify: (title: string, body: string) => void): 
   autoUpdater.on("error", (err) => {
     // Un fallo de actualización (feed caído, sin red) no debe afectar a la impresión: se
     // registra y se reintenta en la siguiente comprobación.
-    console.error("[updater]", err);
+    logError("[updater] error", err);
   });
 
   const comprobar = (): void => {
-    autoUpdater.checkForUpdates().catch((err) => console.error("[updater] check falló:", err));
+    autoUpdater.checkForUpdates().catch((err) => logError("[updater] check falló:", err));
   };
   comprobar();
   setInterval(comprobar, SEIS_HORAS_MS);
