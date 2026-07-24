@@ -1,4 +1,4 @@
-import { runAgent } from "@suarex/agent";
+import { runAgent, type SessionStore, signInAndPersistSession } from "@suarex/agent";
 import { registerUsbRawSink } from "@suarex/printing";
 import {
   type ActivityAlerts,
@@ -7,7 +7,6 @@ import {
   reduceActivity,
 } from "./agent-activity.js";
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./baked-config.js";
-import type { StoredCredentials } from "./config-store.js";
 import { loadWinspoolBinding, makeUsbSink } from "./usb-sink-winspool.js";
 
 let stop: (() => void) | null = null;
@@ -43,10 +42,27 @@ export function getActivity(): AgentActivity {
   return activity;
 }
 
-/** Arranca el agente con las credenciales guardadas: registra el sink USB real (solo en
+/**
+ * Login ÚNICO con contraseña que deja la sesión persistida en `store` (con su refresh token) y
+ * descarta la contraseña. Lo llama la cáscara al EMPAREJAR (contraseña que devuelve el pairing) y
+ * al MIGRAR un device viejo (contraseña que aún tenía guardada). Fuera de aquí las URL/anon key
+ * horneadas no salen de este módulo.
+ */
+export async function establishSessionFromPassword(
+  store: SessionStore,
+  email: string,
+  password: string,
+): Promise<void> {
+  await signInAndPersistSession(SUPABASE_URL, SUPABASE_ANON_KEY, store, email, password);
+}
+
+/** Arranca el agente autenticándose con la sesión persistida (refresh token) del `store` --
+ * nunca con la contraseña, que ya no vive en disco (#11). Registra el sink USB real (solo en
  * Windows; en otra plataforma el sink por defecto de `@suarex/printing` ya falla limpio y el
- * agente solo podría imprimir por red) y llama a `runAgent`. Guarda la función de parada. */
-export async function startAgent(creds: StoredCredentials): Promise<void> {
+ * agente solo podría imprimir por red) y llama a `runAgent`. Guarda la función de parada.
+ * Lanza si la sesión no se puede restaurar/renovar (token revocado o caducado) -> la cáscara lo
+ * trata como "hay que re-emparejar". */
+export async function startAgent(store: SessionStore, tenantId: string): Promise<void> {
   // Para un agente ya en marcha antes de arrancar otro (p. ej. re-emparejar sin
   // des-emparejar): sin esto, la función de parada anterior se perdería y quedaría un
   // segundo agente vivo -- subs de Realtime duplicadas y, peor, tickets impresos dos veces.
@@ -59,10 +75,9 @@ export async function startAgent(creds: StoredCredentials): Promise<void> {
     {
       supabaseUrl: SUPABASE_URL,
       anonKey: SUPABASE_ANON_KEY,
-      email: creds.email,
-      password: creds.password,
+      sessionStore: store,
       // Para el canal de Realtime (vía rápida ante un pedido nuevo). El aislamiento lo da RLS.
-      tenantId: creds.tenantId,
+      tenantId,
     },
     {
       appVersion,

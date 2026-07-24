@@ -1,12 +1,20 @@
 import { writeFileSync } from "node:fs";
+import { DEVICE_SESSION_STORAGE_KEY } from "@suarex/agent";
 import { app, type BrowserWindow, dialog, ipcMain } from "electron";
-import { getActivity, isAgentRunning, startAgent, stopAgent } from "./agent-runner.js";
+import {
+  establishSessionFromPassword,
+  getActivity,
+  isAgentRunning,
+  startAgent,
+  stopAgent,
+} from "./agent-runner.js";
 import { PLATFORM_WEB_ORIGIN } from "./baked-config.js";
 import { loadCredentials, saveCredentials } from "./config-store.js";
 import { formatDiagnostics } from "./diagnostics.js";
 import { type PairError, pairDevice } from "./pairing.js";
 import { listLocalPrinters, printTestTicket } from "./printers.js";
 import { realConfigBackend } from "./real-config-backend.js";
+import { realSessionStore } from "./real-session-store.js";
 import { hideWebPanel, isWebSection, type ShowWebPanelResult, showWebPanel } from "./web-panel.js";
 
 export type PairIpcResult =
@@ -63,8 +71,16 @@ export function registerIpc(getWindow: () => BrowserWindow | null, readLog: () =
       if (isPairError(e)) return { ok: false, kind: e.kind };
       throw e;
     }
-    saveCredentials(realConfigBackend(), creds);
-    await startAgent(creds);
+    // Login ÚNICO con la contraseña que devolvió el pairing: deja la sesión (refresh token)
+    // persistida en el almacén cifrado y descarta la contraseña -- NUNCA se guarda en disco (#11).
+    const store = realSessionStore();
+    await establishSessionFromPassword(store, creds.email, creds.password);
+    saveCredentials(realConfigBackend(), {
+      deviceId: creds.deviceId,
+      email: creds.email,
+      tenantId: creds.tenantId,
+    });
+    await startAgent(store, creds.tenantId);
     return { ok: true, deviceId: creds.deviceId, tenantId: creds.tenantId };
   });
 
@@ -114,6 +130,9 @@ export function registerIpc(getWindow: () => BrowserWindow | null, readLog: () =
   ipcMain.handle("unpair", async () => {
     stopAgent();
     realConfigBackend().write(JSON.stringify({})); // deja el store vacío -> loadCredentials null
+    // Borra también la sesión persistida (refresh token): sin esto quedaría en disco una sesión
+    // válida de un device supuestamente des-emparejado.
+    realSessionStore().removeItem(DEVICE_SESSION_STORAGE_KEY);
     return { ok: true };
   });
 

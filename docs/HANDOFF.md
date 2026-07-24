@@ -65,7 +65,11 @@ Priorizado por valor/coste. Detalle en el hilo; resumen:
 - ✅ **8. Realtime** además del polling de 4 s — HECHO. `runAgent` se suscribe a `orders`
   (`subscribeToOrders`) y dispara un tick al instante ante un pedido `paid`; el poll sigue de
   respaldo (at-least-once). Guard `running`/`pending` coalesce ráfagas.
-- **11. Guardar refresh token** en vez de la contraseña (menor superficie si se rompe DPAPI).
+- ✅ **11. Guardar refresh token** en vez de la contraseña — HECHO. El device autentica por sesión
+  persistida (refresh token cifrado DPAPI en `device-session.enc`, vía `persistSession`+storage de
+  supabase-js, que re-persiste la rotación solo); la contraseña ya no toca disco. Login único al
+  emparejar/migrar. Devices viejos se auto-migran en el primer arranque. Si el token se revoca
+  (`resetDevice`→`deleteUser`) o caduca → re-emparejar.
 - **12. Estado de impresoras de red** en el desktop (probar conexión, no solo test USB).
 - ✅ **13. Query duplicada por tick** — HECHO. `runAgentTick` lee `printers` UNA vez y la comparte
   entre `selectUnprintedOrders` y `resolvePrintersFromRows`; las 4 lecturas del tick van en

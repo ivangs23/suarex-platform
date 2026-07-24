@@ -2,18 +2,20 @@ import { join } from "node:path";
 import { app, BrowserWindow, Menu, Notification, nativeImage, Tray } from "electron";
 import { type ActivityAlerts, type AgentActivity, INITIAL_ACTIVITY } from "./agent-activity.js";
 import {
+  establishSessionFromPassword,
   onAgentActivity,
   setAppVersion,
   setPrintersProvider,
   startAgent,
   stopAgent,
 } from "./agent-runner.js";
-import { loadCredentials } from "./config-store.js";
+import { loadCredentials, saveCredentials } from "./config-store.js";
 import { registerIpc } from "./ipc.js";
 import { createLogger, type Logger } from "./logger.js";
 import { listLocalPrinters } from "./printers.js";
 import { realConfigBackend } from "./real-config-backend.js";
 import { realLogSink } from "./real-log-backend.js";
+import { realSessionStore } from "./real-session-store.js";
 import { TRAY_ICON_DATA_URL } from "./tray-icon.js";
 import { startAutoUpdate } from "./updater.js";
 import { destroyWebPanel, layoutWebPanel } from "./web-panel.js";
@@ -158,10 +160,28 @@ if (!gotLock) {
     // Si ya está emparejado, arranca el agente al iniciar (imprime sin abrir la ventana).
     const creds = loadCredentials(realConfigBackend());
     if (creds) {
-      logger.info(`Emparejado (dispositivo ${creds.deviceId}). Arrancando el agente…`);
-      await startAgent(creds).catch((e) =>
-        reportMain("[agent-desktop] no se pudo arrancar el agente:", e),
-      );
+      const store = realSessionStore();
+      try {
+        if (creds.legacyPassword) {
+          // Migración #11: este device se emparejó con una versión que guardaba la contraseña.
+          // Un login único deja la sesión (refresh token) en el almacén cifrado, y reescribimos
+          // la metadata SIN la contraseña. Transparente: el owner no re-empareja.
+          logger.info(`Migrando dispositivo ${creds.deviceId} a sesión por refresh token…`);
+          await establishSessionFromPassword(store, creds.email, creds.legacyPassword);
+          saveCredentials(realConfigBackend(), {
+            deviceId: creds.deviceId,
+            email: creds.email,
+            tenantId: creds.tenantId,
+          });
+        }
+        logger.info(`Emparejado (dispositivo ${creds.deviceId}). Arrancando el agente…`);
+        await startAgent(store, creds.tenantId);
+      } catch (e) {
+        // La sesión no se pudo restaurar/renovar (token revocado o caducado), o falló la
+        // migración. No se borra la metadata: la ventana muestra "Emparejado, agente parado" y el
+        // owner puede re-emparejar con un código nuevo.
+        reportMain("[agent-desktop] no se pudo arrancar el agente (¿re-emparejar?):", e);
+      }
     } else {
       logger.info("Sin emparejar. El agente no arranca hasta introducir un código.");
     }
