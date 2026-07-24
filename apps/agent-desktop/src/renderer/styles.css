@@ -395,6 +395,14 @@ button:disabled {
   display: none;
 }
 
+/* Variante roja: algo que exige atención ahora (impresora caída, sin conexión), frente al
+   aviso ámbar informativo. */
+.note.danger {
+  background: color-mix(in srgb, var(--danger) 12%, var(--surface, transparent));
+  border-color: color-mix(in srgb, var(--danger) 40%, transparent);
+  color: var(--danger);
+}
+
 /* --- Registro ------------------------------------------------------------------------ */
 
 .log {
