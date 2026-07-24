@@ -231,6 +231,17 @@ export function devicesTableForPairing() {
 }
 
 /**
+ * Resolución del token de totem, ANTES de conocer el tenant. Igual que
+ * `tablesTableForTokenResolution` para la mesa: un `SELECT ... WHERE totem_token = $1` de una
+ * sola fila conocida, no un barrido. El token es la autoridad del canal kiosko (la ventana del
+ * totem lo lleva en la URL), así que la búsqueda no puede pasar por `tenantScoped` (no hay tenant
+ * todavía). No es un escape hatch general.
+ */
+export function devicesTableForTotemToken() {
+  return serviceClient().from("devices");
+}
+
+/**
  * SEXTA EXENCIÓN DELIBERADA. El emparejamiento de un dispositivo crea su propia cuenta de
  * Supabase Auth (la cuenta de servicio no humana del tenant) antes de que exista ningún
  * `tenantId` conocido para filtrar nada -- no hay tabla que filtrar aquí, es la API de

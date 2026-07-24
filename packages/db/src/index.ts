@@ -63,6 +63,8 @@ export { createTable, deleteTable, listTables, updateTable } from "./admin-table
 export { getCategories, getProducts } from "./catalog.js";
 export type { PairDeviceResult } from "./devices.js";
 export { pairDevice } from "./devices.js";
+export type { TotemEntry } from "./kiosko-entry.js";
+export { findDeviceByTotemToken } from "./kiosko-entry.js";
 export type { TableMenu } from "./menu.js";
 export { loadTableMenu } from "./menu.js";
 export type { MarkPaidOutcome } from "./orders.js";
