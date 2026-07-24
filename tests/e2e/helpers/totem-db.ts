@@ -57,6 +57,55 @@ export async function deleteDevice(deviceId: string): Promise<void> {
   if (error) throw error;
 }
 
+/** Siembra un device NORMAL (rol agente, sin totem) para probar que el panel activa el kiosko. */
+export async function seedPlainDevice(tenantSlug: string): Promise<{ deviceId: string }> {
+  const { data: tenant } = await admin.from("tenants").select("id").eq("slug", tenantSlug).single();
+  const { data: venue } = await admin
+    .from("venues")
+    .select("id")
+    .eq("tenant_id", tenant?.id as string)
+    .eq("is_default", true)
+    .single();
+  const { data, error } = await admin
+    .from("devices")
+    .insert({
+      tenant_id: tenant?.id as string,
+      venue_id: venue?.id as string,
+      name: "Dispositivo e2e",
+      roles: ["agente"],
+    })
+    .select("id")
+    .single();
+  if (error) throw error;
+  return { deviceId: data.id as string };
+}
+
+/** Roles + pinpad de un device, para comprobar lo que el panel escribió. */
+export async function deviceRolesAndPinpad(
+  deviceId: string,
+): Promise<{ roles: string[]; pinpadId: string | null }> {
+  const { data, error } = await admin
+    .from("devices")
+    .select("roles, pinpad_id")
+    .eq("id", deviceId)
+    .single();
+  if (error) throw error;
+  return {
+    roles: (data.roles as string[]) ?? [],
+    pinpadId: (data.pinpad_id as string | null) ?? null,
+  };
+}
+
+/** Borra la config Paytef de un tenant (limpieza tras el e2e del panel de pagos). */
+export async function deletePaymentConfig(tenantSlug: string): Promise<void> {
+  const { data: tenant } = await admin.from("tenants").select("id").eq("slug", tenantSlug).single();
+  const { error } = await admin
+    .from("tenant_payment_config")
+    .delete()
+    .eq("tenant_id", tenant?.id as string);
+  if (error) throw error;
+}
+
 export type KioskoOrderInfo = {
   channel: string;
   tableLabel: string | null;

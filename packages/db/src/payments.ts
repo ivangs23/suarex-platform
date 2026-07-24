@@ -44,26 +44,85 @@ export async function getPaymentConfigForDevice(
   };
 }
 
+/** Config Paytef tal como la ve el PANEL (owner/admin): sin el secreto, solo si está puesto. El
+ *  secreto nunca viaja al navegador; para cambiarlo se vuelve a teclear. `null` si no hay config. */
+export type PaymentConfigForManager = {
+  accessKey: string;
+  companyId: string | null;
+  mock: boolean;
+  hasSecret: boolean;
+};
+
+/**
+ * Lee la config Paytef del tenant para el panel (owner/admin; la RLS `tenant_payment_config_manage`
+ * se lo permite, al device no). NO devuelve `secret_key`: la clave secreta no baja al navegador --
+ * solo se informa de si hay una guardada. `null` si el tenant aún no tiene config.
+ */
+export async function getPaymentConfigForManager(
+  tenantId: string,
+): Promise<PaymentConfigForManager | null> {
+  const { data, error } = await tenantScoped("tenant_payment_config", tenantId)
+    .select("access_key, company_id, mock, secret_key")
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  return {
+    accessKey: (data.access_key as string) ?? "",
+    companyId: (data.company_id as string | null) ?? null,
+    mock: (data.mock as boolean) ?? true,
+    hasSecret: typeof data.secret_key === "string" && data.secret_key.length > 0,
+  };
+}
+
+/** No hay config Paytef todavía y no se dio la clave secreta: no se puede crear una a medias. */
+export class MissingPaymentSecretError extends Error {
+  constructor() {
+    super("Falta la clave secreta de Paytef");
+    this.name = "MissingPaymentSecretError";
+  }
+}
+
 /**
  * Alta/edición de la config Paytef del tenant (la gestiona owner/admin desde el panel; el rol se
- * verifica en la Server Action). Upsert por `tenant_id`. No devuelve el secreto.
+ * verifica en la Server Action). Nunca devuelve el secreto.
+ *
+ * `secretKey` es OPCIONAL al editar: si viene vacío y ya hay una config, se CONSERVA la clave
+ * guardada (no baja al navegador, así que no se puede reenviar; dejarla en blanco = no cambiarla).
+ * En el primer alta sí es obligatoria -- sin ella lanza `MissingPaymentSecretError`.
  */
 export async function setPaymentConfig(
   tenantId: string,
-  input: { accessKey: string; secretKey: string; companyId?: string | null; mock?: boolean },
+  input: {
+    accessKey: string;
+    secretKey?: string | null;
+    companyId?: string | null;
+    mock?: boolean;
+  },
 ): Promise<void> {
-  const { error } = await tenantScoped("tenant_payment_config", tenantId).upsert(
-    {
-      provider: "paytef",
-      access_key: input.accessKey,
-      secret_key: input.secretKey,
-      company_id: input.companyId ?? null,
-      mock: input.mock ?? true,
-      updated_at: new Date().toISOString(),
-    },
-    "tenant_id",
-  );
+  const common = {
+    provider: "paytef",
+    access_key: input.accessKey,
+    company_id: input.companyId ?? null,
+    mock: input.mock ?? true,
+    updated_at: new Date().toISOString(),
+  };
+
+  if (input.secretKey) {
+    const { error } = await tenantScoped("tenant_payment_config", tenantId).upsert(
+      { ...common, secret_key: input.secretKey },
+      "tenant_id",
+    );
+    if (error) throw error;
+    return;
+  }
+
+  // Sin secreto nuevo: se actualizan el resto de campos y se conserva el secreto existente. Si no
+  // había fila (update afecta 0 filas), es un primer alta sin clave: se rechaza.
+  const { data, error } = await tenantScoped("tenant_payment_config", tenantId)
+    .update(common)
+    .select("tenant_id");
   if (error) throw error;
+  if (!data || data.length === 0) throw new MissingPaymentSecretError();
 }
 
 /** Pedido kiosko leído por el device para cobrarlo: importe en céntimos (del SERVIDOR, no del

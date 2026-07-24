@@ -1,4 +1,9 @@
-import { getPaymentConfigForDevice, setPaymentConfig } from "@suarex/db";
+import {
+  getPaymentConfigForDevice,
+  getPaymentConfigForManager,
+  MissingPaymentSecretError,
+  setPaymentConfig,
+} from "@suarex/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   admin,
@@ -123,5 +128,66 @@ describe("config de pago del totem (#totem fase 1)", () => {
 
     await deleteMembershipFixtureUser(userId);
     await deleteTenantFixture(otro);
+  });
+});
+
+describe("config de pago para el PANEL (owner/admin, #totem fase 6)", () => {
+  it("getPaymentConfigForManager devuelve la config SIN el secreto, solo si lo hay", async () => {
+    const t = await createTenantFixture(`pay-mgr-${nonce()}`);
+    try {
+      expect(await getPaymentConfigForManager(t.tenantId)).toBeNull();
+
+      await setPaymentConfig(t.tenantId, {
+        accessKey: "AK1",
+        secretKey: "sk-oculta",
+        companyId: "42",
+        mock: false,
+      });
+      const cfg = await getPaymentConfigForManager(t.tenantId);
+      expect(cfg).toEqual({ accessKey: "AK1", companyId: "42", mock: false, hasSecret: true });
+      // El tipo no expone el secreto; se comprueba que tampoco viene por sorpresa en el objeto.
+      expect(JSON.stringify(cfg)).not.toContain("sk-oculta");
+    } finally {
+      await deleteTenantFixture(t);
+    }
+  });
+
+  it("editar con el secreto en blanco CONSERVA el secreto guardado", async () => {
+    const t = await createTenantFixture(`pay-keep-${nonce()}`);
+    try {
+      await setPaymentConfig(t.tenantId, {
+        accessKey: "AK1",
+        secretKey: "sk-original",
+        companyId: "1",
+        mock: true,
+      });
+      // Segundo guardado sin secreto: cambia lo demás, conserva la clave.
+      await setPaymentConfig(t.tenantId, { accessKey: "AK2", companyId: "2", mock: false });
+
+      const { data } = await admin
+        .from("tenant_payment_config")
+        .select("access_key, company_id, mock, secret_key")
+        .eq("tenant_id", t.tenantId)
+        .single();
+      expect(data?.access_key).toBe("AK2");
+      expect(data?.company_id).toBe("2");
+      expect(data?.mock).toBe(false);
+      expect(data?.secret_key).toBe("sk-original"); // no se pisó
+    } finally {
+      await deleteTenantFixture(t);
+    }
+  });
+
+  it("el PRIMER alta sin secreto se rechaza (MissingPaymentSecretError)", async () => {
+    const t = await createTenantFixture(`pay-nosec-${nonce()}`);
+    try {
+      await expect(
+        setPaymentConfig(t.tenantId, { accessKey: "AK1", mock: true }),
+      ).rejects.toBeInstanceOf(MissingPaymentSecretError);
+      // Y no dejó ninguna fila a medias.
+      expect(await getPaymentConfigForManager(t.tenantId)).toBeNull();
+    } finally {
+      await deleteTenantFixture(t);
+    }
   });
 });
