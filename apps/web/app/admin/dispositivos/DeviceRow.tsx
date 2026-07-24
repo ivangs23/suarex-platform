@@ -3,7 +3,13 @@
 import type { DeviceRow as DeviceRecord } from "@suarex/db";
 import { useActionState } from "react";
 import { ConfirmDeleteForm } from "../catalogo/ConfirmDeleteForm";
-import { deleteDeviceAction, regeneratePairingCodeAction, resetDeviceAction } from "./actions";
+import {
+  deleteDeviceAction,
+  regeneratePairingCodeAction,
+  resetDeviceAction,
+  setDevicePinpadAction,
+  setDeviceRolesAction,
+} from "./actions";
 import { PairingCodeView } from "./PairingCodeView";
 
 type PairingState = { pairingCode: string; expiresAt: string } | null;
@@ -52,6 +58,54 @@ export function DeviceRow({ device, venueName }: { device: DeviceRecord; venueNa
       <h3>{device.name}</h3>
       <p>Local: {venueName}</p>
       <p>Estado: {formatStatus(device)}</p>
+
+      {/* Roles: `agente` imprime; `kiosko` activa el totem (carta + cobro por datáfono). */}
+      <form action={setDeviceRolesAction} data-testid="device-roles-form">
+        <input type="hidden" name="device_id" value={device.id} />
+        <fieldset>
+          <legend>Roles</legend>
+          <label>
+            <input
+              type="checkbox"
+              name="role_agente"
+              value="true"
+              defaultChecked={device.roles.includes("agente")}
+            />
+            Agente (impresión)
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              name="role_kiosko"
+              value="true"
+              defaultChecked={device.roles.includes("kiosko")}
+              data-testid="device-role-kiosko"
+            />
+            Kiosko (totem)
+          </label>
+        </fieldset>
+        <button type="submit" data-testid="device-roles-save">
+          Guardar roles
+        </button>
+      </form>
+
+      {/* El pinpad de Paytef solo tiene sentido en un totem: se muestra si el device es kiosko. */}
+      {device.roles.includes("kiosko") ? (
+        <form action={setDevicePinpadAction} data-testid="device-pinpad-form">
+          <input type="hidden" name="device_id" value={device.id} />
+          <label htmlFor={`pinpad-${device.id}`}>Pinpad Paytef (datáfono del totem)</label>
+          <input
+            id={`pinpad-${device.id}`}
+            name="pinpad_id"
+            defaultValue={device.pinpadId ?? ""}
+            autoComplete="off"
+            data-testid="device-pinpad-input"
+          />
+          <button type="submit" data-testid="device-pinpad-save">
+            Guardar pinpad
+          </button>
+        </form>
+      ) : null}
 
       {pairing ? (
         <PairingCodeView pairingCode={pairing.pairingCode} expiresAt={pairing.expiresAt} />

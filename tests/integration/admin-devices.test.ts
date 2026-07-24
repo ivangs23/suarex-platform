@@ -1,4 +1,10 @@
-import { createDevice, listDevices, pairDevice, regeneratePairingCode } from "@suarex/db";
+import {
+  createDevice,
+  listDevices,
+  pairDevice,
+  regeneratePairingCode,
+  setDeviceRoles,
+} from "@suarex/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   admin,
@@ -161,5 +167,29 @@ describe("listDevices", () => {
     // Ningún valor devuelto por listDevices contiene el código en claro, bajo ningún
     // nombre de campo.
     expect(JSON.stringify(row)).not.toContain(created.pairingCode);
+  });
+});
+
+describe("setDeviceRoles (#totem fase 6)", () => {
+  it("activa el rol kiosko y lo refleja en listDevices; descarta roles desconocidos", async () => {
+    const created = await createDevice(tenant.tenantId, { venueId, name: `Totem ${nonce()}` });
+
+    // Activa totem (kiosko) conservando agente. Un rol inventado se descarta en la base.
+    await setDeviceRoles(tenant.tenantId, created.id, ["agente", "kiosko", "superusuario"]);
+    const after = (await listDevices(tenant.tenantId)).find((d) => d.id === created.id);
+    expect(after?.roles.sort()).toEqual(["agente", "kiosko"]);
+
+    // Desactivar totem deja solo agente.
+    await setDeviceRoles(tenant.tenantId, created.id, ["agente"]);
+    const off = (await listDevices(tenant.tenantId)).find((d) => d.id === created.id);
+    expect(off?.roles).toEqual(["agente"]);
+  });
+
+  it("un deviceId de otro tenant no cambia nada (acotado por tenant)", async () => {
+    const created = await createDevice(tenant.tenantId, { venueId, name: `Totem ${nonce()}` });
+    // tenantB intenta tocar un device de tenant A: el tenantScoped no casa -> sin efecto.
+    await setDeviceRoles(tenantB.tenantId, created.id, ["kiosko"]);
+    const row = (await listDevices(tenant.tenantId)).find((d) => d.id === created.id);
+    expect(row?.roles).not.toContain("kiosko");
   });
 });

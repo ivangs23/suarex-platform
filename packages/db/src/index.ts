@@ -31,15 +31,18 @@ export {
 export type {
   CreateDeviceInput,
   CreateDeviceResult,
+  DeviceRoleName,
   DeviceRow,
   RegeneratePairingCodeResult,
 } from "./admin-devices.js";
 export {
   createDevice,
+  DEVICE_ROLES,
   deleteDevice,
   listDevices,
   regeneratePairingCode,
   resetDevice,
+  setDeviceRoles,
 } from "./admin-devices.js";
 export type {
   CreatePrinterInput,
@@ -80,9 +83,15 @@ export {
   OrderCartError,
 } from "./orders.js";
 export { checkPairRateLimit } from "./pair-rate-limit.js";
-export type { KioskoOrderForCharge, PaytefConfig } from "./payments.js";
+export type {
+  KioskoOrderForCharge,
+  PaymentConfigForManager,
+  PaytefConfig,
+} from "./payments.js";
 export {
   getPaymentConfigForDevice,
+  getPaymentConfigForManager,
+  MissingPaymentSecretError,
   markKioskoOrderPaid,
   readKioskoOrderForCharge,
   setDevicePinpad,
