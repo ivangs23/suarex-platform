@@ -29,6 +29,7 @@ type Venue = {
   barProductId: string;
   kitchenPrinterId: string;
   barPrinterId: string;
+  reciboPrinterId: string;
 };
 
 async function seedVenueWithPrinters(tenant: TenantFixture, label: string): Promise<Venue> {
@@ -111,6 +112,20 @@ async function seedVenueWithPrinters(tenant: TenantFixture, label: string): Prom
     })
     .select("id")
     .single();
+  // Impresora de RECIBO del totem. En pedidos de QR no es de destino (no los retiene); solo
+  // cuenta para los de canal kiosko. Se siembra en todos los locales para el caso kiosko.
+  const { data: reciboPrinter } = await admin
+    .from("printers")
+    .insert({
+      tenant_id: tenant.tenantId,
+      venue_id: venueId,
+      name: `Recibo ${label}`,
+      connection: { type: "network", host: "127.0.0.1", port: 9102 },
+      destination: "recibo",
+      enabled: true,
+    })
+    .select("id")
+    .single();
 
   return {
     venueId,
@@ -119,6 +134,7 @@ async function seedVenueWithPrinters(tenant: TenantFixture, label: string): Prom
     barProductId: barProduct?.id as string,
     kitchenPrinterId: kitchenPrinter?.id as string,
     barPrinterId: barPrinter?.id as string,
+    reciboPrinterId: reciboPrinter?.id as string,
   };
 }
 
@@ -138,7 +154,7 @@ async function seedVenueWithPrintersFor(
   label: string,
   enabledFor: readonly ("cocina" | "barra")[],
 ): Promise<
-  Omit<Venue, "kitchenPrinterId" | "barPrinterId"> & {
+  Omit<Venue, "kitchenPrinterId" | "barPrinterId" | "reciboPrinterId"> & {
     kitchenPrinterId: string | null;
     barPrinterId: string | null;
   }
@@ -270,6 +286,29 @@ async function createPaidMixedOrder(
       { productId: venue.kitchenProductId, quantity: 1, extraIds: [], notes: null },
       { productId: venue.barProductId, quantity: 1, extraIds: [], notes: null },
     ],
+    taxRate: 0.1,
+  });
+  const { error } = await admin
+    .from("orders")
+    .update({ status: "paid", paid_at: new Date().toISOString() })
+    .eq("id", order.orderId);
+  if (error) throw error;
+  return order.orderId;
+}
+
+/** Pedido de canal KIOSKO (totem) con una línea de cocina, mesa tecleada, marcado `paid`. Su
+ *  impresora de destino incluye la de recibo, además de la de cocina. */
+async function createPaidKioskoOrder(
+  tenant: TenantFixture,
+  venue: Pick<Venue, "venueId" | "kitchenProductId">,
+): Promise<string> {
+  const order = await createPendingOrder({
+    tenantId: tenant.tenantId,
+    venueId: venue.venueId,
+    tableId: null,
+    tableLabel: "7",
+    channel: "kiosko",
+    lines: [{ productId: venue.kitchenProductId, quantity: 1, extraIds: [], notes: null }],
     taxRate: 0.1,
   });
   const { error } = await admin
@@ -673,6 +712,32 @@ describe("unprintedPaidOrders / reservePrinted — acuerdo SQL/TS en el mapeo es
       await admin.from("orders").select("printed_at").eq("id", orderId).single()
     ).data;
     expect(rowAfterFull?.printed_at).not.toBeNull();
+  });
+
+  it("un pedido kiosko no queda impreso hasta que TAMBIÉN se cubre la impresora de recibo", async () => {
+    // La regla del recibo (canal kiosko -> el recibo es de destino) vive en TS (`targetPrinterIds`)
+    // y en SQL (`reserve_printed`, 20260724000005_recibo_printer.sql). Este caso las ejerce a la
+    // vez: con la comanda de cocina cubierta pero el recibo no, las dos deben seguir en "pendiente".
+    const orderId = await createPaidKioskoOrder(tenant, venue);
+
+    // Reserva solo la comanda de cocina.
+    await reservePrinted(
+      tenant.tenantId,
+      orderId,
+      venue.kitchenPrinterId,
+      new Date().toISOString(),
+    );
+    expect((await unprintedPaidOrders(tenant.tenantId)).some((o) => o.id === orderId)).toBe(true);
+    const midRow = (await admin.from("orders").select("printed_at").eq("id", orderId).single())
+      .data;
+    expect(midRow?.printed_at).toBeNull(); // SQL: falta el recibo
+
+    // Ahora el recibo: las dos implementaciones pasan a "completo".
+    await reservePrinted(tenant.tenantId, orderId, venue.reciboPrinterId, new Date().toISOString());
+    expect((await unprintedPaidOrders(tenant.tenantId)).some((o) => o.id === orderId)).toBe(false);
+    const fullRow = (await admin.from("orders").select("printed_at").eq("id", orderId).single())
+      .data;
+    expect(fullRow?.printed_at).not.toBeNull();
   });
 });
 

@@ -24,6 +24,12 @@ export function renderEscPos(lines: TicketLine[]): Buffer {
       printer.println(line.text);
       printer.setTextSize(0, 0);
       printer.bold(false);
+    } else if (line.kind === "row") {
+      // Dos columnas alineadas al ancho REAL de la impresora: `leftRight` calcula el relleno
+      // solo, así que el recibo no tiene que saber si el papel es de 58 o de 80 mm.
+      printer.bold(Boolean(line.bold));
+      printer.leftRight(line.left, line.right);
+      printer.bold(false);
     } else if (line.kind === "divider") {
       printer.drawLine();
     } else if (line.kind === "newline") {

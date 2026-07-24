@@ -1,6 +1,6 @@
 import { tenantScoped } from "./client.js";
 
-export type PrinterDestination = "cocina" | "barra" | "all";
+export type PrinterDestination = "cocina" | "barra" | "all" | "recibo";
 
 /**
  * Conexión de una impresora: RED (`type: "network"`, host + puerto TCP directo al

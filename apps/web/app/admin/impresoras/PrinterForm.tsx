@@ -101,6 +101,7 @@ export function PrinterForm({ venueId, devices }: { venueId: string; devices: De
         <option value="cocina">Cocina</option>
         <option value="barra">Barra</option>
         <option value="all">Todos</option>
+        <option value="recibo">Recibo (totem)</option>
       </select>
 
       <button type="submit">Crear impresora</button>
