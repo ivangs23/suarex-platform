@@ -26,7 +26,9 @@ const bakedEnv = {
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin({ exclude: ["@suarex/agent", "@suarex/printing"] })],
+    plugins: [
+      externalizeDepsPlugin({ exclude: ["@suarex/agent", "@suarex/printing", "@suarex/db"] }),
+    ],
     define: bakedEnv,
     build: { rollupOptions: { external: ["koffi"] } },
   },
@@ -37,8 +39,15 @@ export default defineConfig({
     // lo emitía como `index.mjs`: Electron no encontraba el fichero, NO avisaba de nada, y
     // la ventana se quedaba sin `window.agent` -- con la interfaz aparentemente bien pero
     // sin ningún botón operativo. Un fallo silencioso que solo se ve al usar la app.
+    //
+    // DOS preloads: `index` (panel del agente, `window.agent`) y `totem` (ventana kiosko,
+    // `window.totem`). Cada ventana referencia el suyo por nombre (`../preload/<name>.js`).
     build: {
       rollupOptions: {
+        input: {
+          index: "src/preload/index.ts",
+          totem: "src/preload/totem.ts",
+        },
         output: { entryFileNames: "[name].js", format: "cjs" },
       },
     },

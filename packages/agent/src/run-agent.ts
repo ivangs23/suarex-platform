@@ -414,12 +414,16 @@ export async function runAgent(
     },
     // Reusa el cliente ya autenticado del agente para el diagnóstico manual de red (#12).
     probeNetworkPrinters: () => probeNetworkPrinters(client),
+    client,
   };
 }
 
-/** Lo que devuelve `runAgent`: parar el agente, y sondear las impresoras de red bajo demanda
- *  (con el cliente ya autenticado del agente). */
+/** Lo que devuelve `runAgent`: parar el agente, sondear las impresoras de red bajo demanda, y el
+ *  CLIENTE ya autenticado del device. El totem lo reutiliza para cobrar (una sola sesión, un solo
+ *  bucle de refresh: dos clientes sobre el mismo almacén se pisarían la rotación del refresh
+ *  token). Es el mismo cliente que usa el tick de impresión. */
 export type AgentHandle = {
   stop: () => void;
   probeNetworkPrinters: () => Promise<NetworkPrinterProbe[]>;
+  client: SupabaseClient;
 };
