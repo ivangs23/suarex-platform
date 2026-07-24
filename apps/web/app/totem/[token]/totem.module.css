@@ -1,0 +1,253 @@
+/*
+ * ENVOLTORIO DEL TOTEM. Pantalla completa, pensado para tocar de pie: objetivos grandes, texto
+ * grande, un solo foco por pantalla. Se pinta con la marca del cliente a través de las variables
+ * `--color-*` y `--font-*` que el layout raíz inyecta por tenant -- aquí no hay ni un color a
+ * pelo, así que el mismo componente sirve para todos y solo cambia el aspecto.
+ */
+
+.overlay,
+.overlayHero {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(1.5rem, 4vh, 3rem);
+  padding: clamp(1.5rem, 5vw, 4rem);
+  text-align: center;
+  background: var(--color-bg);
+  color: var(--color-fg);
+  overflow-y: auto;
+}
+
+/* Con foto de bienvenida configurada, la marca se lee sobre un velo oscuro para que el nombre y
+   el botón destaquen sin depender del color exacto de la imagen. */
+.overlayHero {
+  background:
+    linear-gradient(
+      color-mix(in oklab, black 45%, transparent),
+      color-mix(in oklab, black 45%, transparent)
+    ),
+    var(--color-primary);
+  color: #f6f4ef;
+}
+
+.brand {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(2rem, 6vw, 3.75rem);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: inherit;
+}
+
+.title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: clamp(1.5rem, 4vw, 2.5rem);
+  line-height: 1.1;
+  margin: 0;
+}
+
+.subtitle {
+  font-size: clamp(1rem, 2.5vw, 1.375rem);
+  color: color-mix(in oklab, var(--color-fg) 72%, var(--color-bg));
+  margin: 0;
+  max-width: 40ch;
+}
+
+.overlayHero .subtitle {
+  color: color-mix(in oklab, #f6f4ef 82%, transparent);
+}
+
+/* La fila de acciones: la principal a la derecha, la de volver a la izquierda y más discreta. */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  justify-content: center;
+  width: min(100%, 34rem);
+}
+
+.bigButton {
+  flex: 1 1 auto;
+  min-height: 4.5rem;
+  padding: 0 clamp(1.5rem, 4vw, 3rem);
+  border: none;
+  border-radius: 1rem;
+  background: var(--color-primary);
+  color: var(--color-bg);
+  font-family: var(--font-display);
+  font-size: clamp(1.125rem, 3vw, 1.5rem);
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    filter 180ms ease;
+}
+
+.bigButton:hover {
+  filter: brightness(1.06);
+}
+
+.bigButton:active {
+  transform: scale(0.98);
+}
+
+.bigButton:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.ghostButton {
+  flex: 0 1 auto;
+  min-height: 4.5rem;
+  padding: 0 clamp(1.25rem, 3vw, 2.25rem);
+  border: 2px solid color-mix(in oklab, var(--color-fg) 25%, transparent);
+  border-radius: 1rem;
+  background: transparent;
+  color: inherit;
+  font-family: var(--font-display);
+  font-size: clamp(1rem, 2.5vw, 1.25rem);
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 180ms ease;
+}
+
+.ghostButton:hover {
+  border-color: color-mix(in oklab, var(--color-fg) 45%, transparent);
+}
+
+/* PARA LLEVAR / EN MESA: dos objetivos enormes, uno al lado del otro (o apilados en estrecho). */
+.choiceGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: clamp(1rem, 3vw, 2rem);
+  width: min(100%, 44rem);
+}
+
+@media (max-width: 30rem) {
+  .choiceGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.choice {
+  min-height: clamp(9rem, 30vh, 15rem);
+  border: 2px solid color-mix(in oklab, var(--color-fg) 14%, transparent);
+  border-radius: 1.25rem;
+  background: color-mix(in oklab, var(--color-primary) 8%, var(--color-bg));
+  color: var(--color-fg);
+  font-family: var(--font-display);
+  font-size: clamp(1.25rem, 3.5vw, 2rem);
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 180ms ease;
+}
+
+.choice:hover {
+  border-color: var(--color-primary);
+}
+
+.choice:active {
+  transform: scale(0.98);
+}
+
+/* TECLADO de la mesa. */
+.display {
+  font-family: var(--font-display);
+  font-size: clamp(2.5rem, 9vw, 4.5rem);
+  font-weight: 700;
+  line-height: 1;
+  min-height: 4.5rem;
+  margin: 0;
+  color: var(--color-primary);
+}
+
+.keypad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: clamp(0.5rem, 2vw, 1rem);
+  width: min(100%, 22rem);
+}
+
+.key {
+  aspect-ratio: 3 / 2;
+  border: 2px solid color-mix(in oklab, var(--color-fg) 14%, transparent);
+  border-radius: 0.875rem;
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-family: var(--font-display);
+  font-size: clamp(1.5rem, 5vw, 2.25rem);
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    transform 120ms ease,
+    background-color 120ms ease;
+}
+
+.key:hover {
+  background: color-mix(in oklab, var(--color-primary) 10%, var(--color-bg));
+}
+
+.key:active {
+  transform: scale(0.96);
+}
+
+/* PAGO. */
+.payTotal {
+  font-family: var(--font-display);
+  font-size: clamp(2.5rem, 8vw, 4rem);
+  font-weight: 700;
+  line-height: 1;
+  margin: 0;
+  color: var(--color-primary);
+}
+
+.spinner {
+  width: clamp(3rem, 8vw, 4.5rem);
+  height: clamp(3rem, 8vw, 4.5rem);
+  border-radius: 50%;
+  border: 4px solid color-mix(in oklab, var(--color-fg) 18%, transparent);
+  border-top-color: var(--color-primary);
+  animation: totem-spin 800ms linear infinite;
+}
+
+@keyframes totem-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation-duration: 2s;
+  }
+  .bigButton,
+  .choice,
+  .key {
+    transition: none;
+  }
+}
+
+/* RECOGIDA. */
+.pickup {
+  font-family: var(--font-display);
+  font-size: clamp(3rem, 12vw, 6rem);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  margin: 0;
+  color: var(--color-primary);
+}
+
+.error {
+  margin: 0;
+  max-width: 40ch;
+  font-size: clamp(1rem, 2.5vw, 1.25rem);
+  color: #b3261e;
+}

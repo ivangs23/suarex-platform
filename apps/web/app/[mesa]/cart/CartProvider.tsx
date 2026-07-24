@@ -71,8 +71,16 @@ type CartState = {
    * confirma si Stripe.js se inicializa contra esa misma cuenta.
    */
   pago: { clientSecret: string; publicToken: string; connectedAccount: string | null } | null;
+  /**
+   * Cobro por Paytef en curso (canal kiosko / totem), o `null`. El totem no usa Stripe: el
+   * pedido se crea por `/api/kiosko/orders` y el cobro lo hace el agente-desktop por el datáfono
+   * (`window.totem.pay`). Aquí solo viaja lo que la pantalla de pago necesita.
+   */
+  paytefPago: { orderId: string; publicToken: string; totalCents: number } | null;
   /** El comensal cancela el cobro y vuelve a su pedido, sin haber pagado. */
   cancelarPago: () => void;
+  /** Vacía el carrito. Lo usa el totem al arrancar un pedido nuevo tras cobrar el anterior. */
+  clearCart: () => void;
   checkout: () => void;
 };
 
@@ -111,6 +119,7 @@ export function CartProvider({
   currency,
   canOrder,
   strings,
+  totem,
 }: {
   children: ReactNode;
   locale: string;
@@ -118,12 +127,16 @@ export function CartProvider({
   /** Solo se puede pedir habiendo escaneado el QR de la mesa (ver `lib/mesa-cookie.ts`). */
   canOrder: boolean;
   strings: Strings;
+  /** Presente en el modo TOTEM (canal kiosko): el pedido se crea por `/api/kiosko/orders` con
+   *  este token y etiqueta de mesa, y se paga por Paytef -- no por Stripe. Ausente en el QR. */
+  totem?: { token: string; tableLabel: string | null };
 }) {
   const [lines, setLines] = useState<CartLine[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
   const [pago, setPago] = useState<CartState["pago"]>(null);
+  const [paytefPago, setPaytefPago] = useState<CartState["paytefPago"]>(null);
 
   /* EL CARRITO SOBREVIVE A LA NAVEGACIÓN. La carta se navega por niveles con enlaces
      normales, así que cada categoría es una carga de página nueva y el estado de React se
@@ -223,20 +236,57 @@ export function CartProvider({
     setError(null);
     setEnviando(true);
 
+    const linePayload = lines.map((line) => ({
+      productId: line.product.id,
+      quantity: line.quantity,
+      extraIds: line.extraIds,
+      notes: line.notes,
+    }));
+
+    // MODO TOTEM: el pedido se crea por su propia ruta (autoridad = el token del totem, no la
+    // cookie de mesa) y el cobro NO es Stripe: se pasa a la pantalla de pago Paytef.
+    if (totem) {
+      try {
+        const response = await fetch("/api/kiosko/orders", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            token: totem.token,
+            tableLabel: totem.tableLabel,
+            lines: linePayload,
+          }),
+        });
+        const payload = (await response.json()) as {
+          error?: string;
+          orderId?: string;
+          publicToken?: string;
+          totalCents?: number;
+        };
+        if (!response.ok || !payload.orderId || !payload.publicToken) {
+          setError(payload.error ?? strings.orderError);
+          setEnviando(false);
+          return;
+        }
+        setEnviando(false);
+        setPaytefPago({
+          orderId: payload.orderId,
+          publicToken: payload.publicToken,
+          totalCents: payload.totalCents ?? totalCents,
+        });
+      } catch {
+        setError(strings.orderError);
+        setEnviando(false);
+      }
+      return;
+    }
+
     try {
       // Sin `tableToken`: la mesa la pone el servidor desde la cookie httpOnly del QR, así
       // que este navegador no puede pedir para una mesa que no sea la suya.
       const response = await fetch("/api/orders", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          lines: lines.map((line) => ({
-            productId: line.product.id,
-            quantity: line.quantity,
-            extraIds: line.extraIds,
-            notes: line.notes,
-          })),
-        }),
+        body: JSON.stringify({ lines: linePayload }),
       });
 
       const payload = (await response.json()) as {
@@ -264,12 +314,15 @@ export function CartProvider({
       setError(strings.orderError);
       setEnviando(false);
     }
-  }, [lines, strings]);
+  }, [lines, strings, totem, totalCents]);
 
   const cancelarPago = useCallback(() => {
     setPago(null);
+    setPaytefPago(null);
     setError(null);
   }, []);
+
+  const clearCart = useCallback(() => setLines([]), []);
 
   const value = useMemo<CartState>(
     () => ({
@@ -288,7 +341,9 @@ export function CartProvider({
       openPanel: abrirPanel,
       closePanel: cerrarPanel,
       pago,
+      paytefPago,
       cancelarPago,
+      clearCart,
       checkout,
     }),
     [
@@ -307,7 +362,9 @@ export function CartProvider({
       abrirPanel,
       cerrarPanel,
       pago,
+      paytefPago,
       cancelarPago,
+      clearCart,
       checkout,
     ],
   );

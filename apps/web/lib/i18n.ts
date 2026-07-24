@@ -129,6 +129,25 @@ export type Strings = {
   receiptPrint: string;
   receiptDownload: string;
   backToMenu: string;
+  // Modo totem (canal kiosko).
+  totemStart: string;
+  totemTakeaway: string;
+  totemDineIn: string;
+  totemEnterTable: string;
+  totemTableNumber: string;
+  totemNext: string;
+  totemBack: string;
+  totemDelete: string;
+  totemPayAtTerminal: string;
+  totemFollowTerminal: string;
+  totemPaying: string;
+  totemApproved: string;
+  totemDeclined: string;
+  totemRetry: string;
+  totemCollect: string;
+  totemPickupNumber: string;
+  totemNewOrder: string;
+  totemCancel: string;
 };
 
 const ES: Strings = {
@@ -177,6 +196,24 @@ const ES: Strings = {
   receiptPrint: "Imprimir",
   receiptDownload: "Descargar recibo",
   backToMenu: "Volver a la carta",
+  totemStart: "Empezar pedido",
+  totemTakeaway: "Para llevar",
+  totemDineIn: "Comer en mesa",
+  totemEnterTable: "¿En qué mesa estás?",
+  totemTableNumber: "Número de mesa",
+  totemNext: "Continuar",
+  totemBack: "Atrás",
+  totemDelete: "Borrar",
+  totemPayAtTerminal: "Pagar con tarjeta",
+  totemFollowTerminal: "Sigue las instrucciones del datáfono",
+  totemPaying: "Procesando el pago…",
+  totemApproved: "Pago aprobado",
+  totemDeclined: "Pago rechazado",
+  totemRetry: "Reintentar",
+  totemCollect: "Recoge tu ticket",
+  totemPickupNumber: "Tu número",
+  totemNewOrder: "Nuevo pedido",
+  totemCancel: "Cancelar",
 };
 
 const EN: Strings = {
@@ -225,6 +262,24 @@ const EN: Strings = {
   receiptPrint: "Print",
   receiptDownload: "Download receipt",
   backToMenu: "Back to the menu",
+  totemStart: "Start order",
+  totemTakeaway: "Takeaway",
+  totemDineIn: "Dine in",
+  totemEnterTable: "Which table are you at?",
+  totemTableNumber: "Table number",
+  totemNext: "Continue",
+  totemBack: "Back",
+  totemDelete: "Delete",
+  totemPayAtTerminal: "Pay by card",
+  totemFollowTerminal: "Follow the instructions on the terminal",
+  totemPaying: "Processing payment…",
+  totemApproved: "Payment approved",
+  totemDeclined: "Payment declined",
+  totemRetry: "Try again",
+  totemCollect: "Collect your ticket",
+  totemPickupNumber: "Your number",
+  totemNewOrder: "New order",
+  totemCancel: "Cancel",
 };
 
 const PT: Strings = {
@@ -273,6 +328,24 @@ const PT: Strings = {
   receiptPrint: "Imprimir",
   receiptDownload: "Baixar recibo",
   backToMenu: "Voltar à carta",
+  totemStart: "Iniciar pedido",
+  totemTakeaway: "Para levar",
+  totemDineIn: "Comer na mesa",
+  totemEnterTable: "Em que mesa está?",
+  totemTableNumber: "Número da mesa",
+  totemNext: "Continuar",
+  totemBack: "Voltar",
+  totemDelete: "Apagar",
+  totemPayAtTerminal: "Pagar com cartão",
+  totemFollowTerminal: "Siga as instruções do terminal",
+  totemPaying: "A processar o pagamento…",
+  totemApproved: "Pagamento aprovado",
+  totemDeclined: "Pagamento recusado",
+  totemRetry: "Tentar de novo",
+  totemCollect: "Recolha o seu talão",
+  totemPickupNumber: "O seu número",
+  totemNewOrder: "Novo pedido",
+  totemCancel: "Cancelar",
 };
 
 const STRINGS: Record<Lang, Strings> = { es: ES, en: EN, pt: PT };
