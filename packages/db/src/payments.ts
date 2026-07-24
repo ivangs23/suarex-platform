@@ -66,6 +66,48 @@ export async function setPaymentConfig(
   if (error) throw error;
 }
 
+/** Pedido kiosko leído por el device para cobrarlo: importe en céntimos (del SERVIDOR, no del
+ *  renderer) y estado (para no re-cobrar uno ya pagado). `null` si no existe o el device no lo ve. */
+export type KioskoOrderForCharge = {
+  amountCents: number;
+  status: string;
+  orderNumber: number;
+};
+
+/**
+ * Lee un pedido kiosko con el JWT del device (RLS `orders_select` le permite ver los de su
+ * tenant). El importe sale de aquí -- de la base -- nunca del renderer del totem, para que un
+ * XSS en la carta no pueda cobrar un importe arbitrario. `null` si no existe o no es visible.
+ */
+export async function readKioskoOrderForCharge(
+  client: SupabaseClient,
+  orderId: string,
+): Promise<KioskoOrderForCharge | null> {
+  const { data, error } = await client
+    .from("orders")
+    .select("total, status, order_number, channel")
+    .eq("id", orderId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data || data.channel !== "kiosko") return null;
+  return {
+    amountCents: Math.round(Number(data.total) * 100),
+    status: data.status as string,
+    orderNumber: data.order_number as number,
+  };
+}
+
+/** Marca un pedido kiosko como pagado tras aprobar Paytef, vía la RPC acotada (el device no
+ *  puede hacer UPDATE directo). Devuelve `true` si marcó una fila (pedido propio, kiosko, pending). */
+export async function markKioskoOrderPaid(
+  client: SupabaseClient,
+  orderId: string,
+): Promise<boolean> {
+  const { data, error } = await client.rpc("mark_kiosko_order_paid", { p_order_id: orderId });
+  if (error) throw error;
+  return data === true;
+}
+
 /** Fija (o limpia) el pinpad de Paytef de un dispositivo (totem). Acotado al tenant. */
 export async function setDevicePinpad(
   tenantId: string,
