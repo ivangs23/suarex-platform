@@ -23,6 +23,9 @@ importers:
       '@suarex/printing':
         specifier: workspace:*
         version: link:packages/printing
+      '@suarex/realtime':
+        specifier: workspace:*
+        version: link:packages/realtime
       '@suarex/ticket':
         specifier: workspace:*
         version: link:packages/ticket
@@ -160,6 +163,9 @@ importers:
       '@suarex/printing':
         specifier: workspace:*
         version: link:../printing
+      '@suarex/realtime':
+        specifier: workspace:*
+        version: link:../realtime
       '@suarex/ticket':
         specifier: workspace:*
         version: link:../ticket
