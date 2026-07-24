@@ -1,5 +1,5 @@
 import { type BrowserWindow, ipcMain } from "electron";
-import { isAgentRunning, startAgent, stopAgent } from "./agent-runner.js";
+import { getActivity, isAgentRunning, startAgent, stopAgent } from "./agent-runner.js";
 import { PLATFORM_WEB_ORIGIN } from "./baked-config.js";
 import { loadCredentials, saveCredentials } from "./config-store.js";
 import { type PairError, pairDevice } from "./pairing.js";
@@ -76,6 +76,9 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
       // recibir un error. `process` no está disponible en el renderer (contextIsolation),
       // así que viaja por aquí.
       platform: process.platform,
+      // Estado de impresión acumulado, para que la ventana ya muestre lo que va pasando nada
+      // más abrirse (sin esperar al primer tick que llegue por `agent-activity`).
+      activity: getActivity(),
     };
   });
 

@@ -8,7 +8,27 @@ import { unprintedPaidOrdersForDevice } from "./device-orders.js";
 
 const DEFAULT_POLL_MS = 4000;
 
-export type AgentTickResult = { printed: number; failed: number };
+/** Una entrega de ticket que falló, con lo justo para avisar de qué impresora cayó. */
+export type PrintFailure = {
+  printerId: string;
+  orderNumber: number;
+  destination: "cocina" | "barra" | "all";
+  reason: string;
+};
+
+export type AgentTickResult = {
+  printed: number;
+  failed: number;
+  /** Ids de las impresoras que entregaron OK en este tick. Sirve para detectar que una
+   *  impresora que estaba caída ha vuelto (y retirar su aviso), no solo cuándo cae. */
+  succeeded: string[];
+  /** Solo los fallos de ENTREGA (impresora inalcanzable), para avisar de una impresora
+   *  caída. No incluye el fallo transitorio de marcar impreso (se reintenta sin perder nada). */
+  failures: PrintFailure[];
+  /** Presente solo si el tick entero reventó (p. ej. la lectura de pedidos): sin él, un fallo
+   *  de red dejaría la UI diciendo "imprimiendo" con la cocina muda y sin explicación. */
+  error?: string;
+};
 
 type PrinterRowDb = {
   id: string;
@@ -125,6 +145,8 @@ export async function runAgentTick(client: SupabaseClient): Promise<AgentTickRes
 
   let printed = 0;
   let failed = 0;
+  const failures: PrintFailure[] = [];
+  const succeeded = new Set<string>();
 
   for (const order of orders) {
     const ticketOrder = toTicketOrder(order);
@@ -143,6 +165,9 @@ export async function runAgentTick(client: SupabaseClient): Promise<AgentTickRes
         printToPrinter(lines, printer.config),
       );
       if (result.ok) {
+        // La entrega funcionó -> la impresora está viva, aunque luego falle marcarla. Cuenta
+        // como "recuperada" para retirar un aviso previo de impresora caída.
+        succeeded.add(printer.id);
         const { error } = await client.rpc("reserve_printed_self", {
           p_order_id: order.id,
           p_printer_id: printer.id,
@@ -160,6 +185,12 @@ export async function runAgentTick(client: SupabaseClient): Promise<AgentTickRes
         printed += 1;
       } else {
         failed += 1;
+        failures.push({
+          printerId: printer.id,
+          orderNumber: order.orderNumber,
+          destination: dest,
+          reason: result.reason ?? "impresora inalcanzable",
+        });
       }
     }
   }
@@ -173,7 +204,7 @@ export async function runAgentTick(client: SupabaseClient): Promise<AgentTickRes
     // informativo: un fallo aquí no debe derribar el tick de impresión.
   }
 
-  return { printed, failed };
+  return { printed, failed, succeeded: [...succeeded], failures };
 }
 
 /**
@@ -183,7 +214,13 @@ export async function runAgentTick(client: SupabaseClient): Promise<AgentTickRes
  */
 export async function runAgent(
   creds: AgentCredentials,
-  opts?: { pollMs?: number },
+  opts?: {
+    pollMs?: number;
+    /** Se llama tras CADA tick con su resultado -- la cáscara Electron lo usa para dar
+     *  visibilidad (cuántos impresos, qué impresora cayó) en vez de ser una caja negra. Un
+     *  tick que revienta llega aquí con `error` puesto, nunca se traga en silencio. */
+    onTick?: (result: AgentTickResult) => void;
+  },
 ): Promise<() => void> {
   const client = await createDeviceClient(creds);
   const pollMs = opts?.pollMs ?? DEFAULT_POLL_MS;
@@ -192,9 +229,17 @@ export async function runAgent(
     if (running) return; // no solapar ticks
     running = true;
     try {
-      await runAgentTick(client);
+      const result = await runAgentTick(client);
+      opts?.onTick?.(result);
     } catch (error) {
       console.error("[agent] tick falló:", error);
+      opts?.onTick?.({
+        printed: 0,
+        failed: 0,
+        succeeded: [],
+        failures: [],
+        error: error instanceof Error ? error.message : String(error),
+      });
     } finally {
       running = false;
     }

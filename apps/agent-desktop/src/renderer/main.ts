@@ -1,3 +1,4 @@
+import type { AgentActivity } from "../main/agent-activity.js";
 import type { PairIpcResult } from "../main/ipc.js";
 import type { ShowWebPanelResult } from "../main/web-panel.js";
 import { setupNavigation } from "./navigation.js";
@@ -7,6 +8,7 @@ type AgentStatus = {
   running: boolean;
   deviceId: string | null;
   platform: string;
+  activity: AgentActivity;
 };
 
 type AgentApi = {
@@ -16,6 +18,7 @@ type AgentApi = {
   getStatus(): Promise<AgentStatus>;
   unpair(): Promise<{ ok: boolean }>;
   showSection(section: string): Promise<ShowWebPanelResult>;
+  onActivity(cb: (activity: AgentActivity) => void): () => void;
 };
 
 /**
@@ -75,6 +78,45 @@ function renderStatus(status: AgentStatus): void {
   setDisabled(["refresh", "test"], !esWindows);
 }
 
+const DESTINO_NOMBRE: Record<string, string> = {
+  cocina: "cocina",
+  barra: "barra",
+  all: "cocina y barra",
+};
+
+/**
+ * Pinta el estado de impresión: cuántos tickets van y, sobre todo, un banner rojo si algo va
+ * mal (impresora caída o sin conexión). Es lo que convierte la app de caja negra en algo que
+ * el owner puede mirar y saber si la cocina está recibiendo las comandas.
+ */
+function renderActivity(a: AgentActivity): void {
+  const summary = $("activity-summary");
+  if (!a.lastTickAt) {
+    summary.textContent = "Aún no ha llegado ningún pedido.";
+  } else {
+    const hora = new Date(a.lastTickAt).toLocaleTimeString();
+    const n = a.printedTotal;
+    const impresos = `${n} ticket${n === 1 ? "" : "s"} impreso${n === 1 ? "" : "s"}`;
+    const fallos = a.failedTotal > 0 ? ` · ${a.failedTotal} con problemas` : "";
+    summary.textContent = `${impresos}${fallos}. Última comprobación a las ${hora}.`;
+  }
+
+  const alerta = $("activity-alert");
+  if (a.lastError) {
+    alerta.textContent = "Sin conexión con la plataforma. Reintentando automáticamente.";
+    alerta.hidden = false;
+  } else if (a.downPrinters.length > 0) {
+    const destinos = [
+      ...new Set(a.downPrinters.map((p) => DESTINO_NOMBRE[p.destination] ?? p.destination)),
+    ];
+    alerta.textContent = `Impresora de ${destinos.join(" y ")} sin responder. Comprueba que esté encendida y conectada.`;
+    alerta.hidden = false;
+  } else {
+    alerta.hidden = true;
+    alerta.textContent = "";
+  }
+}
+
 function renderSinPuente(): void {
   $("status").dataset.state = "error";
   $("status-title").textContent = "No se pudo iniciar";
@@ -85,7 +127,9 @@ function renderSinPuente(): void {
 
 async function refreshStatus(): Promise<void> {
   if (!agent) return;
-  renderStatus(await agent.getStatus());
+  const status = await agent.getStatus();
+  renderStatus(status);
+  renderActivity(status.activity);
 }
 
 async function refreshPrinters(): Promise<void> {
@@ -166,6 +210,9 @@ if (!agent) {
       log(`Error al imprimir la prueba: ${(e as Error).message}`);
     }
   });
+
+  // Empuje en vivo: cada tick del agente repinta el estado de impresión sin sondear.
+  agent.onActivity(renderActivity);
 
   void refreshStatus();
   void refreshPrinters();
