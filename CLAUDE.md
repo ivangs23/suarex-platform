@@ -63,6 +63,24 @@ Verificación antes de dar algo por bueno: **lint · typecheck · unit · integr
 suite lleva `retry:2` para absorber flakiness de entorno (Realtime WAL, sockets de impresora
 falsa, cold compile de Next), no para tapar bugs.
 
+### En Windows (setup por máquina)
+
+macOS/Linux resuelven `*.localhost` a loopback gratis; **Windows no**. El e2e y el propio dev
+server usan hosts de tenant (`garum.localhost`, `manuela.localhost`), y las peticiones desde
+Node (fixture `request`/`page.request` de Playwright, la sonda del `webServer`) resuelven por
+el SO, no por Chromium. Sin esto, `pnpm test:e2e` cae con "Timed out waiting from
+config.webServer". Añadir UNA vez, en `C:\Windows\System32\drivers\etc\hosts` (PowerShell como
+administrador):
+
+```
+127.0.0.1 garum.localhost
+127.0.0.1 manuela.localhost
+```
+
+Los saltos de línea los fija `.gitattributes` (`* text=auto eol=lf`): sin él, `core.autocrlf`
+de Windows mete CRLF y `pnpm lint` (Biome, lineEnding lf) marca todos los ficheros. Si un clon
+viejo trae CRLF: `git config core.autocrlf false` y renormalizar.
+
 ## Patrones clave
 
 - **Multi-tenancy**: `tenant_id` + RLS. Tenant resuelto por host (`findTenantByHost`). Claims JWT

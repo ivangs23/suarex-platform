@@ -1,0 +1,20 @@
+# Normaliza los saltos de línea a LF en todo el repo. Sin esto, en Windows el
+# core.autocrlf=true (default) convierte los blobs LF a CRLF en el working tree y Biome
+# (formatter lineEnding = lf) marca los 316 ficheros como mal formateados. Fijar eol=lf
+# aquí hace que `pnpm lint` pase igual en Mac, Linux y Windows.
+* text=auto eol=lf
+
+# Binarios: git suele detectarlos solo, pero lo hacemos explícito para no arriesgar a que
+# se les toquen los saltos de línea.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.webp binary
+*.avif binary
+*.woff  binary
+*.woff2 binary
+*.ttf  binary
+*.otf  binary
+*.pdf  binary
