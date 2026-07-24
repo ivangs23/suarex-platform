@@ -1,11 +1,11 @@
 import { parseBranding } from "@suarex/config";
-import type { PrintableOrder } from "@suarex/db";
+import { type PrintableOrder, selectUnprintedOrders } from "@suarex/db";
 import { deviceKey, enqueueByDevice, type PrinterConfig, printToPrinter } from "@suarex/printing";
 import { subscribeToOrders } from "@suarex/realtime";
 import { buildTicketLines, type TicketBranding, type TicketOrder } from "@suarex/ticket";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { type AgentCredentials, createDeviceClient } from "./agent-client.js";
-import { unprintedPaidOrdersForDevice } from "./device-orders.js";
+import { paidUnprintedOrderRows } from "./device-orders.js";
 
 const DEFAULT_POLL_MS = 4000;
 
@@ -63,25 +63,31 @@ async function ownDeviceId(client: SupabaseClient): Promise<string | null> {
   return (data?.id as string | undefined) ?? null;
 }
 
+/** Las impresoras habilitadas del tenant, con las columnas que necesitan AMBOS consumidores del
+ *  tick (resolver a dónde imprimir Y calcular qué falta por imprimir). Se consulta una sola vez
+ *  por tick y se comparte, en vez de dos veces (#13). Es un superconjunto de `EnabledPrinterRow`,
+ *  así que sirve tal cual a `selectUnprintedOrders`. */
+async function enabledPrinterRows(client: SupabaseClient): Promise<PrinterRowDb[]> {
+  const { data, error } = await client
+    .from("printers")
+    .select("id, venue_id, device_id, destination, connection")
+    .eq("enabled", true);
+  if (error) throw error;
+  return data as unknown as PrinterRowDb[];
+}
+
 /**
  * Impresoras habilitadas que este agente puede imprimir, con su `PrinterConfig` ya
- * construida por tipo:
+ * construida por tipo. Puro (recibe las filas ya leídas y el propio device id):
  *   - RED (`connection.type === "network"`): cualquier agente del tenant la alcanza; el
  *     acotado por local (`venue_id`) lo aplica el bucle de impresión (igual que antes).
  *   - USB (`connection.type === "usb"`): SOLO si `device_id` es el propio dispositivo -- una
  *     impresora USB está físicamente en ESTE PC, así que ningún otro agente debe reclamarla.
  * Un tipo desconocido, o una USB de otro device, se ignora.
  */
-async function resolvePrinters(client: SupabaseClient): Promise<ResolvedPrinter[]> {
-  const deviceId = await ownDeviceId(client);
-  const { data, error } = await client
-    .from("printers")
-    .select("id, venue_id, device_id, destination, connection")
-    .eq("enabled", true);
-  if (error) throw error;
-
+function resolvePrintersFromRows(rows: PrinterRowDb[], deviceId: string | null): ResolvedPrinter[] {
   const resolved: ResolvedPrinter[] = [];
-  for (const p of data as unknown as PrinterRowDb[]) {
+  for (const p of rows) {
     const conn = p.connection ?? {};
     if (conn.type === "network") {
       resolved.push({
@@ -142,11 +148,17 @@ export async function runAgentTick(
   appVersion: string | null = null,
   osPrinters: string[] | null = null,
 ): Promise<AgentTickResult> {
-  const [orders, printers, branding] = await Promise.all([
-    unprintedPaidOrdersForDevice(client),
-    resolvePrinters(client),
+  // Una sola lectura de `printers` por tick, compartida entre "qué falta imprimir"
+  // (`selectUnprintedOrders`) y "a qué impresora" (`resolvePrintersFromRows`) -- antes se
+  // consultaba dos veces (#13). Las cuatro lecturas van en paralelo (1 RTT).
+  const [printerRows, orderRows, branding, deviceId] = await Promise.all([
+    enabledPrinterRows(client),
+    paidUnprintedOrderRows(client),
     ticketBranding(client),
+    ownDeviceId(client),
   ]);
+  const orders = selectUnprintedOrders(orderRows, printerRows);
+  const printers = resolvePrintersFromRows(printerRows, deviceId);
 
   let printed = 0;
   let failed = 0;
