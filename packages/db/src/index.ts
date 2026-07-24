@@ -78,6 +78,12 @@ export {
   OrderCartError,
 } from "./orders.js";
 export { checkPairRateLimit } from "./pair-rate-limit.js";
+export type { PaytefConfig } from "./payments.js";
+export {
+  getPaymentConfigForDevice,
+  setDevicePinpad,
+  setPaymentConfig,
+} from "./payments.js";
 export type {
   EnabledPrinterRow,
   PaidOrderRow,

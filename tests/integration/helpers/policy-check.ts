@@ -226,6 +226,7 @@ const PERMITTED_FORMS: readonly PermittedForm[] = [
       "tenant_settings",
       "devices",
       "printers",
+      "tenant_payment_config",
     ]),
   },
   {
@@ -242,6 +243,7 @@ const PERMITTED_FORMS: readonly PermittedForm[] = [
       "tenant_settings",
       "devices",
       "printers",
+      "tenant_payment_config",
     ]),
   },
 ];

@@ -50,7 +50,13 @@ export class OrderCartError extends Error {
 export async function createPendingOrder(input: {
   tenantId: string;
   venueId: string;
-  tableId: string;
+  /** Mesa del QR (`qr-mesa`). En `kiosko` no hay fila `tables`: va nulo y el número tecleado en
+   *  el totem viaja en `tableLabel`. */
+  tableId?: string | null;
+  /** Etiqueta de mesa libre del totem "en mesa"; nulo en QR o en "para llevar". */
+  tableLabel?: string | null;
+  /** Canal de venta. Por defecto `qr-mesa` (el móvil del comensal); `kiosko` es el totem. */
+  channel?: "qr-mesa" | "kiosko";
   lines: CartLineInput[];
   taxRate: number;
 }): Promise<{ orderId: string; publicToken: string; totalCents: number; currency: string }> {
@@ -195,9 +201,10 @@ export async function createPendingOrder(input: {
   const { data: order, error: orderError } = await tenantScoped("orders", input.tenantId)
     .insert({
       venue_id: input.venueId,
-      table_id: input.tableId,
+      table_id: input.tableId ?? null,
+      table_label: input.tableLabel ?? null,
       order_number: orderNumber,
-      channel: "qr-mesa",
+      channel: input.channel ?? "qr-mesa",
       status: "pending",
       subtotal: centsToEuros(totals.subtotal),
       tax_amount: centsToEuros(totals.taxAmount),
