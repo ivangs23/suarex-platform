@@ -17,7 +17,9 @@ test-results/
 playwright-report/
 blob-report/
 playwright/.cache/
-.claude/
+.claude/*
+# ...salvo la config de preview (dev server), que sí es compartida y útil en cualquier máquina.
+!.claude/launch.json
 
 # Volcados de catálogo de clientes para importar: datos de negocio ajenos, no van al repo.
 .import/
