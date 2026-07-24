@@ -13,12 +13,20 @@ import { loadWinspoolBinding, makeUsbSink } from "./usb-sink-winspool.js";
 let stop: (() => void) | null = null;
 let activity: AgentActivity = INITIAL_ACTIVITY;
 let appVersion: string | undefined;
+let printersProvider: (() => string[] | Promise<string[]>) | undefined;
 
 /** La cáscara Electron (`index.ts`) fija aquí `app.getVersion()` antes de arrancar el agente,
  *  para que el heartbeat reporte la build en marcha. Fuera de aquí para no meter `electron` en
  *  este módulo, que se testea headless. */
 export function setAppVersion(version: string): void {
   appVersion = version;
+}
+
+/** La cáscara Electron inyecta aquí cómo enumerar las impresoras del SO (`getPrintersAsync`
+ *  vía la ventana), para reportarlas en el heartbeat. Fuera de aquí por lo mismo que
+ *  `setAppVersion`: `electron` no entra en este módulo, que se testea headless. */
+export function setPrintersProvider(fn: () => string[] | Promise<string[]>): void {
+  printersProvider = fn;
 }
 
 /** Quien quiera enterarse de cada tick (la cáscara Electron: pinta el estado y avisa de una
@@ -56,6 +64,7 @@ export async function startAgent(creds: StoredCredentials): Promise<void> {
     },
     {
       appVersion,
+      getPrinters: printersProvider,
       onTick: (result) => {
         const next = reduceActivity(activity, result, new Date().toISOString());
         activity = next.activity;

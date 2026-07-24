@@ -1,3 +1,4 @@
+import { listDevices } from "@suarex/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   admin,
@@ -76,5 +77,48 @@ describe("device_heartbeat", () => {
       .single();
     expect(rowB?.app_version).toBeNull();
     expect(rowB?.last_seen_at).toBeNull();
+  });
+
+  it("reporta las impresoras del SO en `printers`, y omitirlas no las borra (#7)", async () => {
+    const { data: venue } = await admin
+      .from("venues")
+      .insert({ tenant_id: tenant.tenantId, slug: `v-${nonce()}`, name: "V", is_default: false })
+      .select("id")
+      .single();
+    const venueId = venue?.id as string;
+
+    const d = await seedDeviceClient(venueId);
+
+    // Primer heartbeat con lista: se guarda tal cual.
+    const nombres = ["EPSON TM-T20", "Star TSP143"];
+    const { error: e1 } = await d.client.rpc("device_heartbeat", {
+      p_app_version: "1.0.0",
+      p_printers: nombres,
+    });
+    expect(e1).toBeNull();
+
+    const { data: row1 } = await admin
+      .from("devices")
+      .select("printers")
+      .eq("id", d.deviceId)
+      .single();
+    expect(row1?.printers).toEqual(nombres);
+
+    // Segundo heartbeat SIN lista (p. ej. fuera de Electron): `coalesce` conserva las anteriores.
+    const { error: e2 } = await d.client.rpc("device_heartbeat", { p_app_version: "1.0.1" });
+    expect(e2).toBeNull();
+
+    const { data: row2 } = await admin
+      .from("devices")
+      .select("printers, app_version")
+      .eq("id", d.deviceId)
+      .single();
+    expect(row2?.printers).toEqual(nombres);
+    expect(row2?.app_version).toBe("1.0.1");
+
+    // `listDevices` (lo que consume el panel admin) las expone.
+    const devices = await listDevices(tenant.tenantId);
+    const reportado = devices.find((dev) => dev.id === d.deviceId);
+    expect(reportado?.printers).toEqual(nombres);
   });
 });

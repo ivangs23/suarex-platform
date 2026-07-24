@@ -56,10 +56,12 @@ App de escritorio (Electron), repaso operativo:
 
 Priorizado por valor/coste. Detalle en el hilo; resumen:
 
-- **9. Logs a fichero + exportar diagnóstico** (recomendado el siguiente): hoy solo `console`,
-  inaccesible en una app oculta en bandeja. Log rotativo en `userData` + botón "exportar".
-- **7. Desplegable de impresoras** en el panel admin en vez de teclear el nombre a mano (un typo =
-  la USB no casa y no imprime en silencio). El desktop ya las lista (`getPrintersAsync`).
+- ✅ **9. Logs a fichero + exportar diagnóstico** — HECHO (`apps/agent-desktop/src/main/logger.ts`,
+  `real-log-backend.ts`, `diagnostics.ts`; botón en el card Registro). Log rotativo en
+  `userData/logs/agent.log`.
+- ✅ **7. Desplegable de impresoras** — HECHO. El device reporta sus impresoras en el heartbeat
+  (`devices.printers`, migración `20260724000001`), y `PrinterForm` ofrece un `<select>` de esas
+  impresoras (con escape "escribir a mano" si el device aún no reportó). Adiós al typo silencioso.
 - **8. Realtime** además del polling de 4 s (menos latencia y carga; polling como respaldo).
 - **11. Guardar refresh token** en vez de la contraseña (menor superficie si se rompe DPAPI).
 - **12. Estado de impresoras de red** en el desktop (probar conexión, no solo test USB).

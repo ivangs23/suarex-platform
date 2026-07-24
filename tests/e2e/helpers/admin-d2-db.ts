@@ -45,6 +45,38 @@ export async function deleteDeviceForTest(deviceId: string): Promise<void> {
   if (error) throw error;
 }
 
+/**
+ * Crea, en el tenant `garum`, un dispositivo con una lista de impresoras ya "reportada" (como
+ * si hubiera mandado un heartbeat), para probar que el panel admin ofrece el desplegable (#7)
+ * sin tener que arrancar un agente real. Devuelve el id para borrarlo en el `afterEach`.
+ */
+export async function createDeviceWithPrintersForTest(
+  name: string,
+  printers: string[],
+): Promise<string> {
+  const { data: tenant, error: te } = await admin
+    .from("tenants")
+    .select("id")
+    .eq("slug", "garum")
+    .single();
+  if (te) throw te;
+  const { data: venue, error: ve } = await admin
+    .from("venues")
+    .select("id")
+    .eq("tenant_id", tenant.id as string)
+    .order("is_default", { ascending: false })
+    .limit(1)
+    .single();
+  if (ve) throw ve;
+  const { data: device, error: de } = await admin
+    .from("devices")
+    .insert({ tenant_id: tenant.id, venue_id: venue.id, name, printers })
+    .select("id")
+    .single();
+  if (de) throw de;
+  return device.id as string;
+}
+
 export async function deletePrinterForTest(printerId: string): Promise<void> {
   const { error } = await admin.from("printers").delete().eq("id", printerId);
   if (error) throw error;

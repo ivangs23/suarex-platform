@@ -68,6 +68,9 @@ export type DeviceRow = {
   pairingExpiresAt: string | null;
   pairedAt: string | null;
   lastSeenAt: string | null;
+  /** Impresoras que el device reportó ver en el SO (nombres Windows exactos), en el último
+   *  heartbeat. Alimenta el desplegable del panel de impresoras. Vacío si aún no reportó. */
+  printers: string[];
 };
 
 /**
@@ -172,6 +175,7 @@ type DeviceRowDb = {
   pairing_expires_at: string | null;
   paired_at: string | null;
   last_seen_at: string | null;
+  printers: string[];
 };
 
 /**
@@ -185,7 +189,7 @@ type DeviceRowDb = {
 export async function listDevices(tenantId: string): Promise<DeviceRow[]> {
   const { data, error } = await tenantScoped("devices", tenantId)
     .select(
-      "id, tenant_id, venue_id, name, roles, pairing_code, pairing_expires_at, paired_at, last_seen_at",
+      "id, tenant_id, venue_id, name, roles, pairing_code, pairing_expires_at, paired_at, last_seen_at, printers",
     )
     .order("created_at", { ascending: true });
   if (error) throw error;
@@ -200,6 +204,7 @@ export async function listDevices(tenantId: string): Promise<DeviceRow[]> {
     pairingExpiresAt: row.pairing_expires_at,
     pairedAt: row.paired_at,
     lastSeenAt: row.last_seen_at,
+    printers: row.printers ?? [],
   }));
 }
 
