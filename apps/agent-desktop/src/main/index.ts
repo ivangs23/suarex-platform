@@ -15,6 +15,18 @@ let quitting = false;
 
 const TRAY_BASE_TOOLTIP = "SuarEx — Agente de impresión";
 
+// Watchdog dentro del proceso. Este agente corre desatendido: un error suelto no capturado no
+// debe llevarse por delante toda la app y dejar la cocina sin imprimir hasta reiniciar el PC.
+// Se registra y se sigue vivo -- el bucle del agente ya envuelve cada tick en su try/catch, así
+// que sobrevivir aquí es lo que mantiene la impresión en marcha. (La caída del PROPIO proceso
+// principal no se recupera desde dentro; para eso haría falta un watchdog del sistema.)
+process.on("uncaughtException", (err) => {
+  console.error("[main] excepción no capturada (se sigue):", err);
+});
+process.on("unhandledRejection", (reason) => {
+  console.error("[main] promesa rechazada sin manejar (se sigue):", reason);
+});
+
 /**
  * Reacciona a cada tick del agente: refresca el renderer (aunque la ventana esté oculta, el
  * webContents recibe el mensaje), pone el estado en el tooltip de la bandeja, y NOTIFICA solo
@@ -65,6 +77,13 @@ if (!gotLock) {
       mainWindow.show();
       mainWindow.focus();
     }
+  });
+
+  // Si el proceso del renderer se cae (no el agente, que vive en el main y sigue imprimiendo),
+  // se recarga la ventana en vez de dejarla en blanco. Al salir no se recarga: se está cerrando.
+  app.on("render-process-gone", (_e, contents, details) => {
+    console.error("[main] el renderer se cayó:", details.reason);
+    if (!quitting && contents === mainWindow?.webContents) mainWindow.reload();
   });
 
   app.whenReady().then(async () => {

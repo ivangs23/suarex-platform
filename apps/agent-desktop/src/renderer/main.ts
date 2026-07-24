@@ -16,6 +16,7 @@ type AgentApi = {
   pair(code: string): Promise<PairIpcResult>;
   testPrint(printerName: string): Promise<{ ok: boolean }>;
   getStatus(): Promise<AgentStatus>;
+  confirmUnpair(): Promise<boolean>;
   unpair(): Promise<{ ok: boolean }>;
   showSection(section: string): Promise<ShowWebPanelResult>;
   onActivity(cb: (activity: AgentActivity) => void): () => void;
@@ -189,6 +190,8 @@ if (!agent) {
   });
 
   $("unpair").addEventListener("click", async () => {
+    // Confirmación nativa: des-emparejar corta la impresión hasta re-emparejar.
+    if (!(await agent.confirmUnpair())) return;
     await agent.unpair();
     log("Des-emparejado.");
     await refreshStatus();

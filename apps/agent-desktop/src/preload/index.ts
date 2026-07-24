@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld("agent", {
     platform: string;
     activity: AgentActivity;
   }> => ipcRenderer.invoke("get-status"),
+  confirmUnpair: (): Promise<boolean> => ipcRenderer.invoke("confirm-unpair"),
   unpair: (): Promise<{ ok: boolean }> => ipcRenderer.invoke("unpair"),
   showSection: (section: string): Promise<ShowWebPanelResult> =>
     ipcRenderer.invoke("show-section", section),
