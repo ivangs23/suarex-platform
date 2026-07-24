@@ -54,9 +54,12 @@ export const GarumTheme: MenuTheme = ({
               {businessName}
             </span>
             <span className={styles.heroLead}>Vinoteca &amp; cocina de producto</span>
-            <span className={styles.mesa} data-testid="mesa">
-              {t.table} {mesa}
-            </span>
+            {/* Sin mesa (canal totem) no se pinta: en la mesa (QR) siempre hay número. */}
+            {mesa ? (
+              <span className={styles.mesa} data-testid="mesa">
+                {t.table} {mesa}
+              </span>
+            ) : null}
             <span className={styles.enter}>{t.enter}</span>
           </span>
         </a>
@@ -89,9 +92,14 @@ export const GarumTheme: MenuTheme = ({
           no dónde encuentra el comensal cada cosa. Asset de marca versionado con la app (no
           el logo por tenant de Storage), servido estático: <img> a propósito. */}
       <header className={styles.topbar}>
-        <span className={styles.mesa} data-testid="mesa">
-          {t.table} {mesa}
-        </span>
+        {/* Sin mesa (totem) la columna del grid queda vacía y el logo sigue centrado. */}
+        {mesa ? (
+          <span className={styles.mesa} data-testid="mesa">
+            {t.table} {mesa}
+          </span>
+        ) : (
+          <span />
+        )}
 
         <Image
           className={styles.logo}

@@ -61,9 +61,12 @@ export const GenericTheme: MenuTheme = ({
             <span className={styles.name} data-testid="tenant-name">
               {businessName}
             </span>
-            <span className={styles.mesa} data-testid="mesa">
-              {t.table} {mesa}
-            </span>
+            {/* Sin mesa (canal totem) no se pinta: en la mesa (QR) siempre hay número. */}
+            {mesa ? (
+              <span className={styles.mesa} data-testid="mesa">
+                {t.table} {mesa}
+              </span>
+            ) : null}
             <span className={styles.enter}>{t.enter}</span>
           </span>
         </a>
@@ -95,9 +98,15 @@ export const GenericTheme: MenuTheme = ({
           estén en el MISMO sitio en todos los temas es parte de la regla: cambia el aspecto,
           no dónde encuentra el comensal cada cosa. */}
       <header className={styles.topbar}>
-        <span className={styles.mesa} data-testid="mesa">
-          {t.table} {mesa}
-        </span>
+        {/* Sin mesa (totem) la columna del grid `1fr auto 1fr` queda vacía y el logo sigue
+            centrado; con mesa (QR) se pinta la pastilla. */}
+        {mesa ? (
+          <span className={styles.mesa} data-testid="mesa">
+            {t.table} {mesa}
+          </span>
+        ) : (
+          <span />
+        )}
 
         {/* El logo es una URL absoluta de Storage por tenant, no un asset local que
             next/image pueda optimizar en build: se usa <img> a propósito. Sin logo, la marca
