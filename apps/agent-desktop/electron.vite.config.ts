@@ -19,6 +19,9 @@ const bakedEnv = {
   "import.meta.env.SUPABASE_URL": JSON.stringify(process.env.SUPABASE_URL ?? ""),
   "import.meta.env.SUPABASE_ANON_KEY": JSON.stringify(process.env.SUPABASE_ANON_KEY ?? ""),
   "import.meta.env.PLATFORM_WEB_ORIGIN": JSON.stringify(process.env.PLATFORM_WEB_ORIGIN ?? ""),
+  // Feed de auto-update (electron-updater, proveedor "generic"): la URL de una carpeta que
+  // sirve `latest.yml` + el instalador. Vacío -> sin auto-update (dev, o build sin feed).
+  "import.meta.env.UPDATE_FEED_URL": JSON.stringify(process.env.UPDATE_FEED_URL ?? ""),
 };
 
 export default defineConfig({

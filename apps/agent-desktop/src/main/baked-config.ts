@@ -16,3 +16,8 @@ export const SUPABASE_ANON_KEY: string = import.meta.env.SUPABASE_ANON_KEY ?? ""
  * orígenes: reutilizar `SUPABASE_URL` aquí haría que `pairDevice` apuntara al host de
  * Supabase y el emparejamiento fallara siempre (404 -> "invalid-code"). */
 export const PLATFORM_WEB_ORIGIN: string = import.meta.env.PLATFORM_WEB_ORIGIN ?? "";
+
+/** URL del feed de auto-update (carpeta que sirve `latest.yml` + el instalador NSIS). Se
+ * hornea desde `UPDATE_FEED_URL`. Vacío = sin auto-update: dev y builds sin feed configurado
+ * arrancan igual, solo que no comprueban actualizaciones. */
+export const UPDATE_FEED_URL: string = import.meta.env.UPDATE_FEED_URL ?? "";

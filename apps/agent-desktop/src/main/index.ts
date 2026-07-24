@@ -1,11 +1,12 @@
 import { join } from "node:path";
 import { app, BrowserWindow, Menu, Notification, nativeImage, Tray } from "electron";
 import type { ActivityAlerts, AgentActivity } from "./agent-activity.js";
-import { onAgentActivity, startAgent, stopAgent } from "./agent-runner.js";
+import { onAgentActivity, setAppVersion, startAgent, stopAgent } from "./agent-runner.js";
 import { loadCredentials } from "./config-store.js";
 import { registerIpc } from "./ipc.js";
 import { realConfigBackend } from "./real-config-backend.js";
 import { TRAY_ICON_DATA_URL } from "./tray-icon.js";
+import { startAutoUpdate } from "./updater.js";
 import { destroyWebPanel, layoutWebPanel } from "./web-panel.js";
 
 let mainWindow: BrowserWindow | null = null;
@@ -74,6 +75,12 @@ if (!gotLock) {
     createTray();
     registerIpc(() => mainWindow);
     onAgentActivity(handleAgentActivity);
+    // La versión de la build viaja al heartbeat (para saber qué locales están desactualizados).
+    setAppVersion(app.getVersion());
+    // Auto-update en segundo plano (no hace nada sin feed configurado, p. ej. en dev).
+    startAutoUpdate((title, body) => {
+      if (Notification.isSupported()) new Notification({ title, body }).show();
+    });
 
     // Si ya está emparejado, arranca el agente al iniciar (imprime sin abrir la ventana).
     const creds = loadCredentials(realConfigBackend());

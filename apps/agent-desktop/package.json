@@ -12,6 +12,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "electron-updater": "^6.8.9",
     "koffi": "^2.9.0"
   },
   "devDependencies": {

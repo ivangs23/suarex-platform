@@ -19,3 +19,10 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
+# Auto-update (electron-updater). Proveedor "generic": una carpeta que sirve `latest.yml` + el
+# instalador. La URL se toma de la env de build `UPDATE_FEED_URL` (la misma que se hornea en la
+# app para `autoUpdater.setFeedURL`); sin ella el build sigue funcionando, solo que el
+# instalador no queda ligado a ningún feed.
+publish:
+  provider: generic
+  url: ${env.UPDATE_FEED_URL}
