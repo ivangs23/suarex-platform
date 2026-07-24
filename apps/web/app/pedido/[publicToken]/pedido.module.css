@@ -202,6 +202,19 @@
   cursor: pointer;
 }
 
+/* Vuelta a la carta tras pagar. Botón sólido de marca (la acción principal: seguir pidiendo),
+   frente al de descargar recibo, que va delineado. */
+.backToMenu {
+  width: min(26rem, 100%);
+  padding: 0.85rem 1rem;
+  border-radius: 0.7rem;
+  background: var(--color-primary, #a88445);
+  color: var(--color-bg, #ffffff);
+  font-weight: 700;
+  text-align: center;
+  text-decoration: none;
+}
+
 /* Al imprimir: solo el papel del recibo, sin el fondo de marca ni el botón. */
 @media print {
   .page {
@@ -216,6 +229,9 @@
     width: 100%;
   }
   .noPrint {
+    display: none;
+  }
+  .backToMenu {
     display: none;
   }
 }

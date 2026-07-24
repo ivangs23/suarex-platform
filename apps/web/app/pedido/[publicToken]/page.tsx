@@ -5,6 +5,7 @@ import {
   getOrderReceipt,
   getTenantSettings,
 } from "@suarex/db";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { resolveLang, strings } from "@/lib/i18n";
 import { requireTenant } from "@/lib/tenant-context";
@@ -38,6 +39,19 @@ export default async function PedidoPage({ params }: { params: Promise<{ publicT
       <StatusPoller publicToken={publicToken} initialOrder={order} locale={locale} strings={t} />
       {receipt && receipt.lines.length > 0 ? (
         <Receipt receipt={receipt} businessName={businessName} locale={locale} strings={t} />
+      ) : null}
+
+      {/* Vuelta a la carta de la mesa: tras pagar, el comensal se queda en esta pantalla y sin
+          esto no tendría forma de volver a pedir (otra ronda, un café). La mesa sale del recibo;
+          la cookie del QR sigue viva (dura la jornada), así que al volver puede pedir de nuevo. */}
+      {receipt?.tableLabel ? (
+        <Link
+          href={`/${receipt.tableLabel}`}
+          className={styles.backToMenu}
+          data-testid="back-to-menu"
+        >
+          {t.backToMenu}
+        </Link>
       ) : null}
     </main>
   );
