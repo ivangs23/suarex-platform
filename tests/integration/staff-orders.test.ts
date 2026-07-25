@@ -1,4 +1,4 @@
-import { listActiveOrders, markStationDone } from "@suarex/db";
+import { listActiveOrders, markStationDone, reprintOrder } from "@suarex/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   admin,
@@ -307,5 +307,73 @@ describe("markStationDone", () => {
       .single();
     expect(data?.bar_status, "un tenant ajeno pudo marcar la estación de otro").toBe("pending");
     expect(data?.status).toBe("pending");
+  });
+});
+
+describe("reprintOrder", () => {
+  /** Deja el pedido tal y como lo dejaría el agente tras imprimirlo del todo. */
+  async function marcaImpreso(orderId: string, printerId = "11111111-1111-1111-1111-111111111111") {
+    const { error } = await admin
+      .from("orders")
+      .update({
+        paid_at: new Date().toISOString(),
+        printed_at: new Date().toISOString(),
+        printed_targets: { [printerId]: new Date().toISOString() },
+      })
+      .eq("id", orderId);
+    if (error) throw error;
+  }
+
+  it("borra las marcas de impresión, que es lo que devuelve el pedido a la cola del agente", async () => {
+    const orderId = await insertOrder(tenantA.tenantId, venueA, productA, {
+      orderNumber: 301,
+      destination: "cocina",
+      status: "paid",
+    });
+    await marcaImpreso(orderId);
+
+    await expect(reprintOrder(tenantA.tenantId, orderId)).resolves.toBe(true);
+
+    const { data } = await admin
+      .from("orders")
+      .select("printed_at, printed_targets, paid_at, status")
+      .eq("id", orderId)
+      .single();
+    expect(data?.printed_at).toBeNull();
+    expect(data?.printed_targets).toEqual({});
+    // Y NO toca nada más: reimprimir es reimprimir, no revivir un pedido.
+    expect(data?.paid_at).not.toBeNull();
+    expect(data?.status).toBe("paid");
+  });
+
+  it("un pedido sin pagar no se puede reimprimir: no está en la cola, así que no habría ticket", async () => {
+    const orderId = await insertOrder(tenantA.tenantId, venueA, productA, {
+      orderNumber: 302,
+      destination: "cocina",
+    });
+
+    await expect(reprintOrder(tenantA.tenantId, orderId)).resolves.toBe(false);
+  });
+
+  it("SECURITY: un tenantId ajeno no puede reimprimir el pedido de otro tenant", async () => {
+    const orderId = await insertOrder(tenantA.tenantId, venueA, productA, {
+      orderNumber: 303,
+      destination: "cocina",
+      status: "paid",
+    });
+    await marcaImpreso(orderId);
+
+    await expect(reprintOrder(tenantB.tenantId, orderId)).resolves.toBe(false);
+
+    // Control positivo: las marcas siguen intactas, así que el `false` no es un falso negativo
+    // de una función que no hace nada para nadie.
+    const { data } = await admin
+      .from("orders")
+      .select("printed_at, printed_targets")
+      .eq("id", orderId)
+      .single();
+    expect(data?.printed_at, "un tenant ajeno pudo reimprimir el pedido de otro").not.toBeNull();
+    expect(Object.keys(data?.printed_targets ?? {})).toHaveLength(1);
+    await expect(reprintOrder(tenantA.tenantId, orderId)).resolves.toBe(true);
   });
 });

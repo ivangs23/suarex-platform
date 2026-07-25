@@ -46,6 +46,16 @@
   font-weight: 600;
 }
 
+/* Confirmación de una reimpresión: no es un error, así que no lleva el rojo de `.alert`. */
+.notice {
+  margin: 1rem 1.5rem 0;
+  padding: 0.75rem 1rem;
+  border-radius: 0.6rem;
+  background: #e9f3ec;
+  color: #1e5631;
+  font-weight: 600;
+}
+
 /* Cocina y barra, una junto a la otra en pantallas anchas (una tablet en horizontal). */
 .board {
   display: grid;
@@ -147,8 +157,35 @@
 }
 
 /* Botón grande: se toca con prisa y con las manos llenas. */
+/* Las dos acciones de la tarjeta. "Reimprimir" es la excepcional y ocupa lo justo; "Marcar
+   hecho" es la de cada comanda y se queda con todo el ancho restante, que es lo que la hace
+   pulsable de un manotazo con las manos ocupadas. */
+.cardActions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.reprintBtn {
+  padding: 0.85rem 0.9rem;
+  border: 1px solid #cbd0d6;
+  border-radius: 0.7rem;
+  background: transparent;
+  color: #4a5159;
+  font: inherit;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.reprintBtn:disabled {
+  color: #9aa1a9;
+  cursor: default;
+}
+
 .doneBtn {
-  width: 100%;
+  flex: 1;
   padding: 0.85rem 1rem;
   border: 0;
   border-radius: 0.7rem;

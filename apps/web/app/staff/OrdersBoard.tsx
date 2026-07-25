@@ -4,7 +4,7 @@ import type { StaffOrder } from "@suarex/db";
 import { createBrowserClient, subscribeToOrders } from "@suarex/realtime";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
-import { markStationDone } from "./actions";
+import { markStationDone, reprintOrderAction } from "./actions";
 import styles from "./staff.module.css";
 
 // Construido una sola vez por montaje del módulo, igual que en `staff/login/page.tsx`:
@@ -27,6 +27,8 @@ export function OrdersBoard({ tenantId, orders }: { tenantId: string; orders: St
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  /** Confirmación de una reimpresión. Separada de `error` porque no lo es: el ticket va a salir. */
+  const [aviso, setAviso] = useState<string | null>(null);
 
   // Se suscribe con el MISMO cliente autenticado que usó el login (`createBrowserClient`
   // cachea un singleton, ver `packages/realtime/src/browser-client.ts`): la suscripción
@@ -60,11 +62,39 @@ export function OrdersBoard({ tenantId, orders }: { tenantId: string; orders: St
     });
   }
 
+  /* Reimprimir: devuelve el pedido a la cola del agente. Lo pide alguien que está mirando una
+     impresora que no ha sacado nada -- se atascó, se quedó sin papel, estaba apagada -- así que
+     un "no ha pasado nada" mudo es lo peor que puede hacer esta pantalla. Se dice tanto cuando
+     sale bien (el ticket tarda unos segundos en salir y sin aviso alguien pulsa cinco veces)
+     como cuando el pedido no era reimprimible. */
+  function handleReprint(orderId: string) {
+    setError(null);
+    setAviso(null);
+    startTransition(() => {
+      reprintOrderAction(orderId)
+        .then((hecho) => {
+          setAviso(
+            hecho
+              ? "Reimprimiendo: el ticket saldrá en unos segundos."
+              : "Ese pedido no se puede reimprimir.",
+          );
+        })
+        .catch(() => {
+          setError("No se pudo reimprimir. Inténtalo de nuevo.");
+        });
+    });
+  }
+
   return (
     <>
       {error ? (
         <p className={styles.alert} role="alert">
           {error}
+        </p>
+      ) : null}
+      {aviso ? (
+        <p className={styles.notice} role="status" data-testid="staff-reprint-notice">
+          {aviso}
         </p>
       ) : null}
       <div className={styles.board}>
@@ -78,6 +108,7 @@ export function OrdersBoard({ tenantId, orders }: { tenantId: string; orders: St
                 order={order}
                 station="cocina"
                 onDone={handleDone}
+                onReprint={handleReprint}
                 disabled={isPending}
               />
             ))}
@@ -94,6 +125,7 @@ export function OrdersBoard({ tenantId, orders }: { tenantId: string; orders: St
                 order={order}
                 station="barra"
                 onDone={handleDone}
+                onReprint={handleReprint}
                 disabled={isPending}
               />
             ))}
@@ -108,11 +140,13 @@ function OrderCard({
   order,
   station,
   onDone,
+  onReprint,
   disabled,
 }: {
   order: StaffOrder;
   station: Station;
   onDone: (orderId: string, station: Station) => void;
+  onReprint: (orderId: string) => void;
   disabled: boolean;
 }) {
   const stationStatus = station === "cocina" ? order.kitchenStatus : order.barStatus;
@@ -140,14 +174,28 @@ function OrderCard({
           </li>
         ))}
       </ul>
-      <button
-        type="button"
-        className={styles.doneBtn}
-        onClick={() => onDone(order.id, station)}
-        disabled={disabled || done}
-      >
-        {done ? "Hecho" : "Marcar hecho"}
-      </button>
+      <div className={styles.cardActions}>
+        {/* Secundario y sin confirmación: reimprimir no destruye nada -- como mucho salen dos
+            tickets iguales, que es MUCHO menos malo que no salir ninguno, y quien lo pulsa
+            está delante de la impresora comprobándolo. */}
+        <button
+          type="button"
+          className={styles.reprintBtn}
+          data-testid="order-reprint"
+          onClick={() => onReprint(order.id)}
+          disabled={disabled}
+        >
+          Reimprimir
+        </button>
+        <button
+          type="button"
+          className={styles.doneBtn}
+          onClick={() => onDone(order.id, station)}
+          disabled={disabled || done}
+        >
+          {done ? "Hecho" : "Marcar hecho"}
+        </button>
+      </div>
     </article>
   );
 }

@@ -1,8 +1,11 @@
 "use server";
 
-import { markStationDone as markStationDoneInDb } from "@suarex/db";
+import {
+  markStationDone as markStationDoneInDb,
+  reprintOrder as reprintOrderInDb,
+} from "@suarex/db";
 import { revalidatePath } from "next/cache";
-import { parseMarkStationDoneInput } from "@/lib/staff-order-input";
+import { parseMarkStationDoneInput, parseOrderId } from "@/lib/staff-order-input";
 import { getStaffSession } from "@/lib/supabase-server";
 import { requireTenant } from "@/lib/tenant-context";
 
@@ -43,4 +46,28 @@ export async function markStationDone(orderId: string, station: string): Promise
 
   await markStationDoneInDb(session.tenantId, input.orderId, input.station);
   revalidatePath("/staff");
+}
+
+/**
+ * Vuelve a poner un pedido en la cola de impresión (#15). Mismo patrón de seguridad que
+ * `markStationDone`: el `tenantId` sale de la sesión contrastada contra el Host, nunca de un
+ * argumento, y el `orderId` se valida antes de tocar la base.
+ *
+ * Devuelve si se ha reimprimido de verdad. Un pedido sin pagar, o de otro tenant, no encuentra
+ * fila y devuelve `false` -- el tablero lo dice en pantalla en vez de fingir que el ticket ya
+ * está saliendo, que es exactamente lo que haría que alguien se quedara esperando delante de la
+ * impresora.
+ */
+export async function reprintOrderAction(orderId: string): Promise<boolean> {
+  const id = parseOrderId(orderId);
+
+  const tenant = await requireTenant();
+  const session = await getStaffSession(tenant);
+  if (!session) {
+    throw new Error("No autenticado");
+  }
+
+  const hecho = await reprintOrderInDb(session.tenantId, id);
+  revalidatePath("/staff");
+  return hecho;
 }
