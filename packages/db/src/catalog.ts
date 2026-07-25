@@ -5,6 +5,15 @@ type ProductExtraRow = {
   id: string;
   name_i18n: Record<string, string>;
   price: string | number;
+  group_id: string | null;
+};
+
+type OptionGroupRow = {
+  id: string;
+  name_i18n: Record<string, string>;
+  min_select: number;
+  max_select: number;
+  sort_order: number;
 };
 
 export async function getCategories(tenantId: string): Promise<Category[]> {
@@ -37,8 +46,11 @@ export async function getCategories(tenantId: string): Promise<Category[]> {
  */
 export async function getProducts(tenantId: string): Promise<Product[]> {
   const { data, error } = await tenantScoped("products", tenantId)
+    // Una sola cadena LITERAL, sin concatenar: supabase-js deduce el tipo de la fila leyendo
+    // este texto en tiempo de compilación, y un `+` por en medio lo deja sin poder hacerlo (la
+    // fila pasa a `GenericStringError` y revienta cada acceso a una columna).
     .select(
-      "id, category_id, name_i18n, description_i18n, price, image_url, allergen_ids, is_available, sort_order, product_extras(id, name_i18n, price)",
+      "id, category_id, name_i18n, description_i18n, price, image_url, allergen_ids, is_available, sort_order, product_extras(id, name_i18n, price, group_id), product_option_groups(id, name_i18n, min_select, max_select, sort_order)",
     )
     .eq("is_available", true)
     .order("sort_order", { ascending: true });
@@ -51,7 +63,26 @@ export async function getProducts(tenantId: string): Promise<Product[]> {
       id: extra.id,
       nameI18n: extra.name_i18n,
       price: Number(extra.price),
+      groupId: extra.group_id ?? null,
     }));
+
+    /* Los grupos llegan con SUS opciones ya dentro (#16). La ficha del producto tiene que pintar
+       "elige el punto de la carne" como una unidad, y el servidor tiene que validarla igual, así
+       que la pertenencia se resuelve UNA vez aquí en vez de cruzarla en cada consumidor.
+       El orden es el que fijó el gestor: un menú del día se lee primero -> segundo -> postre, y
+       dejarlo al orden en que la base devuelva las filas lo barajaría en cada carga. */
+    const groupRows = (row.product_option_groups ?? []) as unknown as OptionGroupRow[];
+    const optionGroups = groupRows
+      .slice()
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map((group) => ({
+        id: group.id,
+        nameI18n: group.name_i18n,
+        minSelect: group.min_select,
+        maxSelect: group.max_select,
+        sortOrder: group.sort_order,
+        options: extras.filter((extra) => extra.groupId === group.id),
+      }));
 
     return {
       id: row.id as string,
@@ -64,6 +95,7 @@ export async function getProducts(tenantId: string): Promise<Product[]> {
       isAvailable: row.is_available as boolean,
       sortOrder: row.sort_order as number,
       extras,
+      optionGroups,
     };
   });
 }

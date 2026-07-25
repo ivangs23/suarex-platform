@@ -165,6 +165,14 @@ export type Strings = {
    *  volver sola al inicio: sin papel, el código de la pantalla es lo único que tiene. */
   totemNoReceiptWarning: string;
   totemNoReceiptCollect: string;
+  /** Regla de un grupo de opciones (#16), escrita en la cabecera del grupo. `{min}`/`{max}` se
+   *  sustituyen por los números; están en el texto para que cada idioma los ponga donde le toque. */
+  optionsChooseExact: string;
+  optionsChooseRange: string;
+  optionsChooseUpTo: string;
+  /** Por qué "Añadir" está apagado. Deliberadamente genérico: el grupo concreto que falta ya se
+   *  ve en pantalla, y enumerarlos aquí duplicaría lo que el comensal está mirando. */
+  optionsRequiredHint: string;
 };
 
 const ES: Strings = {
@@ -243,6 +251,10 @@ const ES: Strings = {
   totemNoReceiptWarning:
     "Ahora mismo no podemos imprimir el recibo. Podrás pagar igualmente, pero apunta o fotografía tu código al terminar.",
   totemNoReceiptCollect: "No hemos podido imprimir tu recibo: apunta o fotografía este código.",
+  optionsChooseExact: "Elige {min}",
+  optionsChooseRange: "Elige entre {min} y {max}",
+  optionsChooseUpTo: "Hasta {max}, opcional",
+  optionsRequiredHint: "Elige las opciones obligatorias para poder añadirlo.",
 };
 
 const EN: Strings = {
@@ -321,6 +333,10 @@ const EN: Strings = {
   totemNoReceiptWarning:
     "We can't print receipts right now. You can still pay, but write down or photograph your code at the end.",
   totemNoReceiptCollect: "We couldn't print your receipt: write down or photograph this code.",
+  optionsChooseExact: "Choose {min}",
+  optionsChooseRange: "Choose between {min} and {max}",
+  optionsChooseUpTo: "Up to {max}, optional",
+  optionsRequiredHint: "Choose the required options to add it.",
 };
 
 const PT: Strings = {
@@ -399,6 +415,10 @@ const PT: Strings = {
   totemNoReceiptWarning:
     "Neste momento não conseguimos imprimir o recibo. Pode pagar na mesma, mas anote ou fotografe o seu código no final.",
   totemNoReceiptCollect: "Não conseguimos imprimir o seu recibo: anote ou fotografe este código.",
+  optionsChooseExact: "Escolhe {min}",
+  optionsChooseRange: "Escolhe entre {min} e {max}",
+  optionsChooseUpTo: "Até {max}, opcional",
+  optionsRequiredHint: "Escolhe as opções obrigatórias para adicionar.",
 };
 
 const STRINGS: Record<Lang, Strings> = { es: ES, en: EN, pt: PT };

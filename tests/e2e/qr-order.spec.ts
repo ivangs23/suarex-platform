@@ -4,6 +4,7 @@ import {
   deleteOrder,
   latestOrderForTenant,
   orderLineNotes,
+  productIdByName,
 } from "./helpers/orders-db.js";
 
 /**
@@ -295,4 +296,90 @@ test("la cookie de una mesa no sirve para pedir desde otra", async ({ page }) =>
 test("la carta de un tenant no muestra productos de otro", async ({ page }) => {
   await page.goto(TINTOS);
   await expect(page.getByText("Tosta de jamón")).toHaveCount(0);
+});
+
+/** Los entrantes del seed: ahí está la "Tabla de quesos", el producto con modificadores. */
+const ENTRANTES = "http://garum.localhost:3000/1?cat=entrantes";
+
+async function abreLaTabla(page: import("@playwright/test").Page) {
+  await page.goto(QR_MESA_1);
+  await page.goto(ENTRANTES);
+  await page
+    .getByTestId("product")
+    .filter({ hasText: "Tabla de quesos" })
+    .getByTestId("open-product-sheet")
+    .click();
+  const ficha = page.getByTestId("product-sheet");
+  await expect(ficha).toBeVisible();
+  return ficha;
+}
+
+test("un modificador obligatorio bloquea el añadir hasta que se elige", async ({ page }) => {
+  const ficha = await abreLaTabla(page);
+
+  // Los dos grupos del seed, con su regla escrita: quien lee la ficha sabe qué se espera de él
+  // antes de tocar nada.
+  const grupos = ficha.getByTestId("option-group");
+  await expect(grupos).toHaveCount(2);
+  await expect(grupos.first()).toContainText("Elige 2 quesos");
+  await expect(grupos.first().getByTestId("option-group-rule")).toHaveText("Elige 2");
+
+  // Sin elegir, no se puede añadir -- y se dice por qué, en vez de dejar un botón mudo.
+  await expect(ficha.getByTestId("sheet-add")).toBeDisabled();
+  await expect(ficha.getByTestId("sheet-missing")).toBeVisible();
+
+  // Un solo queso sigue sin bastar: el mínimo es dos.
+  const quesos = grupos.first().getByTestId("extra-checkbox");
+  await quesos.nth(0).click();
+  await expect(ficha.getByTestId("sheet-add")).toBeDisabled();
+
+  // Con los dos, ya se puede.
+  await quesos.nth(1).click();
+  await expect(ficha.getByTestId("sheet-add")).toBeEnabled();
+  await expect(ficha.getByTestId("sheet-missing")).toHaveCount(0);
+
+  // Y el tercero ya no se deja marcar: el grupo está lleno.
+  await expect(quesos.nth(2)).toBeDisabled();
+
+  await ficha.getByTestId("sheet-add").click();
+  await expect(ficha).toHaveCount(0);
+  // Los quesos no llevan recargo: el total es el del producto.
+  await esperaTotal(page, "14,00 €");
+});
+
+test("un grupo opcional no bloquea nada, pero respeta su tope", async ({ page }) => {
+  const ficha = await abreLaTabla(page);
+
+  const acompanamiento = ficha.getByTestId("option-group").nth(1);
+  await expect(acompanamiento.getByTestId("option-group-rule")).toHaveText("Hasta 2, opcional");
+
+  // Cumplido solo el grupo obligatorio, ya se puede añadir sin tocar el opcional.
+  const quesos = ficha.getByTestId("option-group").first().getByTestId("extra-checkbox");
+  await quesos.nth(0).click();
+  await quesos.nth(1).click();
+  await expect(ficha.getByTestId("sheet-add")).toBeEnabled();
+
+  // Y si se usa, suma su precio: 14,00 + 1,00.
+  await acompanamiento.getByTestId("extra-checkbox").first().click();
+  await expect(ficha.getByTestId("sheet-total")).toHaveText("15,00 €");
+
+  await ficha.getByTestId("sheet-add").click();
+  await esperaTotal(page, "15,00 €");
+});
+
+test("el servidor rechaza un pedido sin la opción obligatoria, aunque la pantalla se salte", async ({
+  page,
+}) => {
+  // La ficha ya lo impide, pero `POST /api/orders` es un endpoint público: este test lo llama
+  // a pelo, que es exactamente lo que haría alguien saltándose la pantalla, y comprueba que la
+  // garantía vive en el servidor y no en un botón deshabilitado.
+  await page.goto(QR_MESA_1);
+
+  const productId = await productIdByName("garum", "Tabla de quesos");
+  const response = await page.request.post("http://garum.localhost:3000/api/orders", {
+    data: { lines: [{ productId, quantity: 1, extraIds: [], notes: null }] },
+  });
+
+  expect(response.ok()).toBeFalsy();
+  expect(JSON.stringify(await response.json())).toContain("Elige 2 quesos");
 });

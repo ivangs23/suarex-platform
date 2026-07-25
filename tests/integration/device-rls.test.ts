@@ -128,6 +128,24 @@ describe("contrato de lectura de un device", () => {
   });
 });
 
+describe("el catálogo sigue fuera del contrato de un device", () => {
+  it("no ve los grupos de opciones de su propio tenant (#16)", async () => {
+    // Control positivo: la fila existe de verdad, sembrada por `seedCatalog`. Sin esto, un cero
+    // podría venir de que no hubiera nada que ver, no de la policy.
+    const { data: existe } = await admin
+      .from("product_option_groups")
+      .select("id")
+      .eq("id", seedA.optionGroupId);
+    expect(existe ?? []).toHaveLength(1);
+
+    // El device construye el ticket con los snapshots ya congelados en `order_items`, así que la
+    // carta -- y los grupos, que son carta -- no entran en lo que necesita ver.
+    const { data, error } = await deviceA.client.from("product_option_groups").select("id");
+    expect(error).toBeNull();
+    expect(data ?? []).toHaveLength(0);
+  });
+});
+
 describe("reserve_printed_self: la única vía de un device para marcar impreso", () => {
   it("un device puede marcar su propio pedido como impreso vía la RPC", async () => {
     const { error } = await deviceA.client.rpc("reserve_printed_self", {

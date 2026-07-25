@@ -488,3 +488,187 @@ describe("markOrderPaid", () => {
     expect(outcome).toBe("order-not-found");
   });
 });
+
+/**
+ * MODIFICADORES OBLIGATORIOS (#16) en el camino que de verdad manda.
+ *
+ * La ficha del producto ya impide añadir al carrito una selección incompleta, pero eso es una
+ * comodidad de pantalla: `POST /api/orders` es un endpoint público y el totem tiene su propio
+ * camino, así que la garantía tiene que estar aquí. Estos tests son los que dicen que una
+ * hamburguesa no puede llegar a cocina sin punto de la carne por mucho que alguien fabrique la
+ * petición a mano.
+ */
+describe("createPendingOrder con grupos de opciones", () => {
+  let hamburguesaId: string;
+  let grupoPuntoId: string;
+  let pocoId: string;
+  let alPuntoId: string;
+  let quesoId: string;
+
+  beforeAll(async () => {
+    const { data: category } = await admin
+      .from("categories")
+      .insert({
+        tenant_id: tenant.tenantId,
+        slug: `burger-${nonce()}`,
+        name_i18n: { es: "Hamburguesas" },
+        destination: "cocina",
+      })
+      .select("id")
+      .single();
+
+    const { data: product } = await admin
+      .from("products")
+      .insert({
+        tenant_id: tenant.tenantId,
+        category_id: category?.id,
+        name_i18n: { es: "Hamburguesa" },
+        price: 12.0,
+      })
+      .select("id")
+      .single();
+    hamburguesaId = product?.id as string;
+
+    const { data: grupo } = await admin
+      .from("product_option_groups")
+      .insert({
+        tenant_id: tenant.tenantId,
+        product_id: hamburguesaId,
+        name_i18n: { es: "Punto de la carne" },
+        min_select: 1,
+        max_select: 1,
+      })
+      .select("id")
+      .single();
+    grupoPuntoId = grupo?.id as string;
+
+    const { data: opciones } = await admin
+      .from("product_extras")
+      .insert([
+        {
+          tenant_id: tenant.tenantId,
+          product_id: hamburguesaId,
+          group_id: grupoPuntoId,
+          name_i18n: { es: "Poco hecha" },
+          price: 0,
+        },
+        {
+          tenant_id: tenant.tenantId,
+          product_id: hamburguesaId,
+          group_id: grupoPuntoId,
+          name_i18n: { es: "Al punto" },
+          price: 0,
+        },
+        // Un añadido SUELTO (sin grupo): el comportamiento de siempre, que no debe cambiar.
+        {
+          tenant_id: tenant.tenantId,
+          product_id: hamburguesaId,
+          group_id: null,
+          name_i18n: { es: "Extra de queso" },
+          price: 1.5,
+        },
+      ])
+      .select("id, name_i18n");
+    const porNombre = new Map(
+      (opciones ?? []).map((o) => [(o.name_i18n as Record<string, string>).es, o.id as string]),
+    );
+    pocoId = porNombre.get("Poco hecha") as string;
+    alPuntoId = porNombre.get("Al punto") as string;
+    quesoId = porNombre.get("Extra de queso") as string;
+  });
+
+  it("rechaza el pedido si falta la elección obligatoria, y dice qué grupo falta", async () => {
+    await expect(
+      createPendingOrder({
+        tenantId: tenant.tenantId,
+        venueId,
+        tableId,
+        lines: [{ productId: hamburguesaId, quantity: 1, extraIds: [], notes: null }],
+        taxRate: 0.1,
+      }),
+    ).rejects.toThrow(/Punto de la carne/);
+  });
+
+  it("acepta el pedido con la elección hecha", async () => {
+    const order = await createPendingOrder({
+      tenantId: tenant.tenantId,
+      venueId,
+      tableId,
+      lines: [{ productId: hamburguesaId, quantity: 1, extraIds: [alPuntoId], notes: null }],
+      taxRate: 0.1,
+    });
+    expect(order.totalCents).toBe(1200);
+  });
+
+  it("rechaza elegir dos donde el grupo solo permite una", async () => {
+    await expect(
+      createPendingOrder({
+        tenantId: tenant.tenantId,
+        venueId,
+        tableId,
+        lines: [
+          { productId: hamburguesaId, quantity: 1, extraIds: [pocoId, alPuntoId], notes: null },
+        ],
+        taxRate: 0.1,
+      }),
+    ).rejects.toThrow(/como mucho 1/);
+  });
+
+  it("un añadido suelto NO cumple el grupo obligatorio", async () => {
+    // El queso existe, es de este producto y se cobraría bien; lo que no hace es ser un punto
+    // de la carne. Sin esta distinción, marcar cualquier extra colaría el pedido.
+    await expect(
+      createPendingOrder({
+        tenantId: tenant.tenantId,
+        venueId,
+        tableId,
+        lines: [{ productId: hamburguesaId, quantity: 1, extraIds: [quesoId], notes: null }],
+        taxRate: 0.1,
+      }),
+    ).rejects.toThrow(/Punto de la carne/);
+  });
+
+  it("con el grupo cumplido, el añadido suelto se sigue cobrando como siempre", async () => {
+    const order = await createPendingOrder({
+      tenantId: tenant.tenantId,
+      venueId,
+      tableId,
+      lines: [
+        { productId: hamburguesaId, quantity: 1, extraIds: [alPuntoId, quesoId], notes: null },
+      ],
+      taxRate: 0.1,
+    });
+    expect(order.totalCents).toBe(1350);
+  });
+
+  it("un producto SIN grupos sigue funcionando exactamente igual", async () => {
+    const order = await createPendingOrder({
+      tenantId: tenant.tenantId,
+      venueId,
+      tableId,
+      lines: [{ productId, quantity: 1, extraIds: [], notes: null }],
+      taxRate: 0.1,
+    });
+    expect(order.totalCents).toBe(1800);
+  });
+
+  it("la elección de un grupo se congela en la línea, como cualquier otra opción", async () => {
+    const order = await createPendingOrder({
+      tenantId: tenant.tenantId,
+      venueId,
+      tableId,
+      lines: [{ productId: hamburguesaId, quantity: 1, extraIds: [pocoId], notes: null }],
+      taxRate: 0.1,
+    });
+    const { data: item } = await admin
+      .from("order_items")
+      .select("id, order_item_extras(name_snapshot)")
+      .eq("order_id", order.orderId)
+      .single();
+    const nombres = ((item?.order_item_extras ?? []) as { name_snapshot: { es: string } }[]).map(
+      (e) => e.name_snapshot.es,
+    );
+    // Cocina tiene que ver "Poco hecha" en el papel aunque mañana se renombre la opción.
+    expect(nombres).toEqual(["Poco hecha"]);
+  });
+});

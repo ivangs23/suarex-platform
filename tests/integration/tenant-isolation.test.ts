@@ -147,6 +147,21 @@ const WRITE_FIXTURES: Record<string, WriteFixture> = {
     updateColumn: "price",
     updateValue: 999.99,
   },
+  product_option_groups: {
+    // Mismo razonamiento que product_extras: `product_id` es de B y A no lo ve, así que el
+    // trigger `assert_same_tenant` (que corre con la RLS del invocador) no puede resolver el
+    // padre y rechaza antes de que el WITH CHECK de la policy llegue a evaluarse.
+    insertPayload: ({ tenantB, seedB }) => ({
+      tenant_id: tenantB.tenantId,
+      product_id: seedB.productId,
+      name_i18n: { es: "Intruso" },
+      min_select: 1,
+      max_select: 1,
+    }),
+    expectedInsertRejection: SAME_TENANT_TRIGGER_REJECTION,
+    updateColumn: "max_select",
+    updateValue: 9,
+  },
   memberships: {
     // El ataque más relevante: A intenta auto-concederse membresía en el tenant de B.
     // Tras la ronda de fix de seguridad #3 (20260721000006_memberships_lockdown.sql),

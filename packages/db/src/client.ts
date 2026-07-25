@@ -41,6 +41,7 @@ export type TenantScopedTable =
   | "categories"
   | "products"
   | "product_extras"
+  | "product_option_groups"
   | "tables"
   | "orders"
   | "order_items"

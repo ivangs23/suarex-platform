@@ -3,10 +3,12 @@
 import {
   createCategory,
   createExtra,
+  createOptionGroup,
   createProduct,
   createTenantAllergen,
   deleteCategory,
   deleteExtra,
+  deleteOptionGroup,
   deleteProduct,
   deleteTenantAllergen,
   listCategoryParents,
@@ -318,7 +320,10 @@ export const createExtraAction = managerAction(async (session, formData: FormDat
   const nameEs = requiredString(formData, "name_es");
   const price = parseEuroPrice(formData, "price");
 
-  await createExtra(session.tenantId, { productId, nameI18n: { es: nameEs }, price });
+  // Vacío = añadido suelto, que es el comportamiento de siempre.
+  const groupId = optionalString(formData, "group_id") ?? null;
+
+  await createExtra(session.tenantId, { productId, nameI18n: { es: nameEs }, price, groupId });
   revalidatePath("/admin/catalogo");
 });
 
@@ -326,6 +331,45 @@ export const deleteExtraAction = managerAction(async (session, formData: FormDat
   const extraId = requiredString(formData, "extra_id");
 
   await deleteExtra(session.tenantId, extraId);
+  revalidatePath("/admin/catalogo");
+});
+
+// ------------------------------------------------- grupos de opciones (modificadores, #16)
+
+/**
+ * Un límite del formulario. Se parsea aquí, ANTES de tocar la base, por el mismo motivo que
+ * `parseAllergenIds`: lo que llega es texto del navegador, y un "dos" o un "-1" tienen que
+ * morir con un mensaje claro en vez de como un error de constraint de Postgres. El acuerdo
+ * entre mínimo y máximo lo comprueba `createOptionGroup` en el repositorio, que es donde vive
+ * esa regla de negocio (y la base la respalda con `product_option_groups_range`).
+ */
+function parseLimite(formData: FormData, field: string): number {
+  const raw = requiredString(formData, field);
+  const valor = Number(raw);
+  if (!Number.isInteger(valor) || valor < 0) {
+    throw new InvalidFormFieldError(`${field} debe ser un número entero: ${JSON.stringify(raw)}`);
+  }
+  return valor;
+}
+
+export const createOptionGroupAction = managerAction(async (session, formData: FormData) => {
+  const productId = requiredString(formData, "product_id");
+  const nameEs = requiredString(formData, "name_es");
+
+  await createOptionGroup(session.tenantId, {
+    productId,
+    nameI18n: { es: nameEs },
+    minSelect: parseLimite(formData, "min_select"),
+    maxSelect: parseLimite(formData, "max_select"),
+    sortOrder: parseOptionalInt(formData, "sort_order") ?? 0,
+  });
+  revalidatePath("/admin/catalogo");
+});
+
+export const deleteOptionGroupAction = managerAction(async (session, formData: FormData) => {
+  const groupId = requiredString(formData, "group_id");
+
+  await deleteOptionGroup(session.tenantId, groupId);
   revalidatePath("/admin/catalogo");
 });
 
