@@ -1,12 +1,61 @@
 "use client";
 
 import { pickupCodeFromToken } from "@suarex/domain";
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Strings } from "@/lib/i18n";
 import { CartPanelHost } from "../../[mesa]/cart/CartPanelHost";
 import { CartProvider, useCart } from "../../[mesa]/cart/CartProvider";
+import { graceSecondsLeft, type IdlePhase, idlePhase } from "./idle";
 import { PaytefPaymentStep } from "./PaytefPaymentStep";
 import styles from "./totem.module.css";
+
+/** Sin tocar la pantalla durante este tiempo, el totem avisa; tras el margen extra, se reinicia
+ *  para el siguiente cliente. Lo bastante largo para leer una carta sin prisa. */
+const IDLE_MS = 90_000;
+const GRACE_MS = 15_000;
+/** Tras recoger, la pantalla de "gracias" vuelve sola a la bienvenida: nadie va a pulsar el botón
+ *  cuando ya tiene su comida en la mano. */
+const DONE_RETURN_MS = 20_000;
+
+/**
+ * Vigila la inactividad del totem con un latido corto: en vez de encadenar temporizadores, mira
+ * cuánto hace del último toque. Así un reloj que salta o una pestaña ralentizada no dejan el
+ * totem colgado a medio pedido.
+ */
+function useIdleWatch(enabled: boolean): { phase: IdlePhase; secondsLeft: number } {
+  const [lastActivity, setLastActivity] = useState(() => Date.now());
+  const [phase, setPhase] = useState<IdlePhase>("active");
+  const [secondsLeft, setSecondsLeft] = useState(0);
+
+  useEffect(() => {
+    if (!enabled) return;
+    /* Al (re)activar la vigilancia, la cuenta empieza de cero. Sin esto, quien pasa un rato en la
+       pantalla del datáfono y luego CANCELA volvería a la carta con el contador ya vencido y se
+       encontraría el carrito borrado en el acto. */
+    setLastActivity(Date.now());
+    const touch = () => setLastActivity(Date.now());
+    const eventos = ["pointerdown", "keydown", "touchstart", "wheel"] as const;
+    for (const evento of eventos) window.addEventListener(evento, touch, { passive: true });
+    return () => {
+      for (const evento of eventos) window.removeEventListener(evento, touch);
+    };
+  }, [enabled]);
+
+  useEffect(() => {
+    if (!enabled) {
+      setPhase("active");
+      return;
+    }
+    const id = window.setInterval(() => {
+      const transcurrido = Date.now() - lastActivity;
+      setPhase(idlePhase(transcurrido, IDLE_MS, GRACE_MS));
+      setSecondsLeft(graceSecondsLeft(transcurrido, IDLE_MS, GRACE_MS));
+    }, 500);
+    return () => window.clearInterval(id);
+  }, [enabled, lastActivity]);
+
+  return { phase, secondsLeft };
+}
 
 /**
  * EL ENVOLTORIO DEL TOTEM: los pasos que rodean a la carta.
@@ -84,6 +133,16 @@ export function TotemFlow({
   // se teclea. Memoizado por (token, mesa) para no rehacer `checkout` en cada render.
   const totem = useMemo(() => ({ token, tableLabel: flow.tableLabel }), [token, flow.tableLabel]);
 
+  // Estable a propósito: de esta función cuelga el temporizador de la pantalla de recogida, y una
+  // identidad nueva en cada render lo reiniciaría sin llegar a disparar nunca.
+  const olvidaFlujo = useCallback(() => {
+    try {
+      window.sessionStorage.removeItem(storageKey);
+    } catch {
+      // Sin almacenamiento no hay nada que olvidar.
+    }
+  }, [storageKey]);
+
   return (
     <CartProvider locale={locale} currency={currency} canOrder strings={strings} totem={totem}>
       {children}
@@ -95,13 +154,7 @@ export function TotemFlow({
         welcomeNode={welcomeNode}
         strings={strings}
         basePath={`/totem/${token}`}
-        onReset={() => {
-          try {
-            window.sessionStorage.removeItem(storageKey);
-          } catch {
-            // ignorar
-          }
-        }}
+        onReset={olvidaFlujo}
       />
     </CartProvider>
   );
@@ -134,6 +187,32 @@ function TotemChrome({
   const cart = useCart();
   const [paid, setPaid] = useState<{ tableLabel: string | null; pickup: string } | null>(null);
 
+  // Pizarra limpia para el siguiente cliente. La misma operación tanto si la pide él como si salta
+  // por inactividad, así que vive en un solo sitio. `clearCart` es estable (ver `CartProvider`).
+  const clearCart = cart?.clearCart;
+  const reiniciaTotem = useCallback(() => {
+    clearCart?.();
+    onReset();
+    window.location.href = basePath;
+  }, [clearCart, onReset, basePath]);
+
+  /* La vigilancia de inactividad SOLO corre con un pedido a medias. Nunca durante el cobro -- ahí
+     hay dinero en juego y manda el datáfono, no un temporizador nuestro -- ni en la bienvenida,
+     donde no hay nada que perder. */
+  const enPedido = hydrated && !paid && !cart?.paytefPago && flow.step !== "welcome";
+  const { phase, secondsLeft } = useIdleWatch(enPedido);
+
+  useEffect(() => {
+    if (enPedido && phase === "expired") reiniciaTotem();
+  }, [enPedido, phase, reiniciaTotem]);
+
+  // Tras recoger, la pantalla vuelve sola: nadie pulsa un botón con la comida ya en la mano.
+  useEffect(() => {
+    if (!paid) return;
+    const id = window.setTimeout(reiniciaTotem, DONE_RETURN_MS);
+    return () => window.clearTimeout(id);
+  }, [paid, reiniciaTotem]);
+
   // Hasta hidratar no se sabe el paso: solo la carta de fondo, sin overlay.
   if (!hydrated || !cart) return null;
 
@@ -159,13 +238,7 @@ function TotemChrome({
           type="button"
           className={styles.bigButton}
           data-testid="totem-new-order"
-          onClick={() => {
-            // Pizarra limpia para el siguiente comensal: se vacía el carrito, se borra el flujo y
-            // se recarga la ruta base (vuelve a la bienvenida, sin arrastrar nada del anterior).
-            cart.clearCart();
-            onReset();
-            window.location.href = basePath;
-          }}
+          onClick={reiniciaTotem}
         >
           {t.totemNewOrder}
         </button>
@@ -185,6 +258,36 @@ function TotemChrome({
           });
         }}
       />
+    );
+  }
+
+  /* ¿SIGUES AHÍ? Alguien dejó el pedido a medias. Se avisa antes de borrar nada -- puede estar
+     leyendo la carta con calma -- y cualquier toque en la pantalla cancela el aviso, porque el
+     propio escuchador de actividad reinicia la cuenta. */
+  if (enPedido && phase === "warning") {
+    return (
+      <section className={styles.overlay} data-testid="totem-idle-warning">
+        <h1 className={styles.title}>{t.totemStillThere}</h1>
+        <p className={styles.subtitle}>{t.totemStillThereBody}</p>
+        <p className={styles.pickup} data-testid="totem-idle-countdown">
+          {secondsLeft}
+        </p>
+        <div className={styles.actions}>
+          <button
+            type="button"
+            className={styles.ghostButton}
+            data-testid="totem-idle-startover"
+            onClick={reiniciaTotem}
+          >
+            {t.totemStartOver}
+          </button>
+          {/* No necesita onClick propio: el toque ya lo recoge el escuchador de actividad y la
+              fase vuelve a "active" sola. El botón existe para que se vea qué hacer. */}
+          <button type="button" className={styles.bigButton} data-testid="totem-idle-stay">
+            {t.totemImHere}
+          </button>
+        </div>
+      </section>
     );
   }
 
@@ -245,8 +348,24 @@ function TotemChrome({
     );
   }
 
-  // CARTA: sin overlay. El botón del pedido lo pone el tema; el panel, `CartPanelHost`.
-  return <CartPanelHost />;
+  /* CARTA: sin overlay, porque la pinta el tema del cliente. Solo se le añade una salida: en la
+     carta no hay ningún paso previo al que volver, así que sin esto un cliente que se equivoca de
+     modo o quiere empezar de cero no tiene forma de hacerlo salvo esperar a la inactividad. */
+  return (
+    <>
+      <CartPanelHost />
+      <button
+        type="button"
+        className={styles.startOver}
+        data-testid="totem-startover"
+        onClick={() => {
+          if (window.confirm(t.totemStartOverConfirm)) reiniciaTotem();
+        }}
+      >
+        {t.totemStartOver}
+      </button>
+    </>
+  );
 }
 
 /**

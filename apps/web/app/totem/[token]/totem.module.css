@@ -29,6 +29,31 @@
   appearance: none;
 }
 
+/* Salida de emergencia en el paso de la carta, donde el tema del cliente manda y no hay ningún
+   control nuestro. Discreta a propósito: es una escapatoria, no una acción que invitar a pulsar.
+   Abajo a la izquierda para no competir con el botón del pedido, que los temas ponen arriba. */
+.startOver {
+  position: fixed;
+  left: clamp(0.75rem, 2vw, 1.25rem);
+  bottom: clamp(0.75rem, 2vw, 1.25rem);
+  z-index: 40;
+  min-height: 3rem;
+  padding: 0 1.1rem;
+  border: 1px solid color-mix(in oklab, var(--color-fg) 25%, transparent);
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--color-bg) 88%, transparent);
+  backdrop-filter: blur(4px);
+  color: color-mix(in oklab, var(--color-fg) 70%, var(--color-bg));
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.startOver:hover {
+  color: var(--color-fg);
+  border-color: color-mix(in oklab, var(--color-fg) 45%, transparent);
+}
+
 .overlay,
 .overlayHero {
   position: fixed;

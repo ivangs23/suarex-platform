@@ -158,6 +158,30 @@ test("un pago rechazado se puede reintentar, sin marcar el pedido pagado", async
   }
 });
 
+test("empezar de nuevo deja el totem limpio para el siguiente cliente", async ({ page }) => {
+  // Un totem no cierra el navegador entre clientes: sin esto, quien deja un pedido a medias se lo
+  // regala al siguiente, que se encuentra comida ajena en su carrito -- o la paga.
+  await page.goto(`${ORIGIN}/totem/${token}`);
+  await page.getByTestId("totem-start").click();
+  await page.getByTestId("totem-takeaway").click();
+  await añadeProducto(page);
+
+  // El carrito tiene algo: el botón del pedido lo cuenta.
+  await page.getByTestId("cart-open").click();
+  await expect(page.getByTestId("cart-panel").getByTestId("cart-line")).toHaveCount(1);
+  await page.getByTestId("cart-panel-close").click();
+
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByTestId("totem-startover").click();
+
+  // Vuelta a la bienvenida y carrito vacío: el siguiente cliente empieza de cero.
+  await expect(page.getByTestId("totem-welcome")).toBeVisible();
+  await page.getByTestId("totem-start").click();
+  await page.getByTestId("totem-takeaway").click();
+  await page.getByTestId("cart-open").click();
+  await expect(page.getByTestId("cart-panel").getByTestId("cart-empty")).toBeVisible();
+});
+
 test("sin datáfono (fuera de un totem) no se finge un cobro: se dice que no está disponible", async ({
   page,
 }) => {
