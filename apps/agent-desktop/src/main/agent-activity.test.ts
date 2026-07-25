@@ -7,6 +7,7 @@ const tick = (over: Partial<AgentTickResult> = {}): AgentTickResult => ({
   failed: 0,
   succeeded: [],
   failures: [],
+  receiptStatus: { status: "unknown" },
   ...over,
 });
 

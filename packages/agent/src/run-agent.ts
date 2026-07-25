@@ -2,11 +2,16 @@ import { parseBranding } from "@suarex/config";
 import { type PrintableOrder, selectUnprintedOrders } from "@suarex/db";
 import { pickupCodeFromToken, taxBreakdown } from "@suarex/domain";
 import {
+  aggregateStatus,
+  createPrinterHealth,
   deviceKey,
   enqueueByDevice,
   type PrinterConfig,
+  type PrinterHealth,
+  type PrinterStatus,
   printToPrinter,
   probeTcp,
+  stillFresh,
 } from "@suarex/printing";
 import { subscribeToOrders } from "@suarex/realtime";
 import {
@@ -22,10 +27,13 @@ import { paidUnprintedOrderRows } from "./device-orders.js";
 
 const DEFAULT_POLL_MS = 4000;
 
-/** Una entrega de ticket que falló, con lo justo para avisar de qué impresora cayó. */
+/** Una impresora que no responde, con lo justo para avisar de cuál es. */
 export type PrintFailure = {
   printerId: string;
-  orderNumber: number;
+  /** El pedido que se quedó sin imprimir, o `null` si el fallo lo destapó una SONDA y no una
+   *  entrega: una impresora apagada de madrugada no tiene ningún pedido asociado, y esperar a
+   *  que lo tenga es esperar a que un cliente pague por descubrirlo. */
+  orderNumber: number | null;
   destination: "cocina" | "barra" | "all" | "recibo";
   reason: string;
 };
@@ -33,8 +41,9 @@ export type PrintFailure = {
 export type AgentTickResult = {
   printed: number;
   failed: number;
-  /** Ids de las impresoras que entregaron OK en este tick. Sirve para detectar que una
-   *  impresora que estaba caída ha vuelto (y retirar su aviso), no solo cuándo cae. */
+  /** Ids de las impresoras que en este tick se sabe VIVAS, por entrega o por sonda. Sirve para
+   *  detectar que una impresora que estaba caída ha vuelto (y retirar su aviso), no solo cuándo
+   *  cae -- y por la sonda eso se nota aunque no haya ningún pedido que imprimir. */
   succeeded: string[];
   /** Solo los fallos de ENTREGA (impresora inalcanzable), para avisar de una impresora
    *  caída. No incluye el fallo transitorio de marcar impreso (se reintenta sin perder nada). */
@@ -42,6 +51,15 @@ export type AgentTickResult = {
   /** Presente solo si el tick entero reventó (p. ej. la lectura de pedidos): sin él, un fallo
    *  de red dejaría la UI diciendo "imprimiendo" con la cocina muda y sin explicación. */
   error?: string;
+  /**
+   * Estado de la impresora de RECIBOS de este dispositivo al cerrar el tick (#15). Lo consulta
+   * el totem ANTES de cobrar: si sale `down`, el cliente se entera de que no habrá papel
+   * mientras todavía puede apuntar su código, y no después de pagar.
+   *
+   * `unknown` cuando este dispositivo no tiene ninguna impresora de recibos configurada (que no
+   * es una avería) o cuando aún no hay evidencia de ninguna.
+   */
+  receiptStatus: PrinterStatus;
 };
 
 type PrinterRowDb = {
@@ -241,11 +259,17 @@ function toReceiptOrder(order: PrintableOrder, locale: string): ReceiptOrder {
  * (RPC, JWT del device -- nunca el service role). Orden entregar→marcar (at-least-once): un
  * fallo entre ambos reimprime en el siguiente tick, nunca pierde el ticket. La marca es por
  * impresora, así que un pedido con una impresora ok y otra caída solo reintenta la caída.
+ *
+ * `health` (#15) acumula lo que se sabe del estado de cada impresora: cada entrega lo alimenta
+ * -- una entrega completada es mejor prueba que cualquier sonda -- y al cerrar el tick se sondea
+ * lo que no tenga evidencia fresca. De ahí sale `receiptStatus`, que el totem consulta antes de
+ * cobrar. Sin `health` el tick funciona igual; solo devuelve `unknown`.
  */
 export async function runAgentTick(
   client: SupabaseClient,
   appVersion: string | null = null,
   osPrinters: string[] | null = null,
+  health: PrinterHealth | null = null,
 ): Promise<AgentTickResult> {
   // Una sola lectura de `printers` por tick, compartida entre "qué falta imprimir"
   // (`selectUnprintedOrders`) y "a qué impresora" (`resolvePrintersFromRows`) -- antes se
@@ -289,6 +313,7 @@ export async function runAgentTick(
       const result = await enqueueByDevice(deviceKey(printer.config), () =>
         printToPrinter(lines, printer.config),
       );
+      health?.record(printer.config, result);
       if (result.ok) {
         // La entrega funcionó -> la impresora está viva, aunque luego falle marcarla. Cuenta
         // como "recuperada" para retirar un aviso previo de impresora caída.
@@ -320,6 +345,39 @@ export async function runAgentTick(
     }
   }
 
+  // Sondeo de lo que no se ha ejercitado con una entrega real. Va DESPUÉS del bucle de
+  // impresión a propósito: primero salen los tickets que la gente está esperando, y el
+  // diagnóstico se cobra el tiempo que sobra. Un fallo aquí no puede derribar el tick.
+  const recibo = printers.filter((p) => p.destination === "recibo");
+  if (health) {
+    try {
+      await health.refresh(printers.map((p) => p.config));
+    } catch (error) {
+      console.error("[agent] fallo al sondear impresoras:", error);
+    }
+
+    /* Lo que dice la sonda de las impresoras que este tick no ha ejercitado. Sin esto, el local
+       solo se entera de que la cocina está apagada cuando alguien ya ha pagado un pedido que no
+       va a salir; con esto se entera a los cuatro segundos de que se apague, con la barra vacía. */
+    const yaVista = new Set([...succeeded, ...failures.map((f) => f.printerId)]);
+    for (const printer of printers) {
+      if (yaVista.has(printer.id)) continue;
+      const estado = health.read(printer.config);
+      if (estado.status === "ok") succeeded.add(printer.id);
+      else if (estado.status === "down") {
+        failures.push({
+          printerId: printer.id,
+          orderNumber: null,
+          destination: printer.destination,
+          reason: estado.reason,
+        });
+      }
+    }
+  }
+  const receiptStatus = health
+    ? aggregateStatus(recibo.map((p) => health.read(p.config)))
+    : ({ status: "unknown" } as const);
+
   // Heartbeat informativo: nunca derriba el tick. `client.rpc(...)` devuelve un
   // PostgrestBuilder que solo implementa `PromiseLike` (tiene `.then`, no `.catch`), así que
   // se envuelve en try/await/catch en vez de encadenar `.catch` directamente.
@@ -331,7 +389,7 @@ export async function runAgentTick(
     // informativo: un fallo aquí no debe derribar el tick de impresión.
   }
 
-  return { printed, failed, succeeded: [...succeeded], failures };
+  return { printed, failed, succeeded: [...succeeded], failures, receiptStatus };
 }
 
 /**
@@ -367,6 +425,11 @@ export async function runAgent(
   const pollMs = opts?.pollMs ?? DEFAULT_POLL_MS;
   const appVersion = opts?.appVersion ?? null;
 
+  // Vive lo que vive el agente, no lo que vive un tick: el valor de esto es precisamente
+  // acumular evidencia entre ticks para poder contestar al instante cuando el totem pregunta.
+  const health = createPrinterHealth();
+  let receiptStatus: PrinterStatus = { status: "unknown" };
+
   // `running` evita solapar ticks; `pending` recuerda que llegó un disparo (poll o Realtime)
   // MIENTRAS uno corría, para relanzar UNO al terminar en vez de perderlo. Juntos coalescen
   // una ráfaga de eventos de Realtime en el mínimo de ticks sin perder ninguno.
@@ -390,15 +453,20 @@ export async function runAgent(
           osPrinters = null;
         }
       }
-      const result = await runAgentTick(client, appVersion, osPrinters);
+      const result = await runAgentTick(client, appVersion, osPrinters, health);
+      receiptStatus = result.receiptStatus;
       opts?.onTick?.(result);
     } catch (error) {
       console.error("[agent] tick falló:", error);
+      // El tick reventó ANTES de poder mirar las impresoras (típicamente sin red). No se toca
+      // `receiptStatus`: la última evidencia real sigue siendo la mejor que hay, y su propia
+      // caducidad la degradará a `unknown` sola si esto se prolonga.
       opts?.onTick?.({
         printed: 0,
         failed: 0,
         succeeded: [],
         failures: [],
+        receiptStatus,
         error: error instanceof Error ? error.message : String(error),
       });
     } finally {
@@ -423,6 +491,7 @@ export async function runAgent(
   }
 
   return {
+    receiptPrinterStatus: () => stillFresh(receiptStatus, Date.now()),
     stop: () => {
       clearInterval(timer);
       unsubscribe?.();
@@ -440,5 +509,15 @@ export async function runAgent(
 export type AgentHandle = {
   stop: () => void;
   probeNetworkPrinters: () => Promise<NetworkPrinterProbe[]>;
+  /**
+   * Estado de la impresora de recibos AHORA (#15), sin tocar la red: contesta con lo que el
+   * último tick dejó apuntado. Tiene que ser instantáneo porque quien pregunta es el totem con
+   * un cliente delante a punto de pasar la tarjeta -- tres segundos de sonda ahí serían tres
+   * segundos de pantalla congelada.
+   *
+   * La caducidad se aplica al MIRAR, no al guardar: si el agente lleva un rato sin poder dar un
+   * tick (sin red), lo último que supo deja de valer y esto pasa a `unknown` solo.
+   */
+  receiptPrinterStatus: () => PrinterStatus;
   client: SupabaseClient;
 };

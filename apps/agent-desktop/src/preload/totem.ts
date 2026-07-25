@@ -16,6 +16,13 @@ type PayResult =
   | { status: "declined"; reason: string }
   | { status: "in-doubt"; authCode: string; reason: string };
 
+/** Mismo contrato que `PrinterStatus` de `@suarex/printing`. */
+type PrinterStatus =
+  | { status: "ok"; checkedAt: number }
+  | { status: "down"; reason: string; checkedAt: number }
+  | { status: "unknown" };
+
 contextBridge.exposeInMainWorld("totem", {
   pay: (orderId: string): Promise<PayResult> => ipcRenderer.invoke("totem-pay", orderId),
+  printerStatus: (): Promise<PrinterStatus> => ipcRenderer.invoke("totem-printer-status"),
 });

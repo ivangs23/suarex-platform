@@ -160,6 +160,11 @@ export type Strings = {
   totemInDoubt: string;
   totemInDoubtBody: string;
   totemAuthCode: string;
+  /** Impresora de recibos caída (#15). Se avisa ANTES de cobrar, mientras el cliente todavía
+   *  puede apuntar su código, y se repite en la pantalla de recogida -- que además deja de
+   *  volver sola al inicio: sin papel, el código de la pantalla es lo único que tiene. */
+  totemNoReceiptWarning: string;
+  totemNoReceiptCollect: string;
 };
 
 const ES: Strings = {
@@ -235,6 +240,9 @@ const ES: Strings = {
   totemInDoubtBody:
     "Tu pago se ha realizado, pero no hemos podido registrar el pedido. No vuelvas a pagar: enseña este código.",
   totemAuthCode: "Código de autorización",
+  totemNoReceiptWarning:
+    "Ahora mismo no podemos imprimir el recibo. Podrás pagar igualmente, pero apunta o fotografía tu código al terminar.",
+  totemNoReceiptCollect: "No hemos podido imprimir tu recibo: apunta o fotografía este código.",
 };
 
 const EN: Strings = {
@@ -310,6 +318,9 @@ const EN: Strings = {
   totemInDoubtBody:
     "Your payment went through, but we could not register the order. Do not pay again: show this code.",
   totemAuthCode: "Authorisation code",
+  totemNoReceiptWarning:
+    "We can't print receipts right now. You can still pay, but write down or photograph your code at the end.",
+  totemNoReceiptCollect: "We couldn't print your receipt: write down or photograph this code.",
 };
 
 const PT: Strings = {
@@ -385,6 +396,9 @@ const PT: Strings = {
   totemInDoubtBody:
     "O seu pagamento foi efetuado, mas não conseguimos registar o pedido. Não pague de novo: mostre este código.",
   totemAuthCode: "Código de autorização",
+  totemNoReceiptWarning:
+    "Neste momento não conseguimos imprimir o recibo. Pode pagar na mesma, mas anote ou fotografe o seu código no final.",
+  totemNoReceiptCollect: "Não conseguimos imprimir o seu recibo: anote ou fotografe este código.",
 };
 
 const STRINGS: Record<Lang, Strings> = { es: ES, en: EN, pt: PT };

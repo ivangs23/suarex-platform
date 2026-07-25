@@ -29,13 +29,29 @@ test.beforeEach(async () => {
   await clearAllRateLimits();
 });
 
-/** Inyecta el puente `window.totem` con el veredicto que cada test quiera (aprobar/rechazar). */
-async function stubTotemBridge(page: Page, result: { ok: boolean; reason?: string }) {
+/**
+ * Inyecta el puente `window.totem` con el veredicto que cada test quiera (aprobar/rechazar).
+ *
+ * `printerStatus` se omite salvo que el test lo pida: así el camino por defecto ejerce el mismo
+ * caso que un totem con un escritorio anterior a #15 -- puente sin ese método -- y comprueba de
+ * paso que ahí no se avisa de nada.
+ */
+async function stubTotemBridge(
+  page: Page,
+  result: { ok: boolean; reason?: string; printer?: "ok" | "down" },
+) {
   await page.addInitScript((r) => {
-    (window as unknown as { totem: unknown }).totem = {
+    const bridge: Record<string, unknown> = {
       pay: async () =>
         r.ok ? { status: "paid", authCode: "TEST-AUTH" } : { status: "declined", reason: r.reason },
     };
+    if (r.printer) {
+      bridge.printerStatus = async () =>
+        r.printer === "ok"
+          ? { status: "ok", checkedAt: Date.now() }
+          : { status: "down", reason: "apagada", checkedAt: Date.now() };
+    }
+    (window as unknown as { totem: unknown }).totem = bridge;
   }, result);
 }
 
@@ -130,6 +146,62 @@ test("para llevar: se salta la mesa y la recogida muestra un número, no una mes
   } finally {
     await deleteOrder(orderId);
   }
+});
+
+test("impresora de recibos caída: avisa ANTES de cobrar y la recogida no se borra sola", async ({
+  page,
+}) => {
+  // Este test espera de verdad a que pase el plazo de auto-reinicio; ver el comentario de abajo.
+  test.slow();
+  await stubTotemBridge(page, { ok: true, printer: "down" });
+  await page.goto(`${ORIGIN}/totem/${token}`);
+
+  await page.getByTestId("totem-start").click();
+  await page.getByTestId("totem-takeaway").click();
+  await añadeProducto(page);
+  await page.getByTestId("cart-open").click();
+  await page.getByTestId("cart-panel").getByTestId("cart-pay").click();
+  await expect(page.getByTestId("totem-pay")).toBeVisible({ timeout: 30_000 });
+
+  // El aviso está EN LA PANTALLA DE PAGAR, con el botón de cobrar todavía disponible: es un
+  // aviso, no un bloqueo -- el código sale en pantalla, así que el pedido sigue valiendo.
+  await expect(page.getByTestId("totem-no-receipt")).toBeVisible();
+  await expect(page.getByTestId("totem-pay-start")).toBeEnabled();
+
+  const { orderId } = await latestOrderForTenant("garum");
+  try {
+    await page.getByTestId("totem-pay-start").click();
+    await expect(page.getByTestId("totem-done")).toBeVisible();
+    await expect(page.getByTestId("totem-done-no-receipt")).toBeVisible();
+
+    /* Y sigue ahí pasado el plazo con el que se borraría normalmente (`DONE_RETURN_MS`, 20 s):
+       sin papel, esta pantalla es el único sitio donde existe el código del cliente.
+       La espera es REAL y no un reloj falso a propósito: `page.clock` hay que instalarlo antes de
+       navegar, y falsear el tiempo durante todo el recorrido (hidratación de Next incluida)
+       cambiaría lo que se está probando. Veintitantos segundos en un único test es un precio
+       barato por una garantía sobre algo que el cliente ya ha pagado. */
+    await page.waitForTimeout(22_000);
+    await expect(page.getByTestId("totem-done-pickup")).toBeVisible();
+  } finally {
+    await deleteOrder(orderId);
+  }
+});
+
+test("con la impresora sana no se avisa de nada", async ({ page }) => {
+  await stubTotemBridge(page, { ok: true, printer: "ok" });
+  await page.goto(`${ORIGIN}/totem/${token}`);
+
+  await page.getByTestId("totem-start").click();
+  await page.getByTestId("totem-takeaway").click();
+  await añadeProducto(page);
+  await page.getByTestId("cart-open").click();
+  await page.getByTestId("cart-panel").getByTestId("cart-pay").click();
+  await expect(page.getByTestId("totem-pay")).toBeVisible({ timeout: 30_000 });
+
+  await expect(page.getByTestId("totem-no-receipt")).toHaveCount(0);
+
+  const { orderId } = await latestOrderForTenant("garum");
+  await deleteOrder(orderId);
 });
 
 test("un pago rechazado se puede reintentar, sin marcar el pedido pagado", async ({ page }) => {

@@ -6,7 +6,7 @@ import {
   type SessionStore,
   signInAndPersistSession,
 } from "@suarex/agent";
-import { registerUsbRawSink } from "@suarex/printing";
+import { type PrinterStatus, registerUsbRawSink } from "@suarex/printing";
 import {
   type ActivityAlerts,
   type AgentActivity,
@@ -114,6 +114,12 @@ export function isAgentRunning(): boolean {
  *  segundo bucle de refresh que rotaría el token por debajo del agente). `null` si no arrancó. */
 export function getDeviceClient(): SupabaseClient | null {
   return handle?.client ?? null;
+}
+
+/** Estado de la impresora de recibos de este totem (#15), sin tocar la red. `unknown` cuando el
+ *  agente no está en marcha: sin agente no hay evidencia, y eso no es una avería. */
+export function receiptPrinterStatus(): PrinterStatus {
+  return handle?.receiptPrinterStatus() ?? { status: "unknown" };
 }
 
 /** Sondea las impresoras de red bajo demanda, reusando el cliente del agente en marcha (#12).

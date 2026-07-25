@@ -1,4 +1,5 @@
 import { createDeviceClient, runAgentTick } from "@suarex/agent";
+import { createPrinterHealth } from "@suarex/printing";
 import { afterEach, describe, expect, it } from "vitest";
 import { type FakedPrinter, startFakePrinter } from "../helpers/fake-escpos-server.js";
 import {
@@ -590,6 +591,52 @@ describe("runAgentTick", () => {
     expect(cocina.connectionCount()).toBe(1);
     expect(recibo.connectionCount()).toBe(1);
   });
+
+  it("#15: el tick sabe si la impresora de recibos responde, con pedidos o sin ellos", async () => {
+    const cocina = await startFakePrinter();
+    const recibo = await startFakePrinter();
+    openPrinters.push(cocina, recibo);
+    const f = await seedKioskoLoop(cocina.port, recibo.port);
+    fixtures.push(f);
+
+    const client = await createDeviceClient({
+      supabaseUrl: supabaseUrlForTest(),
+      anonKey: anonKeyForTest(),
+      email: f.deviceEmail,
+      password: f.devicePassword,
+    });
+
+    /* `trustOkMs: 0` desactiva la ventana en la que un `ok` reciente se da por bueno sin volver
+       a sondear (10 s en producción). Aquí los tres ticks caen en el mismo segundo, así que con
+       el valor real ninguno llegaría a mirar la impresora apagada y el test estaría comprobando
+       el reloj, no el comportamiento. */
+    const health = createPrinterHealth({ trustOkMs: 0 });
+    // Primer tick CON salud: imprime, y la propia entrega es la evidencia de que responde.
+    const r1 = await runAgentTick(client, null, null, health);
+    expect(r1.printed).toBe(2);
+    expect(r1.receiptStatus.status).toBe("ok");
+
+    // Ya no queda nada que imprimir. Aun así se sigue sabiendo el estado: es exactamente el
+    // caso que importa, porque el totem pregunta ANTES de que exista el pedido siguiente.
+    const r2 = await runAgentTick(client, null, null, health);
+    expect(r2.printed).toBe(0);
+    expect(r2.receiptStatus.status).toBe("ok");
+
+    // Se apaga la impresora de recibos. El siguiente latido lo nota SIN que nadie pague nada.
+    await recibo.close();
+    openPrinters.splice(openPrinters.indexOf(recibo), 1);
+    const r3 = await runAgentTick(client, null, null, health);
+    expect(r3.receiptStatus.status).toBe("down");
+    // Y sale como avería reportable aunque no haya ningún pedido asociado.
+    expect(r3.failures.some((x) => x.destination === "recibo" && x.orderNumber === null)).toBe(
+      true,
+    );
+    // La de cocina sigue viva y consta como tal, así que un aviso suyo previo se retiraría.
+    expect(r3.succeeded.length).toBeGreaterThan(0);
+
+    // Sin `health` el tick funciona igual y no afirma nada: es la ruta de quien no lo pasa.
+    expect((await runAgentTick(client)).receiptStatus).toEqual({ status: "unknown" });
+  }, 30_000);
 
   it("Finding 1 (revisión final whole-branch): un pedido de V1 imprime SOLO en la impresora de V1, nunca en la de V2", async () => {
     const p1 = await startFakePrinter();

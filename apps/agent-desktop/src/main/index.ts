@@ -16,6 +16,7 @@ import {
   establishSessionFromPassword,
   getDeviceClient,
   onAgentActivity,
+  receiptPrinterStatus,
   setAppVersion,
   setPrintersProvider,
   startAgent,
@@ -79,9 +80,10 @@ function handleAgentActivity(activity: AgentActivity, alerts: ActivityAlerts): v
   const printed = activity.printedTotal - prevActivity.printedTotal;
   if (printed > 0) logger?.info(`Impresos ${printed} ticket(s) (total ${activity.printedTotal}).`);
   for (const f of alerts.newlyDown) {
-    logger?.warn(
-      `Impresora de ${f.destination} sin responder (pedido #${f.orderNumber}): ${f.reason}.`,
-    );
+    // Sin pedido (`orderNumber` null) el aviso viene de una SONDA: la impresora no responde y
+    // todavía no ha perjudicado a nadie, que es justo cuándo conviene enterarse.
+    const dondeDuele = f.orderNumber === null ? "" : ` (pedido #${f.orderNumber})`;
+    logger?.warn(`Impresora de ${f.destination} sin responder${dondeDuele}: ${f.reason}.`);
   }
   if (alerts.recovered.length > 0) {
     logger?.info(`Impresora(s) recuperada(s): ${alerts.recovered.join(", ")}.`);
@@ -234,7 +236,7 @@ async function maybeStartKiosk(): Promise<void> {
     const token = data?.totem_token as string | undefined;
     if (!token || !roles.includes("kiosko")) return;
 
-    registerTotemIpc(getDeviceClient);
+    registerTotemIpc(getDeviceClient, receiptPrinterStatus);
     const kioskWindow = openKioskWindow(`${PLATFORM_WEB_ORIGIN}/totem/${token}`);
     kioskWindow.on("close", (e) => {
       // El totem no se cierra a mano: si alguien lo intenta, se vuelve a mostrar (salvo al salir).

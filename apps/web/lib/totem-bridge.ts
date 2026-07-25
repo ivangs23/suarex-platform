@@ -23,12 +23,31 @@ export type TotemPayResult =
   | { status: "declined"; reason: string }
   | { status: "in-doubt"; authCode: string; reason: string };
 
+/**
+ * Estado de la impresora de recibos del totem. Refleja `PrinterStatus` de `@suarex/printing`.
+ *
+ * `unknown` NO es una avería: es un totem sin impresora de recibos configurada, o un agente que
+ * aún no tiene evidencia. La carta solo avisa al cliente en `down` -- avisar sin evidencia
+ * convierte el aviso en ruido de fondo y nadie lo lee el día que sí importa.
+ */
+export type TotemPrinterStatus =
+  | { status: "ok"; checkedAt: number }
+  | { status: "down"; reason: string; checkedAt: number }
+  | { status: "unknown" };
+
 export type TotemBridge = {
   /**
    * Cobra un pedido del totem por el datáfono. Recibe SOLO el id del pedido: el importe lo relee
    * el agente del servidor. Resuelve aprobado/rechazado; no lanza salvo fallo del propio puente.
    */
   pay: (orderId: string) => Promise<TotemPayResult>;
+  /**
+   * Lo que el agente sabe de la impresora de recibos, sin tocar la red (#15). Opcional en el
+   * tipo a propósito: un totem con una versión anterior del escritorio no lo expone, y la carta
+   * -- que se despliega antes que el escritorio -- tiene que seguir funcionando ahí sin avisar
+   * de nada.
+   */
+  printerStatus?: () => Promise<TotemPrinterStatus>;
 };
 
 declare global {
@@ -42,4 +61,19 @@ export function getTotemBridge(): TotemBridge | null {
   if (typeof window === "undefined") return null;
   const bridge = window.totem;
   return bridge && typeof bridge.pay === "function" ? bridge : null;
+}
+
+/**
+ * Lo que se sabe de la impresora de recibos, o `unknown` si no hay forma de saberlo -- fuera de
+ * un totem, con un escritorio anterior a #15, o si el propio puente falla. NUNCA lanza: esto se
+ * consulta en el camino de cobrar, y un fallo del diagnóstico no puede impedir una venta.
+ */
+export async function readPrinterStatus(): Promise<TotemPrinterStatus> {
+  const bridge = getTotemBridge();
+  if (typeof bridge?.printerStatus !== "function") return { status: "unknown" };
+  try {
+    return await bridge.printerStatus();
+  } catch {
+    return { status: "unknown" };
+  }
 }

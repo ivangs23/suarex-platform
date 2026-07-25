@@ -185,7 +185,12 @@ function TotemChrome({
   onReset: () => void;
 }) {
   const cart = useCart();
-  const [paid, setPaid] = useState<{ tableLabel: string | null; pickup: string } | null>(null);
+  const [paid, setPaid] = useState<{
+    tableLabel: string | null;
+    pickup: string;
+    /** El cobro salió bien pero la impresora de recibos estaba caída (#15). */
+    sinRecibo: boolean;
+  } | null>(null);
 
   // Pizarra limpia para el siguiente cliente. La misma operación tanto si la pide él como si salta
   // por inactividad, así que vive en un solo sitio. `clearCart` es estable (ver `CartProvider`).
@@ -206,9 +211,12 @@ function TotemChrome({
     if (enPedido && phase === "expired") reiniciaTotem();
   }, [enPedido, phase, reiniciaTotem]);
 
-  // Tras recoger, la pantalla vuelve sola: nadie pulsa un botón con la comida ya en la mano.
+  /* Tras recoger, la pantalla vuelve sola: nadie pulsa un botón con la comida ya en la mano.
+     SALVO si el recibo no se ha impreso: entonces esta pantalla es el único sitio donde existe su
+     código, y borrarla a los veinte segundos es exactamente cómo alguien se queda sin poder
+     reclamar lo que acaba de pagar. Ahí espera a que la cierre una persona. */
   useEffect(() => {
-    if (!paid) return;
+    if (!paid || paid.sinRecibo) return;
     const id = window.setTimeout(reiniciaTotem, DONE_RETURN_MS);
     return () => window.clearTimeout(id);
   }, [paid, reiniciaTotem]);
@@ -234,6 +242,11 @@ function TotemChrome({
             </p>
           </>
         )}
+        {paid.sinRecibo ? (
+          <p className={styles.notice} data-testid="totem-done-no-receipt">
+            {t.totemNoReceiptCollect}
+          </p>
+        ) : null}
         <button
           type="button"
           className={styles.bigButton}
@@ -251,10 +264,11 @@ function TotemChrome({
     const publicToken = cart.paytefPago.publicToken;
     return (
       <PaytefPaymentStep
-        onApproved={() => {
+        onApproved={(sinRecibo) => {
           setPaid({
             tableLabel: flow.tableLabel,
             pickup: pickupCodeFromToken(publicToken),
+            sinRecibo,
           });
         }}
       />
