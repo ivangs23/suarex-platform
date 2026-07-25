@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import type { SupabaseClient } from "@suarex/agent";
+import type { PrinterStatus } from "@suarex/printing";
 import { BrowserWindow, ipcMain } from "electron";
 import { chargeKioskoOrder } from "./totem-charge.js";
 
@@ -53,13 +54,21 @@ export function openKioskWindow(totemUrl: string): BrowserWindow {
 let registered = false;
 
 /**
- * Registra el handler `totem-pay` (una sola vez). Cobra con el cliente del device del agente en
+ * Registra los handlers del totem (una sola vez). Cobra con el cliente del device del agente en
  * marcha (`getClient`), que es el MISMO que imprime -- una sola sesión, sin dos bucles de refresh.
  * Sin cliente (agente no arrancado) devuelve un fallo claro en vez de reventar.
+ *
+ * `totem-printer-status` (#15) contesta con lo que el agente ya sabe, sin tocar la red: la carta
+ * lo pregunta con un cliente delante, y una sonda de tres segundos ahí sería la pantalla
+ * congelada justo antes de pagar.
  */
-export function registerTotemIpc(getClient: () => SupabaseClient | null): void {
+export function registerTotemIpc(
+  getClient: () => SupabaseClient | null,
+  getReceiptStatus: () => PrinterStatus,
+): void {
   if (registered) return;
   registered = true;
+  ipcMain.handle("totem-printer-status", () => getReceiptStatus());
   ipcMain.handle("totem-pay", async (_event, orderId: string) => {
     // Ambos fallos son previos al cobro, así que son `declined`: no se ha movido dinero.
     const client = getClient();

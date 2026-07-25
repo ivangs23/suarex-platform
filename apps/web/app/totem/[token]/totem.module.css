@@ -300,3 +300,20 @@
   font-size: clamp(1rem, 2.5vw, 1.25rem);
   color: #b3261e;
 }
+
+/* Un AVISO, no un error. Lo que viene detrás FUNCIONA -- se puede pagar igual -- pero el cliente
+   tiene que saberlo mientras todavía puede decidir. De ahí el ámbar y no el rojo de `.error`, que
+   en la pantalla de pagar se leería como "algo ha fallado, no pagues". Es un color semántico
+   fijo, no de la marca: el color del tenant ya lo lleva el botón de pagar, y un aviso que se
+   camufla con la marca deja de ser un aviso. */
+.notice {
+  margin: 0;
+  max-width: 44ch;
+  padding: 0.875rem 1.25rem;
+  border-radius: 0.75rem;
+  border: 1px solid oklch(0.72 0.12 78);
+  background: oklch(0.96 0.04 88);
+  color: oklch(0.34 0.07 62);
+  font-size: clamp(1rem, 2.5vw, 1.25rem);
+  line-height: 1.4;
+}

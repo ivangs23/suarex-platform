@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { getTotemBridge, type TotemPayResult } from "@/lib/totem-bridge";
+import { useEffect, useState } from "react";
+import { getTotemBridge, readPrinterStatus, type TotemPayResult } from "@/lib/totem-bridge";
 import { useCart } from "../../[mesa]/cart/CartProvider";
 import styles from "./totem.module.css";
 
@@ -15,14 +15,33 @@ import styles from "./totem.module.css";
  *
  * Sin puente (`window.totem` ausente: un navegador normal, no un totem) no se finge un cobro: se
  * dice que el datáfono no está disponible. En e2e la prueba inyecta su propio puente.
+ *
+ * Antes de cobrar se mira la impresora de recibos (#15). Un aviso, NO un bloqueo: el código de
+ * recogida sale en pantalla, así que sin papel el pedido sigue siendo perfectamente válido y
+ * negar la venta por eso sería peor que hacerla. Lo que no vale es que el cliente se entere
+ * DESPUÉS de pagar, cuando ya no puede decidir nada.
  */
-export function PaytefPaymentStep({ onApproved }: { onApproved: () => void }) {
+export function PaytefPaymentStep({ onApproved }: { onApproved: (sinRecibo: boolean) => void }) {
   const cart = useCart();
   const [phase, setPhase] = useState<"idle" | "paying" | "declined" | "in-doubt">("idle");
+  /** `true` solo con evidencia de avería: `unknown` (fuera de un totem, o sin agente) no avisa. */
+  const [sinRecibo, setSinRecibo] = useState(false);
   const [reason, setReason] = useState<string | null>(null);
   /** Código de autorización cuando el cobro quedó en duda: es lo que permite al personal casarlo
    *  con el cierre del datáfono, así que tiene que estar a la vista. */
   const [authCode, setAuthCode] = useState<string | null>(null);
+
+  // Se consulta al entrar en el cobro y no antes: es el último instante en que el dato todavía
+  // sirve para algo, y el más fresco. No toca la red -- el agente contesta con lo que ya sabía.
+  useEffect(() => {
+    let vigente = true;
+    readPrinterStatus().then((estado) => {
+      if (vigente) setSinRecibo(estado.status === "down");
+    });
+    return () => {
+      vigente = false;
+    };
+  }, []);
 
   if (!cart?.paytefPago) return null;
   const t = cart.strings;
@@ -61,7 +80,7 @@ export function PaytefPaymentStep({ onApproved }: { onApproved: () => void }) {
       return;
     }
     if (result.status === "paid") {
-      onApproved();
+      onApproved(sinRecibo);
       return;
     }
     if (result.status === "in-doubt") {
@@ -149,6 +168,11 @@ export function PaytefPaymentStep({ onApproved }: { onApproved: () => void }) {
       <p className={styles.payTotal} data-testid="totem-pay-total">
         {totalLabel}
       </p>
+      {sinRecibo ? (
+        <p className={styles.notice} data-testid="totem-no-receipt">
+          {t.totemNoReceiptWarning}
+        </p>
+      ) : null}
       <div className={styles.actions}>
         <button
           type="button"
