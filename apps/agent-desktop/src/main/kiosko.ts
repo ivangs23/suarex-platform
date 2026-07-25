@@ -1,3 +1,4 @@
+import type { ChargeEvent } from "./charge-journal.js";
 import type { PaytefBridgeConfig, PaytefResult, PaytefStatus } from "./paytef.js";
 
 // Orquestación del cobro de un pedido del totem: leer el importe (del SERVIDOR), resolver la
@@ -14,11 +15,36 @@ export type ChargeOrderDeps = {
     config: PaytefBridgeConfig,
     amountCents: number,
     transactionReference: string,
-    opts: { onStatus?: (s: PaytefStatus, m: string) => void; isCancelled?: () => boolean },
+    opts: {
+      onStatus?: (s: PaytefStatus, m: string) => void;
+      isCancelled?: () => boolean;
+      onSession?: (sessionId: string) => void | Promise<void>;
+    },
   ) => Promise<PaytefResult>;
   /** Marca el pedido pagado tras aprobar (RPC acotada). `true` si marcó. */
   markPaid: (orderId: string) => Promise<boolean>;
+  /**
+   * Apunta un evento en el DIARIO DURABLE de cobros, y no vuelve hasta que está en disco.
+   *
+   * Es lo único que sobrevive a que el totem se apague a mitad de un pago: sin él, morir entre
+   * que el datáfono aprueba y el pedido queda marcado no deja rastro en ninguna parte y el
+   * cliente se queda pagado, sin comida y sin nadie a quien reclamar. Opcional para que los
+   * tests que solo miran la lógica del cobro no tengan que montar un fichero.
+   */
+  journal?: (event: ChargeEvent) => Promise<void>;
 };
+
+/**
+ * Un evento del diario tal y como lo escribe `chargeOrder`, sin `ref` ni `at`: esos dos los pone
+ * ella, que es quien conoce la referencia de la operación y el reloj inyectado.
+ *
+ * El rodeo por un tipo genérico NO sobra: un `Omit` aplicado directamente a una unión la aplasta
+ * a sus claves COMUNES, y entonces `{ t: "approved", authCode }` deja de compilar. Con el
+ * parámetro desnudo, el condicional se DISTRIBUYE sobre cada miembro y cada variante conserva lo
+ * suyo.
+ */
+type SinReferencia<T> = T extends unknown ? Omit<T, "ref" | "at"> : never;
+type EventoSinReferencia = SinReferencia<ChargeEvent>;
 
 /**
  * Cómo acabó el cobro. Son TRES desenlaces, no dos, y la diferencia es dinero real:
@@ -70,11 +96,31 @@ export async function chargeOrder(
   const now = opts.now ?? (() => Date.now());
   const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const reference = `ORD-${orderId}-${now()}`;
+  const journal = deps.journal;
+  const anota = (event: EventoSinReferencia): Promise<void> =>
+    journal ? journal({ ...event, ref: reference, at: now() } as ChargeEvent) : Promise.resolve();
+
+  /* ANTES de hablar con el datáfono, y en disco. Este es el orden que hace recuperable un corte
+     de corriente: si solo se apuntara lo aprobado, morir DURANTE el cobro dejaría el mismo
+     agujero una capa más abajo -- dinero cobrado del que no queda ni la referencia. */
+  await anota({ t: "started", orderId, amountCents: order.amountCents });
+
   const result = await deps.charge(config, order.amountCents, reference, {
     onStatus: opts.onStatus,
     isCancelled: opts.isCancelled,
+    // La sesión del datáfono, en cuanto existe: es lo que permite volver a preguntarle cómo
+    // acabó la operación si el proceso muere a mitad.
+    onSession: (sessionId) => anota({ t: "session", sessionId }),
   });
-  if (!result.approved) return { status: "declined", reason: result.reason };
+  if (!result.approved) {
+    // Cerrado: no se ha movido un céntimo, así que no hay nada que recuperar al arrancar.
+    await anota({ t: "declined", reason: result.reason });
+    return { status: "declined", reason: result.reason };
+  }
+
+  // Aprobado y en disco ANTES de intentar registrarlo: a partir de aquí, pase lo que pase, el
+  // siguiente arranque sabe que este cliente pagó y con qué código.
+  await anota({ t: "approved", authCode: result.authCode });
 
   /* A PARTIR DE AQUÍ EL CLIENTE YA HA PAGADO. Lo único que puede fallar es registrarlo, y eso sí
      se reintenta: un corte de red de unos segundos no debe convertirse en un cobro sin pedido.
@@ -82,7 +128,10 @@ export async function chargeOrder(
   for (let intento = 0; intento < MARK_ATTEMPTS; intento++) {
     if (intento > 0) await sleep(intento * 500);
     const marked = await deps.markPaid(orderId).catch(() => false);
-    if (marked) return { status: "paid", authCode: result.authCode };
+    if (marked) {
+      await anota({ t: "settled" });
+      return { status: "paid", authCode: result.authCode };
+    }
   }
 
   /* Cobrado y sin registrar. Se devuelve el código de autorización para que no se pierda: es lo

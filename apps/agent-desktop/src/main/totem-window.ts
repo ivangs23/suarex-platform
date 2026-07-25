@@ -2,6 +2,7 @@ import { join } from "node:path";
 import type { SupabaseClient } from "@suarex/agent";
 import type { PrinterStatus } from "@suarex/printing";
 import { BrowserWindow, ipcMain } from "electron";
+import type { ChargeJournal } from "./charge-journal.js";
 import { chargeKioskoOrder } from "./totem-charge.js";
 
 /** ¿La URL cuelga del mismo origen que el totem? Un `href` externo, un `window.open` o una
@@ -65,6 +66,7 @@ let registered = false;
 export function registerTotemIpc(
   getClient: () => SupabaseClient | null,
   getReceiptStatus: () => PrinterStatus,
+  journal?: ChargeJournal,
 ): void {
   if (registered) return;
   registered = true;
@@ -78,6 +80,6 @@ export function registerTotemIpc(
     if (typeof orderId !== "string" || orderId.length === 0) {
       return { status: "declined", reason: "Pedido inválido" };
     }
-    return chargeKioskoOrder(client, orderId);
+    return chargeKioskoOrder(client, orderId, { journal });
   });
 }

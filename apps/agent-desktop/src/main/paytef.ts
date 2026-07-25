@@ -98,6 +98,48 @@ export function interpretPollBody(body: PaytefBody): PollInterpretation {
 const CANCELLED: PaytefResult = { approved: false, reason: "Operación cancelada por el usuario" };
 
 /**
+ * Vuelve a preguntar al datáfono por UNA sesión concreta, sin iniciar nada.
+ *
+ * Es la pieza que hace recuperable el peor caso: el totem muere con el cobro en marcha y, al
+ * arrancar, el diario tiene la sesión pero no el desenlace. Preguntar es lo único que distingue
+ * "el cliente pagó y hay que registrarlo" de "no llegó a pagar y se puede reintentar" -- y sin
+ * esta función solo quedaba avisar a una persona.
+ *
+ * Un solo intento y sin bucle a propósito: esto corre AL ARRANCAR, no con un cliente delante, y
+ * una sesión que ya no existe (el datáfono las caduca) tiene que devolver "no se sabe" enseguida
+ * en vez de bloquear el arranque dos minutos.
+ */
+export async function pollPaytefSession(
+  config: PaytefBridgeConfig,
+  sessionId: string,
+  opts: { transport?: PaytefTransport } = {},
+): Promise<PollInterpretation> {
+  // En mock no hay sesión que consultar: quien lo use se apoya en lo que ya tenga apuntado.
+  if (config.mock) return { kind: "none" };
+
+  const transport = opts.transport ?? realTransport;
+  const auth = await transport(
+    "/authorize/",
+    "POST",
+    {},
+    {
+      accessKey: config.accessKey,
+      secretKey: config.secretKey,
+    },
+  );
+  const token = auth.body?.result?.token;
+  if (auth.status !== 200 || !token) return { kind: "none" };
+
+  const poll = await transport(
+    "/transaction/poll",
+    "POST",
+    { Authorization: `Bearer ${token}` },
+    { sessionID: sessionId, pinpad: config.pinpad },
+  );
+  return interpretPollBody(poll.body);
+}
+
+/**
  * Cobra `amountCents` por Paytef y devuelve aprobado/denegado. Con `mock` (por defecto en config
  * hasta tener datáfono real) simula un cobro aprobado. Emite estados por `onStatus` para la UI.
  * `transport`/`sleep` son inyectables para probar sin red ni relojes reales; `isCancelled` deja
@@ -114,6 +156,13 @@ export async function chargePaytef(
     sleep?: (ms: number) => Promise<void>;
     pollIntervalMs?: number;
     maxPolls?: number;
+    /**
+     * Se llama -- y se ESPERA -- en cuanto el datáfono devuelve sesión, antes del primer poll.
+     * El diario de cobros la apunta ahí: si el proceso muere a mitad de la operación, la sesión
+     * es lo único que permite volver a preguntar al datáfono por cómo acabó (`pollPaytefSession`)
+     * en vez de quedarse sin saber si el cliente pagó.
+     */
+    onSession?: (sessionId: string) => void | Promise<void>;
   } = {},
 ): Promise<PaytefResult> {
   const onStatus = opts.onStatus ?? (() => {});
@@ -163,6 +212,8 @@ export async function chargePaytef(
     onStatus("error", "No se pudo iniciar la operación");
     return { approved: false, reason: "No se pudo iniciar la transacción" };
   }
+  // Antes del primer poll: a partir de aquí el terminal ya puede estar cobrando.
+  await opts.onSession?.(sessionID);
 
   onStatus("waiting_card", "Siga las instrucciones del terminal");
 

@@ -4,6 +4,7 @@ import {
   markKioskoOrderPaid,
   readKioskoOrderForCharge,
 } from "@suarex/db";
+import type { ChargeJournal } from "./charge-journal.js";
 import { type ChargeOrderResult, chargeOrder } from "./kiosko.js";
 import { chargePaytef, type PaytefBridgeConfig } from "./paytef.js";
 
@@ -18,7 +19,7 @@ import { chargePaytef, type PaytefBridgeConfig } from "./paytef.js";
 export async function chargeKioskoOrder(
   client: SupabaseClient,
   orderId: string,
-  opts: { charge?: typeof chargePaytef } = {},
+  opts: { charge?: typeof chargePaytef; journal?: ChargeJournal } = {},
 ): Promise<ChargeOrderResult> {
   const charge = opts.charge ?? chargePaytef;
   return chargeOrder(
@@ -40,6 +41,11 @@ export async function chargeKioskoOrder(
       },
       charge: (config, amountCents, ref, o) => charge(config, amountCents, ref, o),
       markPaid: (id) => markKioskoOrderPaid(client, id),
+      // Sin diario el cobro funciona igual; con él, un tirón del enchufe deja de ser un cobro
+      // perdido. Ver `charge-journal.ts` y `runChargeRecovery`.
+      journal: opts.journal
+        ? (event) => opts.journal?.append(event) ?? Promise.resolve()
+        : undefined,
     },
     orderId,
   );
