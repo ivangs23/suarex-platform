@@ -19,8 +19,22 @@ type ProductRow = {
   name_i18n: Record<string, string>;
   price: string | number;
   is_available: boolean;
-  categories: { destination: string } | null;
+  /** `tax_rate` nulo = hereda (ver `resolveTaxRate`). */
+  tax_rate: string | number | null;
+  categories: { destination: string; tax_rate: string | number | null } | null;
 };
+
+/**
+ * Tipo de IVA de una línea, del escalón más concreto al más general: el del propio artículo, si
+ * no el de su categoría, y si tampoco el de la casa. Un bar normal solo toca el último; uno con
+ * tienda pone la categoría al 21 % y sigue sin editar producto a producto.
+ */
+function resolveTaxRate(product: ProductRow, tenantDefault: number): number {
+  if (product.tax_rate !== null && product.tax_rate !== undefined) return Number(product.tax_rate);
+  const categoria = product.categories?.tax_rate;
+  if (categoria !== null && categoria !== undefined) return Number(categoria);
+  return tenantDefault;
+}
 
 type ExtraRow = {
   id: string;
@@ -89,7 +103,7 @@ export async function createPendingOrder(input: {
   // El filtro por tenant lo aplica tenantScoped: un producto de otro tenant
   // sencillamente no aparece, y la comprobación de abajo lo convierte en error.
   const { data: products, error } = await tenantScoped("products", input.tenantId)
-    .select("id, name_i18n, price, is_available, categories(destination)")
+    .select("id, name_i18n, price, is_available, tax_rate, categories(destination, tax_rate)")
     .in("id", productIds);
   if (error) throw error;
 
@@ -122,6 +136,8 @@ export async function createPendingOrder(input: {
     line_total: number;
     destination: string;
     notes: string | null;
+    /** Congelado con la línea: un pedido de ayer no cambia de IVA porque hoy se edite la carta. */
+    tax_rate: number;
   }[] = [];
   // Paralelo a `rows` (mismo índice = misma línea): las extras congeladas de esa línea,
   // pendientes todavía del `order_item_id` que solo existe tras insertar `order_items`.
@@ -169,7 +185,13 @@ export async function createPendingOrder(input: {
     }
     extrasForRows.push(lineExtraRows);
 
-    const pricedLine: PricedLine = { unitPrice, quantity: line.quantity, extras: extrasCents };
+    const taxRate = resolveTaxRate(product, input.taxRate);
+    const pricedLine: PricedLine = {
+      unitPrice,
+      quantity: line.quantity,
+      extras: extrasCents,
+      taxRate,
+    };
     priced.push(pricedLine);
 
     rows.push({
@@ -183,10 +205,11 @@ export async function createPendingOrder(input: {
       line_total: centsToEuros(lineTotal(pricedLine)),
       destination: product.categories?.destination ?? "cocina",
       notes: line.notes,
+      tax_rate: taxRate,
     });
   }
 
-  const totals = computeTotals(priced, input.taxRate);
+  const totals = computeTotals(priced);
 
   const hasKitchen = rows.some((r) => r.destination === "cocina");
   const hasBar = rows.some((r) => r.destination === "barra");

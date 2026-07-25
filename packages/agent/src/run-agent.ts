@@ -1,6 +1,6 @@
 import { parseBranding } from "@suarex/config";
 import { type PrintableOrder, selectUnprintedOrders } from "@suarex/db";
-import { pickupCodeFromToken } from "@suarex/domain";
+import { pickupCodeFromToken, taxBreakdown } from "@suarex/domain";
 import {
   deviceKey,
   enqueueByDevice,
@@ -213,6 +213,21 @@ function toReceiptOrder(order: PrintableOrder, locale: string): ReceiptOrder {
     subtotalCents: order.subtotalCents,
     taxCents: order.taxCents,
     totalCents: order.totalCents,
+    /* Se reutiliza la MISMA función que calculó los totales del pedido en vez de reagrupar aquí:
+       si el recibo hiciera su propia aritmética, tarde o temprano se separaría del total impreso
+       arriba por un céntimo. Cada línea entra ya con su total, así que basta envolverla. */
+    taxBreakdown: taxBreakdown(
+      order.items.map((item) => ({
+        unitPrice: item.lineCents,
+        quantity: 1,
+        extras: [],
+        taxRate: item.taxRate,
+      })),
+    ).map((bucket) => ({
+      taxRate: bucket.taxRate,
+      baseCents: bucket.base,
+      taxCents: bucket.taxAmount,
+    })),
     currency: order.currency,
     locale,
     pickupCode: pickupCodeFromToken(order.publicToken),

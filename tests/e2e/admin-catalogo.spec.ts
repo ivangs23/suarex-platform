@@ -103,6 +103,9 @@ test("un owner crea una categoría y un producto (con imagen), y aparecen en la 
   await page.getByLabel("Slug").fill(slug);
   await page.getByLabel("Nombre de la categoría").fill(categoryName);
   await page.getByLabel("Destino").selectOption("barra");
+  // Una categoría de vinos PARA LLEVAR va al 21 %, no al 10 % de hostelería: es justo el
+  // caso que obliga a que el tipo viva en la categoría y no en el negocio entero.
+  await page.getByLabel("IVA de la categoría").selectOption("0.21");
   await page.getByRole("button", { name: "Crear categoría" }).click();
 
   // Espera a que la categoría aparezca en el ÁRBOL antes de navegar: la Server Action y su
@@ -134,6 +137,12 @@ test("un owner crea una categoría y un producto (con imagen), y aparecen en la 
     .locator('input[type="hidden"][name="category_id"]')
     .first()
     .inputValue();
+
+  // El 21 % elegido en el alta llegó de verdad a la base: el formulario de edición lo
+  // relee y lo trae ya seleccionado. Sin esta comprobación, un `tax_rate` que se perdiera
+  // por el camino pasaría inadvertido -- la categoría se crearía igual, pero heredando en
+  // silencio el 10 % de la casa y facturando mal cada botella.
+  await expect(categoryRow.getByLabel("Tipo impositivo de la categoría")).toHaveValue("0.21");
 
   // 2. Crea el producto "Ribera" a 18,00 € en esa categoría, con una imagen adjunta --
   // ejerce de verdad el camino de subida (`uploadProductImage`), no solo el campo

@@ -2,6 +2,7 @@
 
 import { useId, useState } from "react";
 import { createProductAction } from "./actions";
+import { TaxRateField } from "./TaxRateField";
 
 type CategoryOption = { id: string; name: string };
 type AllergenOption = { id: number; name: string };
@@ -59,6 +60,8 @@ export function ProductForm({
 
       <label htmlFor={`${formId}-price`}>Precio del producto (€)</label>
       <input id={`${formId}-price`} name="price" type="number" step="0.01" min="0" required />
+
+      <TaxRateField id={`${formId}-tax-rate`} etiqueta="IVA del producto" heredaDe="la categoría" />
 
       <label htmlFor={`${formId}-image`}>Imagen</label>
       {/* Los tipos EXACTOS que acepta el servidor, no `image/*`: con el comodín, el

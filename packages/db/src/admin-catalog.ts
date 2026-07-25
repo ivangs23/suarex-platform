@@ -9,6 +9,9 @@ export type CreateCategoryInput = {
   parentId?: string | null;
   imageUrl?: string | null;
   sortOrder?: number;
+  /** Tipo de IVA en tanto por uno (0.10 = 10 %). `null` = hereda de los ajustes del negocio.
+   *  Ver `resolveTaxRate` en `orders.ts` para la cadena completa. */
+  taxRate?: number | null;
 };
 
 export type UpdateCategoryInput = Partial<CreateCategoryInput>;
@@ -26,6 +29,9 @@ export type CreateProductInput = {
   imagePath?: string | null;
   allergenIds?: number[];
   sortOrder?: number;
+  /** Tipo de IVA en tanto por uno. `null` = hereda de su categoría. Es la excepción de un
+   *  artículo suelto; lo normal es dejarlo heredar. */
+  taxRate?: number | null;
 };
 
 export type UpdateProductInput = Partial<CreateProductInput>;
@@ -57,6 +63,8 @@ export type AdminProduct = {
   allergenIds: number[];
   isAvailable: boolean;
   sortOrder: number;
+  /** `null` = hereda de su categoría. */
+  taxRate: number | null;
   extras: AdminExtra[];
 };
 
@@ -72,6 +80,8 @@ export type AdminCategory = {
   icon: string | null;
   destination: CategoryDestination;
   sortOrder: number;
+  /** `null` = hereda de los ajustes del negocio. */
+  taxRate: number | null;
   products: AdminProduct[];
 };
 
@@ -109,6 +119,7 @@ function categoryInsertValues(input: CreateCategoryInput): Record<string, unknow
     parent_id: input.parentId ?? null,
     image_url: input.imageUrl ?? null,
     sort_order: input.sortOrder ?? 0,
+    tax_rate: input.taxRate ?? null,
   };
 }
 
@@ -154,6 +165,7 @@ export async function updateCategory(
   if (patch.parentId !== undefined) values.parent_id = patch.parentId;
   if (patch.imageUrl !== undefined) values.image_url = patch.imageUrl;
   if (patch.sortOrder !== undefined) values.sort_order = patch.sortOrder;
+  if (patch.taxRate !== undefined) values.tax_rate = patch.taxRate;
 
   const { error } = await tenantScoped("categories", tenantId).update(values).eq("id", categoryId);
   if (error) throw error;
@@ -182,6 +194,7 @@ export async function createProduct(
       image_url: input.imagePath ?? null,
       allergen_ids: input.allergenIds ?? [],
       sort_order: input.sortOrder ?? 0,
+      tax_rate: input.taxRate ?? null,
     })
     .select("id")
     .single();
@@ -204,6 +217,7 @@ export async function updateProduct(
   if (patch.imagePath !== undefined) values.image_url = patch.imagePath;
   if (patch.allergenIds !== undefined) values.allergen_ids = patch.allergenIds;
   if (patch.sortOrder !== undefined) values.sort_order = patch.sortOrder;
+  if (patch.taxRate !== undefined) values.tax_rate = patch.taxRate;
 
   const { error } = await tenantScoped("products", tenantId).update(values).eq("id", productId);
   if (error) throw error;
@@ -290,6 +304,7 @@ type AdminProductRow = {
   is_available: boolean;
   sort_order: number;
   product_extras: AdminExtraRow[];
+  tax_rate: string | number | null;
 };
 
 type AdminCategoryRow = {
@@ -301,6 +316,7 @@ type AdminCategoryRow = {
   destination: CategoryDestination;
   sort_order: number;
   products: AdminProductRow[];
+  tax_rate: string | number | null;
 };
 
 type AdminAllergenRow = {
@@ -324,9 +340,9 @@ export async function listAdminCatalog(tenantId: string): Promise<AdminCatalog> 
   const [categoriesResult, allergensResult] = await Promise.all([
     tenantScoped("categories", tenantId)
       .select(
-        "id, slug, name_i18n, parent_id, icon, destination, sort_order, " +
+        "id, slug, name_i18n, parent_id, icon, destination, sort_order, tax_rate, " +
           "products(id, category_id, name_i18n, description_i18n, price, image_url, " +
-          "allergen_ids, is_available, sort_order, product_extras(id, name_i18n, price))",
+          "allergen_ids, is_available, sort_order, tax_rate, product_extras(id, name_i18n, price))",
       )
       .order("sort_order", { ascending: true }),
     tenantScoped("allergens", tenantId).select("id, name_i18n, icon"),
@@ -350,6 +366,10 @@ export async function listAdminCatalog(tenantId: string): Promise<AdminCatalog> 
         allergenIds: product.allergen_ids,
         isAvailable: product.is_available,
         sortOrder: product.sort_order,
+        taxRate:
+          product.tax_rate === null || product.tax_rate === undefined
+            ? null
+            : Number(product.tax_rate),
         extras: product.product_extras.map((extra) => ({
           id: extra.id,
           nameI18n: extra.name_i18n,
@@ -365,6 +385,10 @@ export async function listAdminCatalog(tenantId: string): Promise<AdminCatalog> 
       icon: category.icon ?? null,
       destination: category.destination,
       sortOrder: category.sort_order,
+      taxRate:
+        category.tax_rate === null || category.tax_rate === undefined
+          ? null
+          : Number(category.tax_rate),
       products,
     };
   });

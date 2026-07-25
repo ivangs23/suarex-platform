@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PricedLine } from "./pricing.js";
-import { computeTotals, lineTotal } from "./pricing.js";
+import { computeTotals, lineTotal, taxBreakdown } from "./pricing.js";
 
 describe("lineTotal", () => {
   it("multiplica precio por cantidad", () => {
@@ -33,7 +33,7 @@ describe("lineTotal", () => {
 describe("computeTotals", () => {
   it("trata el precio de carta como IVA incluido", () => {
     // 11,00 € con IVA del 10 %: base 10,00 €, cuota 1,00 €.
-    const totals = computeTotals([{ unitPrice: 1100, quantity: 1, extras: [] }], 0.1);
+    const totals = computeTotals([{ unitPrice: 1100, quantity: 1, extras: [], taxRate: 0.1 }]);
     expect(totals.total).toBe(1100);
     expect(totals.subtotal).toBe(1000);
     expect(totals.taxAmount).toBe(100);
@@ -41,53 +41,52 @@ describe("computeTotals", () => {
 
   it("el desglose siempre suma exactamente el total", () => {
     // 4,50 € al 10 % no divide exacto; el redondeo no puede perder ni inventar céntimos.
-    const totals = computeTotals([{ unitPrice: 450, quantity: 1, extras: [] }], 0.1);
+    const totals = computeTotals([{ unitPrice: 450, quantity: 1, extras: [], taxRate: 0.1 }]);
     expect(totals.subtotal + totals.taxAmount).toBe(totals.total);
   });
 
   it("suma varias líneas", () => {
-    const totals = computeTotals(
-      [
-        { unitPrice: 1800, quantity: 1, extras: [] },
-        { unitPrice: 450, quantity: 2, extras: [150] },
-      ],
-      0.1,
-    );
+    const totals = computeTotals([
+      { unitPrice: 1800, quantity: 1, extras: [], taxRate: 0.1 },
+      { unitPrice: 450, quantity: 2, extras: [150], taxRate: 0.1 },
+    ]);
     expect(totals.total).toBe(1800 + 1200);
   });
 
   it("con tipo cero, la cuota es cero y la base es el total", () => {
-    const totals = computeTotals([{ unitPrice: 1000, quantity: 1, extras: [] }], 0);
+    const totals = computeTotals([{ unitPrice: 1000, quantity: 1, extras: [], taxRate: 0 }]);
     expect(totals).toEqual({ subtotal: 1000, taxAmount: 0, total: 1000 });
   });
 
   it("un pedido vacío da todo a cero", () => {
-    expect(computeTotals([], 0.1)).toEqual({ subtotal: 0, taxAmount: 0, total: 0 });
+    expect(computeTotals([])).toEqual({ subtotal: 0, taxAmount: 0, total: 0 });
   });
 
   it("rechaza un taxRate no finito", () => {
-    expect(() => computeTotals([{ unitPrice: 1000, quantity: 1, extras: [] }], Number.NaN)).toThrow(
-      /taxRate/,
-    );
     expect(() =>
-      computeTotals([{ unitPrice: 1000, quantity: 1, extras: [] }], Number.POSITIVE_INFINITY),
+      computeTotals([{ unitPrice: 1000, quantity: 1, extras: [], taxRate: Number.NaN }]),
+    ).toThrow(/taxRate/);
+    expect(() =>
+      computeTotals([
+        { unitPrice: 1000, quantity: 1, extras: [], taxRate: Number.POSITIVE_INFINITY },
+      ]),
     ).toThrow(/taxRate/);
   });
 
   it("rechaza un taxRate <= -1 (haría la base infinita o de signo cambiado)", () => {
-    expect(() => computeTotals([{ unitPrice: 1000, quantity: 1, extras: [] }], -1)).toThrow(
-      /taxRate/,
-    );
-    expect(() => computeTotals([{ unitPrice: 1000, quantity: 1, extras: [] }], -2)).toThrow(
-      /taxRate/,
-    );
+    expect(() =>
+      computeTotals([{ unitPrice: 1000, quantity: 1, extras: [], taxRate: -1 }]),
+    ).toThrow(/taxRate/);
+    expect(() =>
+      computeTotals([{ unitPrice: 1000, quantity: 1, extras: [], taxRate: -2 }]),
+    ).toThrow(/taxRate/);
   });
 
   it("un taxRate de 1 (100 %) sigue siendo aritméticamente válido", () => {
     // Este paquete no juzga si un tipo es fiscalmente razonable, solo que la
     // división por (1 + taxRate) no rompa. Esa decisión de negocio vive en
     // quien llama (createPendingOrder en @suarex/db).
-    const totals = computeTotals([{ unitPrice: 1000, quantity: 1, extras: [] }], 1);
+    const totals = computeTotals([{ unitPrice: 1000, quantity: 1, extras: [], taxRate: 1 }]);
     expect(totals.subtotal + totals.taxAmount).toBe(totals.total);
   });
 });
@@ -103,7 +102,7 @@ describe("computeTotals", () => {
  * cero.
  */
 describe("computeTotals — invariante subtotal + taxAmount === total (barrido)", () => {
-  const cases: Array<{ name: string; lines: PricedLine[]; taxRate: number }> = [
+  const cases: Array<{ name: string; lines: Omit<PricedLine, "taxRate">[]; taxRate: number }> = [
     {
       name: "tipo alto realista (IVA general 21 %)",
       lines: [{ unitPrice: 4999, quantity: 3, extras: [125] }],
@@ -141,9 +140,63 @@ describe("computeTotals — invariante subtotal + taxAmount === total (barrido)"
   ];
 
   it.each(cases)("$name", ({ lines, taxRate }) => {
-    const totals = computeTotals(lines, taxRate);
+    const totals = computeTotals(lines.map((line) => ({ ...line, taxRate })));
     expect(totals.subtotal + totals.taxAmount).toBe(totals.total);
     expect(Number.isInteger(totals.subtotal)).toBe(true);
     expect(Number.isInteger(totals.taxAmount)).toBe(true);
+  });
+});
+
+describe("taxBreakdown — el desglose que exige una factura", () => {
+  it("separa cada tipo con su base y su cuota, ordenados de menor a mayor", () => {
+    // El caso español de diario: un menú al 10 % y una botella para llevar al 21 %.
+    const buckets = taxBreakdown([
+      { unitPrice: 1100, quantity: 1, extras: [], taxRate: 0.1 },
+      { unitPrice: 1210, quantity: 1, extras: [], taxRate: 0.21 },
+    ]);
+    expect(buckets).toEqual([
+      { taxRate: 0.1, base: 1000, taxAmount: 100, total: 1100 },
+      { taxRate: 0.21, base: 1000, taxAmount: 210, total: 1210 },
+    ]);
+  });
+
+  it("agrupa las líneas del mismo tipo en un solo renglón", () => {
+    const buckets = taxBreakdown([
+      { unitPrice: 500, quantity: 1, extras: [], taxRate: 0.1 },
+      { unitPrice: 600, quantity: 1, extras: [], taxRate: 0.1 },
+    ]);
+    expect(buckets).toHaveLength(1);
+    expect(buckets[0]?.total).toBe(1100);
+  });
+
+  it("agrupa ANTES de redondear: el desglose cuadra con el total exacto", () => {
+    /* Tres líneas de 3,33 € al 10 %. Redondeando línea a línea la base saldría 303+303+303=909;
+       agrupando, 999/1,1 = 908,18 -> 908. Un céntimo de diferencia contra lo que se declara. */
+    const buckets = taxBreakdown([
+      { unitPrice: 333, quantity: 1, extras: [], taxRate: 0.1 },
+      { unitPrice: 333, quantity: 1, extras: [], taxRate: 0.1 },
+      { unitPrice: 333, quantity: 1, extras: [], taxRate: 0.1 },
+    ]);
+    expect(buckets[0]).toEqual({ taxRate: 0.1, base: 908, taxAmount: 91, total: 999 });
+  });
+
+  it("cada grupo cuadra por separado y la suma cuadra con los totales", () => {
+    const lines = [
+      { unitPrice: 1234, quantity: 3, extras: [55], taxRate: 0.1 },
+      { unitPrice: 987, quantity: 2, extras: [], taxRate: 0.21 },
+      { unitPrice: 250, quantity: 1, extras: [], taxRate: 0.04 },
+    ];
+    const buckets = taxBreakdown(lines);
+    for (const bucket of buckets) {
+      expect(bucket.base + bucket.taxAmount).toBe(bucket.total);
+    }
+    const totals = computeTotals(lines);
+    expect(buckets.reduce((s, b) => s + b.total, 0)).toBe(totals.total);
+    expect(buckets.reduce((s, b) => s + b.base, 0)).toBe(totals.subtotal);
+    expect(totals.subtotal + totals.taxAmount).toBe(totals.total);
+  });
+
+  it("un pedido vacío no tiene desglose", () => {
+    expect(taxBreakdown([])).toEqual([]);
   });
 });

@@ -10,6 +10,8 @@ export type PrintableItem = {
   extras: string[];
   /** Total de la línea en céntimos (unidad × cantidad, extras incluidas). Solo el recibo lo usa. */
   lineCents: number;
+  /** Tipo de IVA congelado en la línea, para el desglose por tipo del recibo. */
+  taxRate: number;
 };
 
 export type PrintableOrder = {
@@ -68,6 +70,7 @@ export type PaidOrderRow = {
     destination: "cocina" | "barra";
     notes: string | null;
     line_total: number;
+    tax_rate: number;
     order_item_extras: { name_snapshot: Record<string, string> }[];
   }[];
 };
@@ -184,6 +187,7 @@ export function selectUnprintedOrders(
         notes: item.notes,
         extras: item.order_item_extras.map((extra) => resolveItemName(extra.name_snapshot)),
         lineCents: eurosToCents(Number(item.line_total)),
+        taxRate: Number(item.tax_rate),
       })),
     }));
 }
@@ -247,7 +251,7 @@ export async function unprintedPaidOrders(tenantId: string): Promise<PrintableOr
     .select(
       "id, order_number, created_at, printed_targets, venue_id, kitchen_status, bar_status, " +
         "channel, public_token, subtotal, tax_amount, total, currency, table_label, tables(label), " +
-        "order_items(name_snapshot, quantity, destination, notes, line_total, " +
+        "order_items(name_snapshot, quantity, destination, notes, line_total, tax_rate, " +
         "order_item_extras(name_snapshot))",
     )
     .not("paid_at", "is", null)

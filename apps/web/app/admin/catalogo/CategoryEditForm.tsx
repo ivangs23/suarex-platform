@@ -1,10 +1,13 @@
 import { updateCategoryAction } from "./actions";
+import { TaxRateField } from "./TaxRateField";
 
 type Props = {
   categoryId: string;
   name: string;
   slug: string;
   destination: "cocina" | "barra";
+  /** Tipo de IVA propio de la categoría en tanto por uno, o `null` si hereda el de la casa. */
+  taxRate: number | null;
 };
 
 /**
@@ -48,6 +51,13 @@ export function CategoryEditForm(props: Props) {
           <option value="barra">Barra</option>
         </select>
       </label>
+
+      <TaxRateField
+        id={`category-tax-${props.categoryId}`}
+        etiqueta="Tipo impositivo de la categoría"
+        heredaDe="los ajustes del negocio"
+        defaultValue={props.taxRate}
+      />
 
       <button type="submit">Guardar categoría</button>
     </form>
