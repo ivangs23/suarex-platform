@@ -148,6 +148,13 @@ export type Strings = {
   totemPickupNumber: string;
   totemNewOrder: string;
   totemCancel: string;
+  /** Reinicio por inactividad: el totem se queda a medias y hay que dejarlo listo para el
+   *  siguiente cliente, pero sin borrarle el pedido a quien solo se ha parado a pensar. */
+  totemStillThere: string;
+  totemStillThereBody: string;
+  totemImHere: string;
+  totemStartOver: string;
+  totemStartOverConfirm: string;
 };
 
 const ES: Strings = {
@@ -214,6 +221,11 @@ const ES: Strings = {
   totemPickupNumber: "Tu número",
   totemNewOrder: "Nuevo pedido",
   totemCancel: "Cancelar",
+  totemStillThere: "¿Sigues ahí?",
+  totemStillThereBody: "Si no, empezamos de nuevo para el siguiente cliente.",
+  totemImHere: "Sigo aquí",
+  totemStartOver: "Empezar de nuevo",
+  totemStartOverConfirm: "¿Seguro que quieres empezar de nuevo? Se borrará tu pedido.",
 };
 
 const EN: Strings = {
@@ -280,6 +292,11 @@ const EN: Strings = {
   totemPickupNumber: "Your number",
   totemNewOrder: "New order",
   totemCancel: "Cancel",
+  totemStillThere: "Still there?",
+  totemStillThereBody: "If not, we'll start over for the next customer.",
+  totemImHere: "I'm still here",
+  totemStartOver: "Start over",
+  totemStartOverConfirm: "Start over? Your order will be cleared.",
 };
 
 const PT: Strings = {
@@ -346,6 +363,11 @@ const PT: Strings = {
   totemPickupNumber: "O seu número",
   totemNewOrder: "Novo pedido",
   totemCancel: "Cancelar",
+  totemStillThere: "Ainda aí?",
+  totemStillThereBody: "Se não, recomeçamos para o próximo cliente.",
+  totemImHere: "Continuo aqui",
+  totemStartOver: "Recomeçar",
+  totemStartOverConfirm: "Recomeçar? O seu pedido será apagado.",
 };
 
 const STRINGS: Record<Lang, Strings> = { es: ES, en: EN, pt: PT };
