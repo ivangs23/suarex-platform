@@ -376,3 +376,72 @@ test.describe("mover por el árbol", () => {
     await expect(page.getByTestId("category").filter({ hasText: "Blancos" })).toBeVisible();
   });
 });
+
+test("un owner crea un grupo obligatorio y la carta lo exige al momento", async ({ page }) => {
+  // El recorrido completo de #16 por la UI real: el dueño define "Elige el pan" desde el panel,
+  // le cuelga una opción, y la carta pública pasa a exigirla. Sin este test, la parte de panel
+  // podría estar rota y solo lo sabría quien fuese a configurarlo por primera vez.
+  await loginComoOwner(page);
+  await page.goto("http://garum.localhost:3000/admin/catalogo?cat=entrantes");
+
+  const producto = filaProducto(page, "Croquetas caseras");
+  await expect(producto).toBeVisible({ timeout: 15_000 });
+
+  await producto.locator("summary", { hasText: "Grupos de opciones" }).click();
+  const bloque = producto.getByTestId("option-groups");
+  // Control positivo: este producto NO tenía grupos, así que lo que se vea después es lo creado.
+  await expect(bloque.getByTestId("option-group-row")).toHaveCount(0);
+
+  const nombreGrupo = `Elige el pan ${Date.now()}`;
+  const formulario = bloque.getByTestId("option-group-form");
+  await formulario.getByLabel("Nombre del grupo").fill(nombreGrupo);
+  await formulario.getByLabel("Elegir como mínimo").fill("1");
+  await formulario.getByLabel("Elegir como máximo").fill("1");
+  await formulario.getByRole("button", { name: "Crear grupo" }).click();
+
+  const fila = producto.getByTestId("option-group-row").filter({ hasText: nombreGrupo });
+  await expect(fila).toBeVisible({ timeout: 15_000 });
+  await expect(fila).toContainText("mín. 1");
+
+  try {
+    // Una opción dentro del grupo, desde el alta de extra: el desplegable de grupo solo ofrece
+    // los del producto elegido, así que elegirlo por nombre ya prueba ese filtrado.
+    await page.locator("summary", { hasText: "Nuevo extra" }).click();
+    await page.getByLabel("Producto", { exact: true }).selectOption({ label: "Croquetas caseras" });
+    await page.getByLabel("Grupo de opciones").selectOption({ label: nombreGrupo });
+    await page.getByLabel("Nombre del extra").fill("Pan de cristal");
+    await page.getByLabel("Precio del extra (€)").fill("0");
+    await page.getByRole("button", { name: "Crear extra" }).click();
+    await expect(page.getByText("Pan de cristal")).toBeVisible({ timeout: 15_000 });
+
+    // Y la carta pública ya lo exige: sin elegir, no se puede añadir.
+    await page.goto("http://garum.localhost:3000/m/11111111-1111-1111-1111-111111111111");
+    await page.goto("http://garum.localhost:3000/1?cat=entrantes");
+    await page
+      .getByTestId("product")
+      .filter({ hasText: "Croquetas caseras" })
+      .getByTestId("open-product-sheet")
+      .click();
+
+    const ficha = page.getByTestId("product-sheet");
+    await expect(ficha.getByTestId("option-group").filter({ hasText: nombreGrupo })).toBeVisible();
+    await expect(ficha.getByTestId("sheet-add")).toBeDisabled();
+    await ficha.getByTestId("extra-checkbox").first().click();
+    await expect(ficha.getByTestId("sheet-add")).toBeEnabled();
+  } finally {
+    // Limpieza por la UI: `supabase/seed.sql` no trae este grupo, y otros ficheros de la suite
+    // asumen la carta tal cual la dejó el seed. Borrar el grupo deja "Pan de cristal" como
+    // extra suelto (`on delete set null`), que es justo lo que este panel promete.
+    await page.goto("http://garum.localhost:3000/admin/catalogo?cat=entrantes");
+    const limpieza = filaProducto(page, "Croquetas caseras");
+    await limpieza.locator("summary", { hasText: "Grupos de opciones" }).click();
+    await limpieza
+      .getByTestId("option-group-row")
+      .filter({ hasText: nombreGrupo })
+      .getByTestId("delete-option-group")
+      .click();
+    await expect(
+      limpieza.getByTestId("option-group-row").filter({ hasText: nombreGrupo }),
+    ).toHaveCount(0, { timeout: 15_000 });
+  }
+});

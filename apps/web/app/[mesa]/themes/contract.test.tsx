@@ -58,6 +58,8 @@ const VIEW_HOJA: MenuView = {
       priceCents: 1800,
       priceLabel: "18,00 €",
       imageUrl: "https://storage.test/foto.jpg",
+      optionGroups: [],
+      looseExtras: [],
       extras: [{ id: "e1", name: "Copa extra", priceCents: 300, priceLabel: "3,00 €" }],
       allergens: [
         { id: 7, name: "Lácteos", icon: "milk" },

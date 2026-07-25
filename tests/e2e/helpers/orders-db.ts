@@ -227,3 +227,23 @@ export async function printMarksForTest(
     printedTargets: (data?.printed_targets as Record<string, string>) ?? {},
   };
 }
+
+/** Id de un producto por su nombre en español. Lo usa el test que necesita EXACTAMENTE el
+ *  producto con modificadores obligatorios, no uno cualquiera de su misma estación. */
+export async function productIdByName(tenantSlug: string, nameEs: string): Promise<string> {
+  const { data: tenant, error: tenantError } = await admin
+    .from("tenants")
+    .select("id")
+    .eq("slug", tenantSlug)
+    .single();
+  if (tenantError) throw tenantError;
+
+  const { data, error } = await admin
+    .from("products")
+    .select("id")
+    .eq("tenant_id", tenant.id as string)
+    .eq("name_i18n->>es", nameEs)
+    .single();
+  if (error) throw error;
+  return data.id as string;
+}

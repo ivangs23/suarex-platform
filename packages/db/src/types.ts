@@ -39,6 +39,25 @@ export type ProductExtra = {
   id: string;
   nameI18n: Record<string, string>;
   price: number;
+  /** Grupo de opciones al que pertenece (#16), o `null` si es un añadido suelto de los de
+   *  siempre: opcional y sin más regla que existir. */
+  groupId: string | null;
+};
+
+/**
+ * Un grupo de opciones de un producto: "Punto de la carne" (elige 1), "Salsas" (hasta 2),
+ * "Primero" / "Segundo" de un menú del día. Las reglas de cuántas se pueden y se deben elegir
+ * las evalúa `validateOptionGroups` (`@suarex/domain`), la MISMA función en la ficha y en el
+ * servidor.
+ */
+export type ProductOptionGroup = {
+  id: string;
+  nameI18n: Record<string, string>;
+  minSelect: number;
+  maxSelect: number;
+  sortOrder: number;
+  /** Las opciones de este grupo, ya resueltas: cada consumidor recibe la pertenencia hecha. */
+  options: ProductExtra[];
 };
 
 export type Product = {
@@ -57,6 +76,9 @@ export type Product = {
   isAvailable: boolean;
   sortOrder: number;
   extras: ProductExtra[];
+  /** Los grupos, ordenados como los dejó el gestor. Vacío en un producto sin modificadores,
+   *  que es la carta entera de cualquier cliente que no los use. */
+  optionGroups: ProductOptionGroup[];
 };
 
 export type TableRow = {

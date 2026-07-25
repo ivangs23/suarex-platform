@@ -131,6 +131,34 @@ select p.tenant_id, p.id, '{"es":"Copa extra","en":"Extra glass"}'::jsonb, 3.00
  where t.slug = 'garum'
    and p.name_i18n->>'es' = 'Ribera del Duero';
 
+-- Modificadores obligatorios (#16) sobre la Tabla de quesos de garum: un grupo que EXIGE elegir
+-- (dos quesos, ni uno ni tres) y otro opcional con tope. Se cuelgan de un producto que ya existe
+-- en vez de crear uno nuevo a propósito: `two-tenants.spec.ts` afirma cuántos productos tiene
+-- garum, y un producto de más aquí sería un fallo en un test que no habla de esto.
+insert into public.product_option_groups (tenant_id, product_id, name_i18n, min_select, max_select, sort_order)
+select p.tenant_id, p.id, g.name_i18n, g.min_select, g.max_select, g.sort_order
+  from public.products p
+  join public.tenants t on t.id = p.tenant_id
+  join (values
+    ('{"es":"Elige 2 quesos","en":"Choose 2 cheeses"}'::jsonb, 2, 2, 0),
+    ('{"es":"Acompañamiento","en":"Sides"}'::jsonb,            0, 2, 1)
+  ) as g(name_i18n, min_select, max_select, sort_order) on true
+ where t.slug = 'garum'
+   and p.name_i18n->>'es' = 'Tabla de quesos';
+
+insert into public.product_extras (tenant_id, product_id, group_id, name_i18n, price)
+select g.tenant_id, g.product_id, g.id, o.name_i18n, o.price
+  from public.product_option_groups g
+  join public.tenants t on t.id = g.tenant_id
+  join (values
+    ('Elige 2 quesos',  '{"es":"Manchego curado","en":"Aged Manchego"}'::jsonb,   0.00),
+    ('Elige 2 quesos',  '{"es":"Torta del Casar","en":"Torta del Casar"}'::jsonb, 0.00),
+    ('Elige 2 quesos',  '{"es":"Cabrales","en":"Cabrales"}'::jsonb,               0.00),
+    ('Acompañamiento',  '{"es":"Membrillo","en":"Quince jelly"}'::jsonb,          1.00),
+    ('Acompañamiento',  '{"es":"Nueces","en":"Walnuts"}'::jsonb,                  1.00)
+  ) as o(grupo, name_i18n, price) on o.grupo = g.name_i18n->>'es'
+ where t.slug = 'garum';
+
 -- Mesa de manuela: sin esto, `tests/e2e/staff-board.spec.ts` no podría crear un pedido
 -- real para manuela por la API pública (`POST /api/orders` exige un `tableToken` válido,
 -- ver `findTableByToken`) y su test de aislamiento (control positivo con dos tenants

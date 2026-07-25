@@ -59,6 +59,7 @@ export type TenantFixture = {
 export type SeedResult = {
   categoryId: string;
   productId: string;
+  optionGroupId: string;
   venueId: string;
   orderId: string;
   orderItemId: string;
@@ -244,6 +245,22 @@ export async function seedCatalog(tenantId: string, label: string): Promise<Seed
     .single();
   if (productError) throw productError;
 
+  // Un grupo de opciones (#16) por tenant, para que la cobertura de escritura/borrado
+  // cross-tenant de `tenant-isolation.test.ts` tenga una fila real de B contra la que probar
+  // su control positivo. Se crea ANTES que la extra, que cuelga de él.
+  const { data: group, error: groupError } = await admin
+    .from("product_option_groups")
+    .insert({
+      tenant_id: tenantId,
+      product_id: product.id,
+      name_i18n: { es: `Grupo ${label}` },
+      min_select: 0,
+      max_select: 1,
+    })
+    .select("id")
+    .single();
+  if (groupError) throw groupError;
+
   const { data: extra, error: extraError } = await admin
     .from("product_extras")
     .insert({
@@ -363,6 +380,7 @@ export async function seedCatalog(tenantId: string, label: string): Promise<Seed
   return {
     categoryId: category.id,
     productId: product.id,
+    optionGroupId: group.id,
     venueId: venue.id,
     orderId: order.id,
     orderItemId: orderItem.id,

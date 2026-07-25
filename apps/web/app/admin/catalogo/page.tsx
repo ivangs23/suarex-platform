@@ -19,6 +19,7 @@ import styles from "./catalogo.module.css";
 import { ExtraForm } from "./ExtraForm";
 import { MoveCategoryForm } from "./MoveCategoryForm";
 import { MoveProductForm } from "./MoveProductForm";
+import { OptionGroupsForm } from "./OptionGroupsForm";
 import { ProductEditForm } from "./ProductEditForm";
 import { ProductForm } from "./ProductForm";
 
@@ -90,8 +91,18 @@ export default async function AdminCatalogoPage({
   // carta hay varios "BLANCO" y varios "TINTO" en ramas distintas.
   const moveOptions = view.tree.map((n) => ({ id: n.id, name: n.name, depth: n.depth }));
 
+  /* Cada producto viaja con SUS grupos para que el alta de extra pueda ofrecer solo los del
+     producto elegido: un desplegable con los grupos de los 184 productos sería la forma más
+     rápida de meter "Punto de la carne" en un vino. */
   const productOptions = catalog.categories.flatMap((category) =>
-    category.products.map((product) => ({ id: product.id, name: product.nameI18n.es ?? "" })),
+    category.products.map((product) => ({
+      id: product.id,
+      name: product.nameI18n.es ?? "",
+      groups: product.optionGroups.map((group) => ({
+        id: group.id,
+        name: group.nameI18n.es ?? "",
+      })),
+    })),
   );
 
   const allergenOptions = assignableAllergens.map((allergen) => ({
@@ -199,6 +210,11 @@ export default async function AdminCatalogoPage({
                         imageUrl={product.imageUrl ? catalogImageUrl(product.imageUrl) : null}
                         taxRate={product.taxRate}
                       />
+                    </details>
+
+                    <details className={styles.details}>
+                      <summary>Grupos de opciones</summary>
+                      <OptionGroupsForm productId={product.id} groups={product.optionGroups} />
                     </details>
 
                     <details className={styles.details}>

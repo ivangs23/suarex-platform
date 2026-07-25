@@ -3,7 +3,9 @@ import {
   computeTotals,
   eurosToCents,
   lineTotal,
+  type OptionGroup,
   type PricedLine,
+  validateOptionGroups,
 } from "@suarex/domain";
 import {
   expirePendingOrdersRpc,
@@ -41,6 +43,15 @@ type ExtraRow = {
   product_id: string;
   name_i18n: Record<string, string>;
   price: string | number;
+  group_id: string | null;
+};
+
+type OptionGroupRow = {
+  id: string;
+  product_id: string;
+  name_i18n: Record<string, string>;
+  min_select: number;
+  max_select: number;
 };
 
 /**
@@ -119,12 +130,30 @@ export async function createPendingOrder(input: {
       "product_extras",
       input.tenantId,
     )
-      .select("id, product_id, name_i18n, price")
+      .select("id, product_id, name_i18n, price, group_id")
       .in("id", allExtraIds);
     if (extrasError) throw extrasError;
     for (const extraRow of extraRows as unknown as ExtraRow[]) {
       extrasById.set(extraRow.id, extraRow);
     }
+  }
+
+  /* Los grupos de opciones de los productos del carrito (#16). Se leen SIEMPRE, aunque el
+     carrito no traiga ninguna extra: precisamente el caso que hay que rechazar es el de una
+     hamburguesa que llega sin punto de la carne, y ese no trae extras. Un pedido sin grupos
+     definidos (la carta de cualquiera que no los use) devuelve cero filas y no cambia nada. */
+  const groupsByProduct = new Map<string, OptionGroupRow[]>();
+  const { data: groupRows, error: groupsError } = await tenantScoped(
+    "product_option_groups",
+    input.tenantId,
+  )
+    .select("id, product_id, name_i18n, min_select, max_select")
+    .in("product_id", productIds);
+  if (groupsError) throw groupsError;
+  for (const groupRow of (groupRows ?? []) as unknown as OptionGroupRow[]) {
+    const lista = groupsByProduct.get(groupRow.product_id) ?? [];
+    lista.push(groupRow);
+    groupsByProduct.set(groupRow.product_id, lista);
   }
 
   const priced: PricedLine[] = [];
@@ -184,6 +213,37 @@ export async function createPendingOrder(input: {
       });
     }
     extrasForRows.push(lineExtraRows);
+
+    /* Y AQUÍ es donde los modificadores obligatorios lo son de verdad. La ficha del producto ya
+       impide añadir al carrito una selección incompleta, pero eso es una comodidad, no una
+       garantía: `POST /api/orders` es un endpoint público y el totem tiene su propio camino.
+       La misma función que usa la pantalla (`validateOptionGroups`, @suarex/domain) decide aquí,
+       para que un rechazo del servidor no pueda contradecir a lo que el comensal acababa de ver.
+       Se comprueba DESPUÉS de resolver las extras: así una extra de otro producto ya ha caído
+       antes por su propio motivo, más concreto que "te falta elegir". */
+    const gruposDelProducto = groupsByProduct.get(line.productId) ?? [];
+    if (gruposDelProducto.length > 0) {
+      const grupos: OptionGroup[] = gruposDelProducto.map((group) => ({
+        id: group.id,
+        name: group.name_i18n.es ?? Object.values(group.name_i18n)[0] ?? "",
+        minSelect: group.min_select,
+        maxSelect: group.max_select,
+        optionIds: uniqueExtraIds.filter((id) => extrasById.get(id)?.group_id === group.id),
+      }));
+      const violaciones = validateOptionGroups(grupos, uniqueExtraIds);
+      if (violaciones.length > 0) {
+        // Mensaje por grupo y no un "carrito inválido" genérico: quien lo recibe tiene que poder
+        // volver a la ficha correcta, y con tres grupos en un menú del día saber a cuál.
+        const detalle = violaciones
+          .map((v) =>
+            v.kind === "too-few"
+              ? `elige al menos ${v.limit} en "${v.groupName}"`
+              : `elige como mucho ${v.limit} en "${v.groupName}"`,
+          )
+          .join("; ");
+        throw new OrderCartError(`Faltan opciones obligatorias: ${detalle}`);
+      }
+    }
 
     const taxRate = resolveTaxRate(product, input.taxRate);
     const pricedLine: PricedLine = {

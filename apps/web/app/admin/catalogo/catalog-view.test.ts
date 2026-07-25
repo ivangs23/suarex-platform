@@ -14,6 +14,7 @@ function prod(id: string, categoryId: string, name: string, sortOrder = 0): Admi
     isAvailable: true,
     sortOrder,
     extras: [],
+    optionGroups: [],
     taxRate: null,
   };
 }

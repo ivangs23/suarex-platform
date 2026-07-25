@@ -35,6 +35,7 @@ function prod(
     imagePath: null,
     allergenIds,
     isAvailable: true,
+    optionGroups: [],
     sortOrder: 0,
     extras: [],
   };

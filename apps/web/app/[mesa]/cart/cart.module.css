@@ -451,3 +451,19 @@
   text-align: center;
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.22);
 }
+
+/* La regla de un grupo de opciones, al lado de su nombre y en segundo plano: informa, no compite
+   con el nombre del grupo. */
+.groupRule {
+  margin-left: 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: color-mix(in oklab, var(--color-fg) 55%, var(--color-bg));
+}
+
+/* En la ficha, "Añadir" apagado significa "te falta elegir", no "espera": `cursor: progress` --
+   el de `.pay:disabled` para el botón de pagar mientras el cobro está en vuelo -- diría justo lo
+   contrario de lo que pasa. */
+.sheetFoot .pay:disabled {
+  cursor: not-allowed;
+}

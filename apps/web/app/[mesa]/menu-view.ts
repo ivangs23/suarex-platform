@@ -1,4 +1,4 @@
-import type { Category, Product } from "@suarex/db";
+import type { Category, Product, ProductExtra } from "@suarex/db";
 import { eurosToCents, formatCents } from "@suarex/domain";
 import { type Lang, pickI18n } from "@/lib/i18n";
 
@@ -24,6 +24,19 @@ export type MenuExtra = {
   priceLabel: string;
 };
 
+/**
+ * Un grupo de opciones ya resuelto para pintarlo (#16): su nombre en el idioma del comensal, sus
+ * reglas y sus opciones dentro. La ficha lo trata como una unidad -- "elige el punto de la carne"
+ * -- en vez de como una lista suelta de casillas.
+ */
+export type MenuOptionGroup = {
+  id: string;
+  name: string;
+  minSelect: number;
+  maxSelect: number;
+  options: MenuExtra[];
+};
+
 /** Alérgeno declarado de un producto, ya resuelto a nombre e icono. */
 export type MenuAllergen = { id: number; name: string; icon: string | null };
 
@@ -41,8 +54,16 @@ export type MenuProduct = {
   /** URL pública completa de la foto, o `null`. Se compone aquí para que ningún tema
    * tenga que conocer el endpoint de Storage ni el nombre del bucket. */
   imageUrl: string | null;
-  /** Extras que el comensal puede añadir a este producto. */
+  /** Extras que el comensal puede añadir a este producto, grupos incluidos. */
   extras: MenuExtra[];
+  /**
+   * Grupos de opciones, en el orden que fijó el gestor. Las opciones de un grupo también están
+   * en `extras` (son las mismas filas), pero la ficha las pinta desde aquí para poder aplicar
+   * las reglas; `sueltas` es lo que queda fuera de todo grupo.
+   */
+  optionGroups: MenuOptionGroup[];
+  /** Extras que no pertenecen a ningún grupo: opcionales y sin más reglas, como siempre. */
+  looseExtras: MenuExtra[];
   /**
    * Alérgenos DECLARADOS por el gestor. Nunca se infieren del nombre ni de la categoría:
    * equivocarse con un alérgeno es un riesgo para el comensal, no un fallo cosmético. Una
@@ -215,6 +236,17 @@ export function buildMenuView(params: {
 
   const ownProducts = current ? (productsByCategory.get(current.id) ?? []) : [];
 
+  /* Una extra, lista para pintar. Se define aquí dentro porque necesita el idioma, la moneda y
+     el locale ya resueltos, y se usa desde TRES sitios (la lista plana, las opciones de cada
+     grupo y las sueltas): con tres copias, el día que cambie el formato del precio cambiaría en
+     dos de ellas. */
+  const aMenuExtra = (extra: ProductExtra): MenuExtra => ({
+    id: extra.id,
+    name: pickI18n(extra.nameI18n, lang),
+    priceCents: eurosToCents(extra.price),
+    priceLabel: formatCents(eurosToCents(extra.price), locale, currency),
+  });
+
   return {
     currentName: current ? categoryName(current, lang) : null,
     breadcrumb,
@@ -235,12 +267,15 @@ export function buildMenuView(params: {
           ? [{ id, name: pickI18n(allergen.nameI18n, lang), icon: allergen.icon }]
           : [];
       }),
-      extras: product.extras.map((extra) => ({
-        id: extra.id,
-        name: pickI18n(extra.nameI18n, lang),
-        priceCents: eurosToCents(extra.price),
-        priceLabel: formatCents(eurosToCents(extra.price), locale, currency),
+      extras: product.extras.map(aMenuExtra),
+      optionGroups: product.optionGroups.map((group) => ({
+        id: group.id,
+        name: pickI18n(group.nameI18n, lang),
+        minSelect: group.minSelect,
+        maxSelect: group.maxSelect,
+        options: group.options.map(aMenuExtra),
       })),
+      looseExtras: product.extras.filter((extra) => extra.groupId === null).map(aMenuExtra),
       // Sin origen de Storage no se compone nada: mejor sin foto que con una URL rota.
       imageUrl:
         storageOrigin && product.imagePath

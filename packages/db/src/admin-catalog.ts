@@ -40,6 +40,16 @@ export type CreateExtraInput = {
   productId: string;
   nameI18n: Record<string, string>;
   price: number;
+  /** Grupo al que pertenece la opción (#16), o `null`/ausente para un añadido suelto. */
+  groupId?: string | null;
+};
+
+export type CreateOptionGroupInput = {
+  productId: string;
+  nameI18n: Record<string, string>;
+  minSelect: number;
+  maxSelect: number;
+  sortOrder?: number;
 };
 
 export type CreateTenantAllergenInput = {
@@ -51,6 +61,16 @@ export type AdminExtra = {
   id: string;
   nameI18n: Record<string, string>;
   price: number;
+  /** Grupo al que pertenece, o `null` si es un añadido suelto. */
+  groupId: string | null;
+};
+
+export type AdminOptionGroup = {
+  id: string;
+  nameI18n: Record<string, string>;
+  minSelect: number;
+  maxSelect: number;
+  sortOrder: number;
 };
 
 export type AdminProduct = {
@@ -66,6 +86,7 @@ export type AdminProduct = {
   /** `null` = hereda de su categoría. */
   taxRate: number | null;
   extras: AdminExtra[];
+  optionGroups: AdminOptionGroup[];
 };
 
 export type AdminCategory = {
@@ -250,6 +271,7 @@ export async function createExtra(
       product_id: input.productId,
       name_i18n: input.nameI18n,
       price: input.price,
+      group_id: input.groupId ?? null,
     })
     .select("id")
     .single();
@@ -259,6 +281,66 @@ export async function createExtra(
 
 export async function deleteExtra(tenantId: string, extraId: string): Promise<void> {
   const { error } = await tenantScoped("product_extras", tenantId).delete().eq("id", extraId);
+  if (error) throw error;
+}
+
+/**
+ * Alta de un grupo de opciones (#16). El rango lo valida ADEMÁS la base
+ * (`product_option_groups_range`), pero se comprueba aquí para que el gestor reciba un mensaje
+ * en su idioma y no un error de constraint: un grupo que pide más de lo que permite no tiene
+ * ninguna selección válida, o sea que hace el producto imposible de pedir.
+ */
+export async function createOptionGroup(
+  tenantId: string,
+  input: CreateOptionGroupInput,
+): Promise<{ id: string }> {
+  if (!Number.isInteger(input.minSelect) || input.minSelect < 0) {
+    throw new Error(`minSelect debe ser un entero >= 0: ${input.minSelect}`);
+  }
+  if (!Number.isInteger(input.maxSelect) || input.maxSelect < 1) {
+    throw new Error(`maxSelect debe ser un entero >= 1: ${input.maxSelect}`);
+  }
+  if (input.maxSelect < input.minSelect) {
+    throw new Error(
+      `Un grupo no puede exigir más opciones de las que permite: ${input.minSelect} > ${input.maxSelect}`,
+    );
+  }
+
+  const { data, error } = await tenantScoped("product_option_groups", tenantId)
+    .insert({
+      product_id: input.productId,
+      name_i18n: input.nameI18n,
+      min_select: input.minSelect,
+      max_select: input.maxSelect,
+      sort_order: input.sortOrder ?? 0,
+    })
+    .select("id")
+    .single();
+  if (error) throw error;
+  return { id: data.id as string };
+}
+
+/**
+ * Borra un grupo. Sus opciones NO se van con él (`on delete set null` en la FK): se quedan como
+ * añadidos sueltos, visibles y recuperables. Borrar el grupo "Punto de la carne" no debe llevarse
+ * por delante "Poco hecha", "Al punto" y "Muy hecha".
+ */
+export async function deleteOptionGroup(tenantId: string, groupId: string): Promise<void> {
+  const { error } = await tenantScoped("product_option_groups", tenantId)
+    .delete()
+    .eq("id", groupId);
+  if (error) throw error;
+}
+
+/** Mueve una opción a un grupo, o la saca de todos (`null`). */
+export async function setExtraGroup(
+  tenantId: string,
+  extraId: string,
+  groupId: string | null,
+): Promise<void> {
+  const { error } = await tenantScoped("product_extras", tenantId)
+    .update({ group_id: groupId })
+    .eq("id", extraId);
   if (error) throw error;
 }
 
@@ -291,6 +373,15 @@ type AdminExtraRow = {
   id: string;
   name_i18n: Record<string, string>;
   price: string | number;
+  group_id: string | null;
+};
+
+type AdminOptionGroupRow = {
+  id: string;
+  name_i18n: Record<string, string>;
+  min_select: number;
+  max_select: number;
+  sort_order: number;
 };
 
 type AdminProductRow = {
@@ -304,6 +395,7 @@ type AdminProductRow = {
   is_available: boolean;
   sort_order: number;
   product_extras: AdminExtraRow[];
+  product_option_groups: AdminOptionGroupRow[];
   tax_rate: string | number | null;
 };
 
@@ -342,7 +434,8 @@ export async function listAdminCatalog(tenantId: string): Promise<AdminCatalog> 
       .select(
         "id, slug, name_i18n, parent_id, icon, destination, sort_order, tax_rate, " +
           "products(id, category_id, name_i18n, description_i18n, price, image_url, " +
-          "allergen_ids, is_available, sort_order, tax_rate, product_extras(id, name_i18n, price))",
+          "allergen_ids, is_available, sort_order, tax_rate, product_extras(id, name_i18n, price, group_id), " +
+          "product_option_groups(id, name_i18n, min_select, max_select, sort_order))",
       )
       .order("sort_order", { ascending: true }),
     tenantScoped("allergens", tenantId).select("id, name_i18n, icon"),
@@ -374,7 +467,17 @@ export async function listAdminCatalog(tenantId: string): Promise<AdminCatalog> 
           id: extra.id,
           nameI18n: extra.name_i18n,
           price: Number(extra.price),
+          groupId: extra.group_id ?? null,
         })),
+        optionGroups: [...(product.product_option_groups ?? [])]
+          .sort((a, b) => a.sort_order - b.sort_order)
+          .map((group) => ({
+            id: group.id,
+            nameI18n: group.name_i18n,
+            minSelect: group.min_select,
+            maxSelect: group.max_select,
+            sortOrder: group.sort_order,
+          })),
       }));
 
     return {
