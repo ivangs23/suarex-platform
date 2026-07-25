@@ -34,7 +34,7 @@ async function stubTotemBridge(page: Page, result: { ok: boolean; reason?: strin
   await page.addInitScript((r) => {
     (window as unknown as { totem: unknown }).totem = {
       pay: async () =>
-        r.ok ? { ok: true, authCode: "TEST-AUTH" } : { ok: false, reason: r.reason },
+        r.ok ? { status: "paid", authCode: "TEST-AUTH" } : { status: "declined", reason: r.reason },
     };
   }, result);
 }
@@ -153,6 +153,42 @@ test("un pago rechazado se puede reintentar, sin marcar el pedido pagado", async
 
     // El pedido sigue pending: no se ha cobrado nada.
     expect((await kioskoOrderInfo(orderId)).status).toBe("pending");
+  } finally {
+    await deleteOrder(orderId);
+  }
+});
+
+test("cobro aprobado sin registrar: avisa al personal y NO ofrece reintentar", async ({ page }) => {
+  /* El caso que produce clientes cobrados sin comida. Distinto de un rechazo: aquí el dinero YA
+     ha salido, así que un botón de reintentar sería cobrarle dos veces. */
+  await page.addInitScript(() => {
+    (window as unknown as { totem: unknown }).totem = {
+      pay: async () => ({
+        status: "in-doubt",
+        authCode: "AUTH-9911",
+        reason: "El cobro se aprobó pero no se pudo registrar el pedido",
+      }),
+    };
+  });
+  await page.goto(`${ORIGIN}/totem/${token}`);
+  await page.getByTestId("totem-start").click();
+  await page.getByTestId("totem-takeaway").click();
+  await añadeProducto(page);
+  await page.getByTestId("cart-open").click();
+  await page.getByTestId("cart-panel").getByTestId("cart-pay").click();
+  await expect(page.getByTestId("totem-pay")).toBeVisible({ timeout: 30_000 });
+
+  const { orderId } = await latestOrderForTenant("garum");
+  try {
+    await page.getByTestId("totem-pay-start").click();
+
+    // Se avisa al personal y el código de autorización queda a la vista para casarlo con el cierre.
+    await expect(page.getByTestId("totem-pay-authcode")).toHaveText("AUTH-9911");
+    // Lo que NO puede haber es una forma de volver a pagar.
+    await expect(page.getByTestId("totem-pay-retry")).toHaveCount(0);
+    await expect(page.getByTestId("totem-pay-cancel")).toHaveCount(0);
+    // Ni se da por bueno el pedido: no se pasa a la pantalla de recogida.
+    await expect(page.getByTestId("totem-done")).toHaveCount(0);
   } finally {
     await deleteOrder(orderId);
   }

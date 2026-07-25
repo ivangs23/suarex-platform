@@ -52,16 +52,17 @@ describe("chargeKioskoOrder (composición del totem en el desktop)", () => {
   it("con config mock: cobra el importe del servidor y marca el pedido pagado", async () => {
     const { client, mark } = fakeClient({});
     const result = await chargeKioskoOrder(client, "ord-1");
-    expect(result.ok).toBe(true);
-    if (result.ok) expect(result.authCode).toBe("MOCK-000000");
+    expect(result.status).toBe("paid");
+    if (result.status === "paid") expect(result.authCode).toBe("MOCK-000000");
     expect(mark).toHaveBeenCalledTimes(1);
   });
 
   it("sin config de pago: no cobra ni marca, y lo dice", async () => {
     const { client, mark } = fakeClient({ config: null });
     const result = await chargeKioskoOrder(client, "ord-1");
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.reason).toMatch(/terminal|configurado/i);
+    // `declined` y no `in-doubt`: el fallo es ANTES de cobrar, así que no se ha movido dinero.
+    expect(result.status).toBe("declined");
+    if (result.status === "declined") expect(result.reason).toMatch(/terminal|configurado/i);
     expect(mark).not.toHaveBeenCalled();
   });
 
