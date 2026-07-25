@@ -3,55 +3,98 @@
  * Es una herramienta de fondo, no una web: vive minimizada en la bandeja de un PC que está
  * en la barra de un bar y solo se abre cuando algo va mal o hay que configurar. El diseño
  * se ordena en consecuencia -- lo primero y más grande es el ESTADO ("¿está imprimiendo?"),
- * que es a lo que se viene el 90% de las veces; lo demás son acciones puntuales.
+ * que es a lo que se viene el 90% de las veces; lo demás son acciones puntuales. La aspiración
+ * es que la herramienta desaparezca en la tarea: densidad tranquila, cero decoración gratuita.
  *
  * Sigue el tema del sistema (`prefers-color-scheme`). En una barra iluminada el modo claro
  * se lee mejor, y en una cocina a media luz el oscuro cansa menos: imponer uno solo obliga
  * a la mitad de las instalaciones a la opción mala.
+ *
+ * Color en OKLCH: los neutros llevan una pizca de la tinta de marca (índigo, hue 274) en vez
+ * de gris puro, para que el conjunto se sienta de una pieza y no de plantilla.
  */
 
 :root {
-  --bg: #f6f7f9;
-  --surface: #ffffff;
-  --surface-alt: #eef0f4;
-  --border: #d8dce4;
-  --text: #1a1d23;
-  --text-muted: #5c6470;
-  --accent: #4f46e5;
-  --accent-text: #ffffff;
-  --ok: #128a4d;
-  --ok-bg: #e6f4ec;
-  --warn: #9a6200;
-  --warn-bg: #fdf3e2;
-  --danger: #b42318;
-  --shadow: 0 1px 2px rgb(16 24 40 / 6%), 0 1px 3px rgb(16 24 40 / 10%);
+  /* Escala de espaciado: todo el layout sale de aquí, sin números sueltos. */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+
+  --radius-sm: 7px;
   --radius: 10px;
+  --radius-lg: 14px;
+
+  /* Deceleración exponencial, sin rebote: propio de una herramienta, no de un juguete. */
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --transition: 160ms var(--ease);
+
+  /* --- Tema claro (por defecto) --- */
+  --bg: oklch(0.972 0.004 274);
+  --surface: oklch(0.995 0.002 274);
+  --surface-alt: oklch(0.948 0.005 274);
+  --border: oklch(0.9 0.007 274);
+  --border-strong: oklch(0.84 0.01 274);
+  --text: oklch(0.27 0.014 274);
+  --text-muted: oklch(0.52 0.017 274);
+
+  --accent: oklch(0.53 0.18 274);
+  --accent-hover: oklch(0.48 0.18 274);
+  --accent-text: oklch(0.99 0.005 274);
+  --accent-ring: oklch(0.53 0.18 274 / 35%);
+
+  --ok: oklch(0.54 0.13 155);
+  --ok-bg: oklch(0.95 0.04 155);
+  --warn: oklch(0.58 0.11 72);
+  --warn-bg: oklch(0.95 0.05 82);
+  --danger: oklch(0.55 0.19 27);
+  --danger-bg: oklch(0.95 0.04 27);
+
+  --shadow: 0 1px 2px oklch(0.27 0.03 274 / 6%), 0 2px 6px oklch(0.27 0.03 274 / 8%);
+
   /* Debe coincidir con SIDEBAR_WIDTH en main/web-panel.ts: la vista incrustada de la
      plataforma se coloca en píxeles justo a la derecha de la barra. Si divergen, tapa la
      barra o deja una franja muerta. */
   --sidebar: 208px;
-  --side-bg: #12151b;
-  --side-text: #d6dae1;
-  --side-muted: #838d9c;
-  --side-active: #262c36;
+  /* Carbón tintado de índigo (no negro): separa la navegación del contenido -- que en
+     Productos y Pedidos es la web de la plataforma, con su propio fondo claro -- y de paso la
+     ata a la marca. Igual en ambos temas a propósito. */
+  --side-bg: oklch(0.24 0.026 274);
+  --side-text: oklch(0.93 0.01 274);
+  --side-muted: oklch(0.68 0.02 274);
+  --side-active: oklch(0.32 0.03 274);
+  --side-hair: oklch(1 0 0 / 8%);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #14161a;
-    --surface: #1c1f25;
-    --surface-alt: #23272e;
-    --border: #31363f;
-    --text: #e8eaed;
-    --text-muted: #9aa3af;
-    --accent: #7c74ff;
-    --accent-text: #10121a;
-    --ok: #4ade80;
-    --ok-bg: #12291d;
-    --warn: #fbbf24;
-    --warn-bg: #2a2113;
-    --danger: #f87171;
-    --shadow: none;
+    --bg: oklch(0.18 0.012 274);
+    --surface: oklch(0.225 0.015 274);
+    --surface-alt: oklch(0.27 0.016 274);
+    --border: oklch(0.33 0.016 274);
+    --border-strong: oklch(0.4 0.018 274);
+    --text: oklch(0.94 0.008 274);
+    --text-muted: oklch(0.68 0.016 274);
+
+    --accent: oklch(0.7 0.15 274);
+    --accent-hover: oklch(0.76 0.15 274);
+    --accent-text: oklch(0.17 0.02 274);
+    --accent-ring: oklch(0.7 0.15 274 / 45%);
+
+    --ok: oklch(0.76 0.15 158);
+    --ok-bg: oklch(0.29 0.06 158);
+    --warn: oklch(0.82 0.13 82);
+    --warn-bg: oklch(0.3 0.05 82);
+    --danger: oklch(0.72 0.16 25);
+    --danger-bg: oklch(0.3 0.07 25);
+
+    --shadow: 0 1px 2px oklch(0 0 0 / 24%), 0 2px 8px oklch(0 0 0 / 30%);
+
+    --side-bg: oklch(0.155 0.014 274);
+    --side-active: oklch(0.26 0.02 274);
+    --side-hair: oklch(1 0 0 / 6%);
   }
 }
 
@@ -68,9 +111,17 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   font-size: 14px;
   line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Scrollbar discreta y a tono, no la del navegador chillona sobre fondo oscuro. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
 }
 
 .shell {
@@ -85,11 +136,8 @@ body {
   flex: none;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  padding: 1rem 0.75rem;
-  /* Oscura en ambos temas a propósito: separa la navegación del contenido -- que en
-     Productos y Pedidos es la web de la plataforma, con su propio fondo claro -- para que
-     se vea siempre como parte de la aplicación y no como parte de la página. */
+  gap: var(--space-5);
+  padding: var(--space-4) var(--space-3);
   background: var(--side-bg);
   color: var(--side-text);
 }
@@ -97,21 +145,22 @@ body {
 .brand {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.25rem 0.5rem 0.5rem;
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-2) var(--space-2);
 }
 
 .brand-mark {
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   flex: none;
   display: grid;
   place-items: center;
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-text);
   font-weight: 700;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
+  letter-spacing: -0.02em;
 }
 
 .brand-text {
@@ -121,7 +170,8 @@ body {
 }
 
 .brand-text strong {
-  font-size: 0.9rem;
+  font-size: 0.925rem;
+  letter-spacing: -0.01em;
 }
 
 .brand-text span {
@@ -144,15 +194,18 @@ body {
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.55rem 0.65rem;
+  gap: var(--space-3);
+  padding: 0.55rem var(--space-3);
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--side-muted);
   font: inherit;
   text-align: left;
   cursor: pointer;
+  transition:
+    background var(--transition),
+    color var(--transition);
 }
 
 .nav-item:hover {
@@ -162,13 +215,15 @@ body {
 
 .nav-item[aria-selected="true"] {
   background: var(--side-active);
-  color: #fff;
+  color: oklch(0.99 0.005 274);
   font-weight: 600;
 }
 
 .nav-icon {
   font-size: 1rem;
   line-height: 1;
+  width: 1.1rem;
+  text-align: center;
 }
 
 /* Estado siempre visible, se esté en la sección que se esté: es el dato por el que se abre
@@ -176,10 +231,11 @@ body {
 .side-status {
   display: flex;
   align-items: flex-start;
-  gap: 0.55rem;
-  padding: 0.65rem;
-  border-radius: 8px;
-  background: rgb(255 255 255 / 4%);
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  background: oklch(1 0 0 / 5%);
+  border: 1px solid var(--side-hair);
   font-size: 0.78rem;
 }
 
@@ -189,7 +245,7 @@ body {
   flex: 1;
   min-width: 0;
   overflow: auto;
-  padding: 1.5rem;
+  padding: var(--space-6) var(--space-5);
 }
 
 .panel[hidden] {
@@ -197,20 +253,21 @@ body {
 }
 
 .panel-head {
-  margin-bottom: 1.25rem;
+  margin-bottom: var(--space-5);
 }
 
 .panel-head h1 {
-  font-size: 1.35rem;
-  font-weight: 650;
+  font-size: 1.375rem;
+  font-weight: 640;
   margin: 0;
-  letter-spacing: -0.015em;
+  letter-spacing: -0.02em;
 }
 
 .panel-head p {
-  margin: 0.2rem 0 0;
+  margin: var(--space-1) 0 0;
   color: var(--text-muted);
-  font-size: 0.85rem;
+  font-size: 0.875rem;
+  max-width: 60ch;
 }
 
 /* Solo se ve si la vista incrustada no pudo cargarse: normalmente queda tapada por ella. */
@@ -223,8 +280,8 @@ body {
 /* El punto lleva ADEMÁS el texto de al lado: el color por sí solo no comunica el estado a
    quien no distingue rojo y verde, que es ~8% de los hombres. */
 .dot {
-  width: 10px;
-  height: 10px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
   flex: none;
   background: var(--text-muted);
@@ -232,7 +289,7 @@ body {
 
 .side-status[data-state="running"] .dot {
   background: var(--ok);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 22%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ok) 24%, transparent);
 }
 
 .side-status[data-state="paired"] .dot {
@@ -293,29 +350,30 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  padding: 1rem 1.125rem;
-  margin-bottom: 1rem;
+  padding: var(--space-4) 1.125rem;
+  margin-bottom: var(--space-4);
 }
 
 .card h2 {
   font-size: 0.72rem;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.07em;
   color: var(--text-muted);
-  margin: 0 0 0.75rem;
+  margin: 0 0 var(--space-3);
 }
 
 .hint {
   font-size: 0.8rem;
   color: var(--text-muted);
-  margin: 0.5rem 0 0;
+  margin: var(--space-2) 0 0;
+  max-width: 60ch;
 }
 
 .row {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: var(--space-2);
   align-items: center;
 }
 
@@ -332,8 +390,16 @@ select {
   color: var(--text);
   background: var(--surface-alt);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   padding: 0.5rem 0.7rem;
+  transition:
+    border-color var(--transition),
+    box-shadow var(--transition);
+}
+
+input:hover:not(:disabled),
+select:hover:not(:disabled) {
+  border-color: var(--border-strong);
 }
 
 input:focus-visible,
@@ -343,19 +409,36 @@ button:focus-visible {
   outline-offset: 2px;
 }
 
+/* Anillo suave también en :focus (no solo :focus-visible) para inputs: refuerza dónde
+   estás escribiendo sin depender de la heurística de teclado del navegador. */
+input:focus,
+select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
 button {
   font: inherit;
-  font-weight: 500;
+  font-weight: 550;
   color: var(--text);
   background: var(--surface-alt);
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
   padding: 0.5rem 0.9rem;
   cursor: pointer;
+  transition:
+    background var(--transition),
+    border-color var(--transition),
+    transform var(--transition);
 }
 
 button:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  border-color: var(--accent);
+  background: color-mix(in oklab, var(--accent) 8%, var(--surface-alt));
+}
+
+button:active:not(:disabled) {
+  transform: translateY(0.5px);
 }
 
 button.primary {
@@ -364,9 +447,20 @@ button.primary {
   color: var(--accent-text);
 }
 
+button.primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
 button.danger {
   color: var(--danger);
-  border-color: color-mix(in srgb, var(--danger) 35%, var(--border));
+  border-color: color-mix(in oklab, var(--danger) 40%, var(--border));
+  background: var(--surface-alt);
+}
+
+button.danger:hover:not(:disabled) {
+  border-color: var(--danger);
+  background: color-mix(in oklab, var(--danger) 10%, var(--surface-alt));
 }
 
 /* Los botones deshabilitados se ven claramente inertes: en esta app un botón que no
@@ -377,18 +471,18 @@ button:disabled {
   cursor: not-allowed;
 }
 
-/* --- Aviso de plataforma ------------------------------------------------------------- */
+/* --- Avisos -------------------------------------------------------------------------- */
 
 .note {
   display: flex;
-  gap: 0.6rem;
+  gap: var(--space-3);
   padding: 0.7rem 0.85rem;
   background: var(--warn-bg);
-  border: 1px solid color-mix(in srgb, var(--warn) 30%, transparent);
-  border-radius: 8px;
+  border: 1px solid color-mix(in oklab, var(--warn) 28%, transparent);
+  border-radius: var(--radius-sm);
   font-size: 0.82rem;
   color: var(--text);
-  margin-bottom: 0.75rem;
+  margin-bottom: var(--space-3);
 }
 
 .note[hidden] {
@@ -398,9 +492,31 @@ button:disabled {
 /* Variante roja: algo que exige atención ahora (impresora caída, sin conexión), frente al
    aviso ámbar informativo. */
 .note.danger {
-  background: color-mix(in srgb, var(--danger) 12%, var(--surface, transparent));
-  border-color: color-mix(in srgb, var(--danger) 40%, transparent);
+  background: var(--danger-bg);
+  border-color: color-mix(in oklab, var(--danger) 38%, transparent);
   color: var(--danger);
+}
+
+/* --- Impresoras de red (estado del sondeo) ------------------------------------------- */
+
+/* Resultados del "Probar impresoras de red": una fila por impresora, con el emoji de estado
+   al principio (el color NO va solo). Los mensajes sueltos (sin impresoras / agente parado)
+   son texto directo en el contenedor. */
+#network-status {
+  margin-top: var(--space-3);
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+#network-status p {
+  margin: 0;
+  padding: 0.45rem var(--space-1);
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+#network-status p + p {
+  border-top: 1px solid var(--border);
 }
 
 /* --- Registro ------------------------------------------------------------------------ */
@@ -410,12 +526,12 @@ button:disabled {
   overflow-wrap: anywhere;
   background: var(--surface-alt);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   color: var(--text);
   padding: 0.7rem 0.85rem;
   height: 11rem;
   overflow: auto;
-  font-family: ui-monospace, SFMono-Regular, "Cascadia Mono", Menlo, monospace;
+  font-family: ui-monospace, "Cascadia Mono", SFMono-Regular, Menlo, monospace;
   font-size: 0.78rem;
   line-height: 1.55;
 }
@@ -423,4 +539,17 @@ button:disabled {
 .log:empty::before {
   content: "Sin actividad todavía.";
   color: var(--text-muted);
+}
+
+/* Nadie está mirando la app para disfrutar de la animación; el movimiento solo comunica
+   estado. Quien lo desactiva a nivel de sistema no debe ver ninguno. Se apagan las
+   transiciones en los únicos elementos que las tienen (sin `!important`: mismo o mayor peso
+   que las reglas que anulan). */
+@media (prefers-reduced-motion: reduce) {
+  .nav-item,
+  input,
+  select,
+  button {
+    transition: none;
+  }
 }
