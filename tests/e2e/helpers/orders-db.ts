@@ -76,7 +76,11 @@ export async function deleteOrder(orderId: string): Promise<void> {
 export async function markOrderPaidForTest(orderId: string): Promise<void> {
   const { error } = await admin
     .from("orders")
-    .update({ status: "paid" })
+    // `paid_at` además de `status`, igual que `markOrderPaid`: es la columna por la que el agente
+    // decide qué imprimir (`paidUnprintedOrderRows` filtra por ella, no por `status`) y la que
+    // exige `reprintOrder`. Sin ella este helper decía simular el webhook pero dejaba el pedido
+    // en un estado que la producción no produce nunca.
+    .update({ status: "paid", paid_at: new Date().toISOString() })
     .eq("id", orderId)
     .eq("status", "pending");
   if (error) throw error;
@@ -189,4 +193,37 @@ export async function tableIdForToken(token: string): Promise<string> {
 export async function clearAllRateLimits(): Promise<void> {
   const { error } = await admin.from("rate_limit_hits").delete().neq("bucket", "__none__");
   if (error) throw error;
+}
+
+/**
+ * Deja el pedido como lo dejaría el agente tras imprimirlo del todo: con `printed_at` y una marca
+ * en `printed_targets`. Es el estado desde el que tiene sentido pedir una reimpresión -- sin él,
+ * el pedido ya estaba pendiente de imprimir y el test no probaría nada.
+ */
+export async function markOrderPrintedForTest(orderId: string): Promise<void> {
+  const ahora = new Date().toISOString();
+  const { error } = await admin
+    .from("orders")
+    .update({
+      printed_at: ahora,
+      printed_targets: { "11111111-1111-1111-1111-111111111111": ahora },
+    })
+    .eq("id", orderId);
+  if (error) throw error;
+}
+
+/** Las dos marcas de impresión de un pedido, para comprobar que reimprimir las ha borrado. */
+export async function printMarksForTest(
+  orderId: string,
+): Promise<{ printedAt: string | null; printedTargets: Record<string, string> }> {
+  const { data, error } = await admin
+    .from("orders")
+    .select("printed_at, printed_targets")
+    .eq("id", orderId)
+    .single();
+  if (error) throw error;
+  return {
+    printedAt: (data?.printed_at as string | null) ?? null,
+    printedTargets: (data?.printed_targets as Record<string, string>) ?? {},
+  };
 }

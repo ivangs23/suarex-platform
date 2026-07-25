@@ -126,3 +126,32 @@ export async function markStationDone(
     .eq(column, "pending");
   if (error) throw error;
 }
+
+/**
+ * VUELVE A IMPRIMIR un pedido: borra las marcas de impresión para que el agente lo saque otra vez
+ * en su siguiente pasada.
+ *
+ * No imprime nada por sí misma, y ese es justo el punto. El agente ya sabe entregar un pedido en
+ * la impresora que le toca, reintentar, marcar solo lo que entregó y no duplicar (at-least-once,
+ * ver `reserve_printed`); reimprimir es SOLO devolver el pedido a ese camino. Una segunda vía de
+ * impresión sería una segunda vía que mantener en sync y una segunda forma de duplicar tickets.
+ *
+ * Se limpian las DOS marcas a la vez porque significan cosas distintas y ambas excluyen el pedido
+ * de la cola: `printed_targets` (qué impresora ya lo tiene) y `printed_at` (ya está cubierto del
+ * todo). Vaciar solo una lo dejaría en un limbo del que no saldría nunca.
+ *
+ * El filtro `paid_at is not null` es el que hace que esto no pueda inventar trabajo: un pedido sin
+ * pagar no entra en la cola del agente, así que "reimprimirlo" no tendría ningún efecto y decir
+ * que sí lo tuvo sería mentir. Devuelve si de verdad ha tocado un pedido -- un id de otro tenant
+ * (`tenantScoped`) o sin pagar no encuentra fila y devuelve `false`, para que quien llama pueda
+ * decirlo en pantalla en vez de fingir éxito.
+ */
+export async function reprintOrder(tenantId: string, orderId: string): Promise<boolean> {
+  const { data, error } = await tenantScoped("orders", tenantId)
+    .update({ printed_targets: {}, printed_at: null })
+    .eq("id", orderId)
+    .not("paid_at", "is", null)
+    .select("id");
+  if (error) throw error;
+  return (data?.length ?? 0) > 0;
+}

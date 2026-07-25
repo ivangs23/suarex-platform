@@ -5,6 +5,8 @@ import {
   findOrderByPublicToken,
   firstProductIdOfTenant,
   markOrderPaidForTest,
+  markOrderPrintedForTest,
+  printMarksForTest,
 } from "./helpers/orders-db.js";
 
 // Igual que `REALTIME_READY_TIMEOUT_MS` en `tests/integration/realtime-isolation.test.ts`:
@@ -99,6 +101,42 @@ test("un pedido pagado aparece en el panel", async ({ page }) => {
   } finally {
     // La limpieza real: borra la fila, no depende de que "marcar hecho" haya llegado a
     // ejecutarse ni de qué haya devuelto el filtro del tablero.
+    await deleteOrder(orderId);
+  }
+});
+
+test("reimprimir un pedido lo devuelve a la cola de impresión", async ({ page }) => {
+  await loginAsStaff(page, "garum.localhost", "staff@garum.local");
+
+  const productId = await firstProductIdOfTenant("garum", "barra");
+  await escanearQr(page, "garum.localhost", GARUM_TABLE_TOKEN);
+  const response = await page.request.post("http://garum.localhost:3000/api/orders", {
+    data: { lines: [{ productId, quantity: 1, extraIds: [], notes: null }] },
+  });
+  expect(response.ok()).toBeTruthy();
+  const { publicToken } = (await response.json()) as { publicToken: string };
+  const { orderId } = await findOrderByPublicToken(publicToken);
+
+  try {
+    await markOrderPaidForTest(orderId);
+    // El agente ya lo imprimió: es el estado desde el que alguien pediría reimprimirlo.
+    await markOrderPrintedForTest(orderId);
+
+    const card = cardFor(page, orderId);
+    await expect(card).toHaveCount(1, { timeout: REALTIME_WAIT_MS });
+
+    await card.getByTestId("order-reprint").click();
+
+    // El personal ve que ha pasado algo: sin confirmación, quien mira una impresora muda
+    // pulsa el botón cinco veces más.
+    await expect(page.getByTestId("staff-reprint-notice")).toBeVisible();
+
+    // Y en la base el pedido vuelve a estar pendiente de imprimir, que es lo que hace que el
+    // agente lo saque en su siguiente pasada.
+    const marcas = await printMarksForTest(orderId);
+    expect(marcas.printedAt).toBeNull();
+    expect(marcas.printedTargets).toEqual({});
+  } finally {
     await deleteOrder(orderId);
   }
 });

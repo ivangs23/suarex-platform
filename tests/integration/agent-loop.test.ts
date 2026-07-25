@@ -592,6 +592,38 @@ describe("runAgentTick", () => {
     expect(recibo.connectionCount()).toBe(1);
   });
 
+  it("#15: reimprimir devuelve el pedido a la cola y el agente lo saca otra vez", async () => {
+    const cocina = await startFakePrinter();
+    openPrinters.push(cocina);
+    const f = await seedLoop(cocina.port);
+    fixtures.push(f);
+
+    const client = await createDeviceClient({
+      supabaseUrl: supabaseUrlForTest(),
+      anonKey: anonKeyForTest(),
+      email: f.deviceEmail,
+      password: f.devicePassword,
+    });
+
+    expect((await runAgentTick(client)).printed).toBe(1);
+    // Sin reimprimir, el pedido está cerrado: por eso el segundo tick no vuelve a sacarlo.
+    expect((await runAgentTick(client)).printed).toBe(0);
+    expect(cocina.connectionCount()).toBe(1);
+
+    // Lo que pide el personal cuando mira la impresora y no ha salido nada.
+    const { reprintOrder } = await import("@suarex/db");
+    await expect(reprintOrder(f.tenant.tenantId, f.orderId)).resolves.toBe(true);
+
+    // Y sale otra vez -- por el camino de siempre, no por una segunda vía de impresión.
+    expect((await runAgentTick(client)).printed).toBe(1);
+    expect(cocina.connectionCount()).toBe(2);
+    expect(cocina.received().toString("latin1")).toContain("Paella");
+
+    // Vuelve a quedar cerrado: una reimpresión es UNA, no deja el pedido imprimiéndose en bucle.
+    expect((await runAgentTick(client)).printed).toBe(0);
+    expect(cocina.connectionCount()).toBe(2);
+  }, 30_000);
+
   it("#15: el tick sabe si la impresora de recibos responde, con pedidos o sin ellos", async () => {
     const cocina = await startFakePrinter();
     const recibo = await startFakePrinter();

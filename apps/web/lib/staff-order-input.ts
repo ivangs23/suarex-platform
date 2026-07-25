@@ -39,3 +39,17 @@ export function parseMarkStationDoneInput(orderId: string, station: string): Mar
 
   return { orderId, station: station as "cocina" | "barra" };
 }
+
+/**
+ * Mismo razonamiento que `parseMarkStationDoneInput` para la reimpresión, que solo recibe un
+ * `orderId`: una Server Action es un endpoint HTTP, así que el tipo `string` de la firma no
+ * garantiza nada en ejecución y un id malformado llegaría crudo a Postgres como un 22P02.
+ */
+export function parseOrderId(orderId: string): string {
+  if (!UUID_PATTERN.test(orderId)) {
+    throw new InvalidStaffOrderInputError(
+      `orderId no es un UUID válido: ${JSON.stringify(orderId)}`,
+    );
+  }
+  return orderId;
+}
