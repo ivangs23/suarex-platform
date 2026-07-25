@@ -61,10 +61,13 @@ export function registerTotemIpc(getClient: () => SupabaseClient | null): void {
   if (registered) return;
   registered = true;
   ipcMain.handle("totem-pay", async (_event, orderId: string) => {
+    // Ambos fallos son previos al cobro, así que son `declined`: no se ha movido dinero.
     const client = getClient();
-    if (!client) return { ok: false, reason: "El totem no está conectado a la plataforma" };
+    if (!client) {
+      return { status: "declined", reason: "El totem no está conectado a la plataforma" };
+    }
     if (typeof orderId !== "string" || orderId.length === 0) {
-      return { ok: false, reason: "Pedido inválido" };
+      return { status: "declined", reason: "Pedido inválido" };
     }
     return chargeKioskoOrder(client, orderId);
   });

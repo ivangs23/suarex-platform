@@ -12,8 +12,16 @@
  * prueba inyecta su propio stub por `addInitScript`, así que este mismo camino vale para las dos.
  */
 
-/** Veredicto del cobro. Refleja `ChargeOrderResult` del agente (`apps/agent-desktop`). */
-export type TotemPayResult = { ok: true; authCode: string } | { ok: false; reason: string };
+/**
+ * Veredicto del cobro. Refleja `ChargeOrderResult` del agente (`apps/agent-desktop`), y son TRES
+ * desenlaces a propósito: `declined` significa que no se ha movido un céntimo y se puede
+ * reintentar, mientras que `in-doubt` significa que el cliente YA HA PAGADO pero no hemos podido
+ * registrarlo. Confundirlos es cobrar dos veces.
+ */
+export type TotemPayResult =
+  | { status: "paid"; authCode: string }
+  | { status: "declined"; reason: string }
+  | { status: "in-doubt"; authCode: string; reason: string };
 
 export type TotemBridge = {
   /**

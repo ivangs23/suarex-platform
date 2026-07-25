@@ -10,7 +10,12 @@ import { contextBridge, ipcRenderer } from "electron";
  * totem NO debe ver las operaciones del agente (emparejar, imprimir prueba, desemparejar), solo
  * `pay`. Cada ventana carga el preload que le corresponde.
  */
+/** Mismo contrato de tres desenlaces que `ChargeOrderResult` y `TotemPayResult` de la carta. */
+type PayResult =
+  | { status: "paid"; authCode: string }
+  | { status: "declined"; reason: string }
+  | { status: "in-doubt"; authCode: string; reason: string };
+
 contextBridge.exposeInMainWorld("totem", {
-  pay: (orderId: string): Promise<{ ok: true; authCode: string } | { ok: false; reason: string }> =>
-    ipcRenderer.invoke("totem-pay", orderId),
+  pay: (orderId: string): Promise<PayResult> => ipcRenderer.invoke("totem-pay", orderId),
 });

@@ -18,8 +18,11 @@ import styles from "./totem.module.css";
  */
 export function PaytefPaymentStep({ onApproved }: { onApproved: () => void }) {
   const cart = useCart();
-  const [phase, setPhase] = useState<"idle" | "paying" | "declined">("idle");
+  const [phase, setPhase] = useState<"idle" | "paying" | "declined" | "in-doubt">("idle");
   const [reason, setReason] = useState<string | null>(null);
+  /** Código de autorización cuando el cobro quedó en duda: es lo que permite al personal casarlo
+   *  con el cierre del datáfono, así que tiene que estar a la vista. */
+  const [authCode, setAuthCode] = useState<string | null>(null);
 
   if (!cart?.paytefPago) return null;
   const t = cart.strings;
@@ -57,8 +60,16 @@ export function PaytefPaymentStep({ onApproved }: { onApproved: () => void }) {
       setPhase("declined");
       return;
     }
-    if (result.ok) {
+    if (result.status === "paid") {
       onApproved();
+      return;
+    }
+    if (result.status === "in-doubt") {
+      /* El cliente YA HA PAGADO. Aquí no se ofrece reintentar bajo ningún concepto: sería cobrarle
+         dos veces. Se le pide que avise al personal y se enseña el código de autorización. */
+      setAuthCode(result.authCode || null);
+      setReason(result.reason);
+      setPhase("in-doubt");
       return;
     }
     setReason(result.reason || t.totemDeclined);
@@ -72,6 +83,31 @@ export function PaytefPaymentStep({ onApproved }: { onApproved: () => void }) {
         <h1 className={styles.title}>{t.totemPaying}</h1>
         <p className={styles.subtitle}>{t.totemFollowTerminal}</p>
         <p className={styles.payTotal}>{totalLabel}</p>
+      </section>
+    );
+  }
+
+  /* EN DUDA: cobrado pero sin registrar. Pantalla deliberadamente SIN salida ni reintento -- no
+     hay nada que el cliente pueda hacer por su cuenta que no sea pagar dos veces. Se queda aquí
+     con el código a la vista hasta que llega alguien del local. */
+  if (phase === "in-doubt") {
+    return (
+      <section className={styles.overlay} data-testid="totem-pay">
+        <h1 className={styles.title}>{t.totemInDoubt}</h1>
+        <p className={styles.subtitle}>{t.totemInDoubtBody}</p>
+        {authCode ? (
+          <>
+            <p className={styles.subtitle}>{t.totemAuthCode}</p>
+            <p className={styles.pickup} data-testid="totem-pay-authcode">
+              {authCode}
+            </p>
+          </>
+        ) : null}
+        {reason ? (
+          <p className={styles.error} role="alert" data-testid="totem-pay-indoubt">
+            {reason}
+          </p>
+        ) : null}
       </section>
     );
   }
