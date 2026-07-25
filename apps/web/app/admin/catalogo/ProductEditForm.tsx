@@ -2,6 +2,7 @@
 
 import { useId, useState } from "react";
 import { updateProductAction } from "./actions";
+import { TaxRateField } from "./TaxRateField";
 
 type AllergenOption = { id: number; name: string };
 
@@ -17,6 +18,8 @@ type Props = {
   imagePath: string | null;
   /** URL pública de la foto actual, para la vista previa. */
   imageUrl: string | null;
+  /** Tipo de IVA propio del producto en tanto por uno, o `null` si hereda el de su categoría. */
+  taxRate: number | null;
 };
 
 /**
@@ -70,6 +73,13 @@ export function ProductEditForm(props: Props) {
         min="0"
         defaultValue={props.price}
         required
+      />
+
+      <TaxRateField
+        id={`${formId}-tax-rate`}
+        etiqueta="Tipo impositivo del producto"
+        heredaDe="la categoría"
+        defaultValue={props.taxRate}
       />
 
       <label htmlFor={`${formId}-description`}>Descripción</label>

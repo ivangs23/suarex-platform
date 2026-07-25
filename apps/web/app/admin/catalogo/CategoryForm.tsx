@@ -1,4 +1,5 @@
 import { createCategoryAction } from "./actions";
+import { TaxRateField } from "./TaxRateField";
 
 /**
  * Alta de categoría. Formulario de servidor puro -- sin "use client", sin estado --
@@ -22,6 +23,12 @@ export function CategoryForm() {
         <option value="cocina">Cocina</option>
         <option value="barra">Barra</option>
       </select>
+
+      <TaxRateField
+        id="category-tax-rate"
+        etiqueta="IVA de la categoría"
+        heredaDe="los ajustes del negocio"
+      />
 
       <button type="submit">Crear categoría</button>
     </form>

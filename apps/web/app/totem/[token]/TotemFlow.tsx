@@ -1,7 +1,7 @@
 "use client";
 
 import { pickupCodeFromToken } from "@suarex/domain";
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import type { Strings } from "@/lib/i18n";
 import { CartPanelHost } from "../../[mesa]/cart/CartPanelHost";
 import { CartProvider, useCart } from "../../[mesa]/cart/CartProvider";

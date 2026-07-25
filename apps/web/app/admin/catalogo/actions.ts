@@ -161,6 +161,19 @@ async function extractImagePatch(
   return null;
 }
 
+/** Tipos de IVA españoles. Solo se aceptan estos: un valor inventado se trata como "heredar"
+ *  antes que escribir una barbaridad en la carta y facturar mal a partir de ahí. */
+const IVA_VALIDOS = new Set([0, 0.04, 0.1, 0.21]);
+
+/** Vacío = heredar (`null`). Campo ausente = `undefined`, que en un update es "no tocar". */
+function parseTaxRate(formData: FormData): number | null | undefined {
+  const raw = formData.get("tax_rate");
+  if (raw === null) return undefined;
+  if (raw === "") return null;
+  const n = Number(raw);
+  return IVA_VALIDOS.has(n) ? n : null;
+}
+
 // ---------------------------------------------------------------- categorías
 
 export const createCategoryAction = managerAction(async (session, formData: FormData) => {
@@ -171,6 +184,7 @@ export const createCategoryAction = managerAction(async (session, formData: Form
     slug,
     nameI18n: { es: nameEs },
     destination: parseDestination(formData),
+    taxRate: parseTaxRate(formData),
   });
   revalidatePath("/admin/catalogo");
 });
@@ -183,6 +197,7 @@ export const updateCategoryAction = managerAction(async (session, formData: Form
     slug: optionalString(formData, "slug"),
     nameI18n: nameEs !== undefined ? { es: nameEs } : undefined,
     destination: parseDestination(formData),
+    taxRate: parseTaxRate(formData),
   });
   revalidatePath("/admin/catalogo");
 });
@@ -251,6 +266,7 @@ export const createProductAction = managerAction(async (session, formData: FormD
     price,
     imagePath,
     allergenIds: parseAllergenIds(formData),
+    taxRate: parseTaxRate(formData),
   });
   revalidatePath("/admin/catalogo");
 });
@@ -275,6 +291,7 @@ export const updateProductAction = managerAction(async (session, formData: FormD
     price: parseOptionalEuroPrice(formData, "price"),
     imagePath,
     allergenIds: parseAllergenIds(formData),
+    taxRate: parseTaxRate(formData),
   });
   revalidatePath("/admin/catalogo");
 });

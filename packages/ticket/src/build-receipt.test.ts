@@ -45,6 +45,34 @@ describe("buildReceiptLines", () => {
     expect(texts(lines).some((t) => t.includes("+ Copa extra"))).toBe(true);
   });
 
+  it("con varios tipos, desglosa cada uno por separado", () => {
+    // Es lo que exige una factura cuando el ticket mezcla tipos: no "la base", sino la base y la
+    // cuota de cada tipo. Menú al 10 % + botella para llevar al 21 %.
+    const lines = buildReceiptLines(
+      {
+        ...base,
+        taxBreakdown: [
+          { taxRate: 0.1, baseCents: 1000, taxCents: 100 },
+          { taxRate: 0.21, baseCents: 1000, taxCents: 210 },
+        ],
+      },
+      branding,
+    );
+    const r = rows(lines);
+    expect(r).toContainEqual(["Base 10 %", "10,00 €"]);
+    expect(r).toContainEqual(["IVA 10 %", "1,00 €"]);
+    expect(r).toContainEqual(["Base 21 %", "10,00 €"]);
+    expect(r).toContainEqual(["IVA 21 %", "2,10 €"]);
+    // Y ya no debe quedar la línea agregada sin tipo, que sería ambigua.
+    expect(r.some(([izq]) => izq === "Base")).toBe(false);
+  });
+
+  it("sin desglose (recibos antiguos) cae al total agregado, no deja el ticket sin base", () => {
+    const r = rows(buildReceiptLines(base, branding));
+    expect(r).toContainEqual(["Base", "49,09 €"]);
+    expect(r).toContainEqual(["IVA", "4,91 €"]);
+  });
+
   it("desglosa base, IVA y total; el total en negrita", () => {
     const lines = buildReceiptLines(base, branding);
     expect(rows(lines)).toContainEqual(["Base", "49,09 €"]);

@@ -40,6 +40,7 @@ function order(overrides: Partial<PaidOrderRow>): PaidOrderRow {
         destination: "cocina",
         notes: null,
         line_total: 22,
+        tax_rate: 0.1,
         order_item_extras: [],
       },
     ],

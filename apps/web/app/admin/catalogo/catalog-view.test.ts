@@ -14,6 +14,7 @@ function prod(id: string, categoryId: string, name: string, sortOrder = 0): Admi
     isAvailable: true,
     sortOrder,
     extras: [],
+    taxRate: null,
   };
 }
 
@@ -33,6 +34,7 @@ function cat(
     destination: "cocina",
     sortOrder,
     products,
+    taxRate: null,
   };
 }
 

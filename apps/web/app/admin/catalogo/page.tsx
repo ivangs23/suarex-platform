@@ -197,6 +197,7 @@ export default async function AdminCatalogoPage({
                         allergens={allergenOptions}
                         imagePath={product.imageUrl}
                         imageUrl={product.imageUrl ? catalogImageUrl(product.imageUrl) : null}
+                        taxRate={product.taxRate}
                       />
                     </details>
 
@@ -266,6 +267,7 @@ export default async function AdminCatalogoPage({
                   name={seleccionada.nameI18n.es ?? seleccionada.slug}
                   slug={seleccionada.slug}
                   destination={seleccionada.destination}
+                  taxRate={seleccionada.taxRate}
                 />
               </details>
               <details className={styles.details}>

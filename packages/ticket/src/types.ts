@@ -50,6 +50,12 @@ export type ReceiptOrder = {
   subtotalCents: number;
   taxCents: number;
   totalCents: number;
+  /**
+   * Desglose por tipo impositivo, que es lo que debe figurar en la factura: no "la base del
+   * ticket", sino la base y la cuota de cada tipo por separado. Con un solo tipo se imprime una
+   * línea; con menú al 10 % y botella al 21 %, dos. Vacío = no se desglosa (compatibilidad).
+   */
+  taxBreakdown?: { taxRate: number; baseCents: number; taxCents: number }[];
   currency: string;
   locale: string;
   /** Código de recogida, el MISMO que la pantalla de recogida del totem. */
