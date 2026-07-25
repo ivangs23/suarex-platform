@@ -392,7 +392,12 @@ test("un owner crea un grupo obligatorio y la carta lo exige al momento", async 
   // Control positivo: este producto NO tenía grupos, así que lo que se vea después es lo creado.
   await expect(bloque.getByTestId("option-group-row")).toHaveCount(0);
 
-  const nombreGrupo = `Elige el pan ${Date.now()}`;
+  const sufijo = Date.now();
+  const nombreGrupo = `Elige el pan ${sufijo}`;
+  // La opción también lleva sufijo: al borrar el grupo se queda como extra suelto (`on delete
+  // set null`, que es lo que este panel promete), así que un nombre fijo iría acumulando una
+  // copia por ejecución hasta que el localizador dejara de ser único.
+  const nombreOpcion = `Pan de cristal ${sufijo}`;
   const formulario = bloque.getByTestId("option-group-form");
   await formulario.getByLabel("Nombre del grupo").fill(nombreGrupo);
   await formulario.getByLabel("Elegir como mínimo").fill("1");
@@ -409,10 +414,10 @@ test("un owner crea un grupo obligatorio y la carta lo exige al momento", async 
     await page.locator("summary", { hasText: "Nuevo extra" }).click();
     await page.getByLabel("Producto", { exact: true }).selectOption({ label: "Croquetas caseras" });
     await page.getByLabel("Grupo de opciones").selectOption({ label: nombreGrupo });
-    await page.getByLabel("Nombre del extra").fill("Pan de cristal");
+    await page.getByLabel("Nombre del extra").fill(nombreOpcion);
     await page.getByLabel("Precio del extra (€)").fill("0");
     await page.getByRole("button", { name: "Crear extra" }).click();
-    await expect(page.getByText("Pan de cristal")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(nombreOpcion)).toBeVisible({ timeout: 15_000 });
 
     // Y la carta pública ya lo exige: sin elegir, no se puede añadir.
     await page.goto("http://garum.localhost:3000/m/11111111-1111-1111-1111-111111111111");
@@ -443,5 +448,14 @@ test("un owner crea un grupo obligatorio y la carta lo exige al momento", async 
     await expect(
       limpieza.getByTestId("option-group-row").filter({ hasText: nombreGrupo }),
     ).toHaveCount(0, { timeout: 15_000 });
+
+    // Y la opción que sobrevivió al grupo: se borra también, o cada ejecución dejaría una más
+    // en la carta de garum -- que el resto de la suite espera tal cual la dejó el seed.
+    page.once("dialog", (dialog) => dialog.accept());
+    await limpieza
+      .locator("li", { hasText: nombreOpcion })
+      .getByRole("button", { name: "Borrar extra" })
+      .click();
+    await expect(page.getByText(nombreOpcion)).toHaveCount(0, { timeout: 15_000 });
   }
 });

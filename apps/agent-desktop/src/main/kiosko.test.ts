@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import type { ChargeEvent } from "./charge-journal.js";
 import { type ChargeOrderDeps, chargeOrder } from "./kiosko.js";
 import type { PaytefBridgeConfig } from "./paytef.js";
 
@@ -101,5 +102,96 @@ describe("chargeOrder", () => {
     const r = await chargeOrder(deps({ charge, markPaid }), "ord-1", { sleep: async () => {} });
     expect(r.status).toBe("in-doubt");
     expect(charge).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * EL ORDEN de lo que se apunta en el diario, que es lo único que hace recuperable un tirón del
+ * enchufe. No se comprueba "que se llame al diario" sino CUÁNDO: apuntar el cobro después de
+ * cobrarlo dejaría el mismo agujero que no apuntarlo.
+ */
+describe("chargeOrder y el diario de cobros", () => {
+  /** Devuelve los eventos apuntados, y de paso registra en qué momento pasó cada cosa. */
+  function conDiario(over: Partial<ChargeOrderDeps> = {}) {
+    const orden: string[] = [];
+    const eventos: ChargeEvent[] = [];
+    const base = deps({
+      charge: async (_c, _a, _r, opts) => {
+        orden.push("cobra");
+        await opts.onSession?.("S-1");
+        return { approved: true as const, authCode: "OK123" };
+      },
+      markPaid: async () => {
+        orden.push("marca");
+        return true;
+      },
+      ...over,
+    });
+    return {
+      orden,
+      eventos,
+      deps: {
+        ...base,
+        journal: async (event: ChargeEvent) => {
+          orden.push(`diario:${event.t}`);
+          eventos.push(event);
+        },
+      } satisfies ChargeOrderDeps,
+    };
+  }
+
+  it("apunta el cobro ANTES de hablar con el datáfono, y el aprobado ANTES de registrarlo", async () => {
+    const caso = conDiario();
+    await chargeOrder(caso.deps, "ord-1", { now: () => 42 });
+
+    expect(caso.orden).toEqual([
+      "diario:started", // primero el disco...
+      "cobra", // ...y solo entonces el dinero
+      "diario:session",
+      "diario:approved", // aprobado en disco...
+      "marca", // ...antes de intentar registrarlo
+      "diario:settled",
+    ]);
+  });
+
+  it("todos los eventos comparten la referencia de la operación", async () => {
+    const caso = conDiario();
+    await chargeOrder(caso.deps, "ord-1", { now: () => 42 });
+    expect(new Set(caso.eventos.map((e) => e.ref))).toEqual(new Set(["ORD-ord-1-42"]));
+  });
+
+  it("apunta el importe y el pedido: sin ellos, un cobro recuperado no se sabe de quién es", async () => {
+    const caso = conDiario();
+    await chargeOrder(caso.deps, "ord-1", { now: () => 42 });
+    expect(caso.eventos[0]).toMatchObject({ t: "started", orderId: "ord-1", amountCents: 1250 });
+  });
+
+  it("guarda la sesión del datáfono: es lo que permite volver a preguntarle tras un corte", async () => {
+    const caso = conDiario();
+    await chargeOrder(caso.deps, "ord-1", { now: () => 42 });
+    expect(caso.eventos.find((e) => e.t === "session")).toMatchObject({ sessionId: "S-1" });
+  });
+
+  it("un cobro denegado se cierra en el diario: no hay nada que recuperar al arrancar", async () => {
+    const caso = conDiario({
+      charge: async () => ({ approved: false as const, reason: "Fondos insuficientes" }),
+    });
+    await chargeOrder(caso.deps, "ord-1", { now: () => 42 });
+
+    expect(caso.eventos.map((e) => e.t)).toEqual(["started", "declined"]);
+  });
+
+  it("aprobado y sin registrar NO se cierra: es justo lo que hay que recuperar", async () => {
+    const caso = conDiario({ markPaid: async () => false });
+    const r = await chargeOrder(caso.deps, "ord-1", { now: () => 42, sleep: async () => {} });
+
+    expect(r.status).toBe("in-doubt");
+    expect(caso.eventos.map((e) => e.t)).toEqual(["started", "session", "approved"]);
+    expect(caso.eventos.some((e) => e.t === "settled")).toBe(false);
+  });
+
+  it("sin diario, el cobro funciona igual: es una garantía añadida, no un requisito", async () => {
+    const r = await chargeOrder(deps(), "ord-1", { now: () => 42 });
+    expect(r).toEqual({ status: "paid", authCode: "OK123" });
   });
 });

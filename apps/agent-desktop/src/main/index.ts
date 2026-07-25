@@ -23,6 +23,8 @@ import {
   stopAgent,
 } from "./agent-runner.js";
 import { PLATFORM_WEB_ORIGIN } from "./baked-config.js";
+import { type ChargeJournal, createChargeJournal } from "./charge-journal.js";
+import { runChargeRecovery } from "./charge-recovery-runner.js";
 import { loadCredentials, saveCredentials } from "./config-store.js";
 import { registerIpc } from "./ipc.js";
 import { createLogger, type Logger } from "./logger.js";
@@ -44,6 +46,9 @@ let quitting = false;
 // entonces, y por si un fallo salta antes, `reportMain` cae en `console.error`. La app corre
 // oculta en bandeja, así que sin este fichero un crash no dejaba ningún rastro.
 let logger: Logger | null = null;
+// El diario de cobros vive junto a los datos de la app y se crea en `whenReady`, igual que el
+// logger: hasta entonces `app.getPath("userData")` no está disponible.
+let chargeJournal: ChargeJournal | null = null;
 function reportMain(msg: string, err?: unknown): void {
   if (logger) logger.error(msg, err);
   else console.error(msg, err);
@@ -151,6 +156,10 @@ if (!gotLock) {
     logger = createLogger(logSink, () => new Date().toISOString());
     logger.info(`Arranque. Versión ${app.getVersion()}, plataforma ${process.platform}.`);
 
+    // El diario de cobros, junto a los datos de la app: es lo que sobrevive a un tirón del
+    // enchufe a mitad de un pago. Se crea aquí para que exista ANTES de que se pueda cobrar.
+    chargeJournal = createChargeJournal(app.getPath("userData"));
+
     // Auto-arranque en el login de Windows (desatendido, oculto en bandeja).
     app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true });
 
@@ -202,6 +211,7 @@ if (!gotLock) {
         }
         logger.info(`Emparejado (dispositivo ${creds.deviceId}). Arrancando el agente…`);
         await startAgent(store, creds.tenantId);
+        await recuperarCobrosPendientes();
         await maybeStartKiosk();
       } catch (e) {
         // La sesión no se pudo restaurar/renovar (token revocado o caducado), o falló la
@@ -222,6 +232,39 @@ if (!gotLock) {
 }
 
 /**
+ * Resuelve los cobros que quedaron a medias si el totem se apagó en mitad de un pago (#18).
+ *
+ * Va DESPUÉS de arrancar el agente (necesita su cliente autenticado) y ANTES de abrir la ventana
+ * del totem: primero se cierra lo que le pasó al cliente anterior y solo entonces se admite al
+ * siguiente. Nunca lanza -- un fallo aquí no puede dejar el local sin totem.
+ */
+async function recuperarCobrosPendientes(): Promise<void> {
+  const client = getDeviceClient();
+  if (!client || !chargeJournal) return;
+  try {
+    await runChargeRecovery({
+      client,
+      journal: chargeJournal,
+      log: (mensaje) => logger?.info(mensaje),
+      alert: (outcome) => {
+        if (!Notification.isSupported()) return;
+        const importe = (outcome.amountCents / 100).toFixed(2);
+        const codigo = outcome.authCode
+          ? `
+Autorización: ${outcome.authCode}`
+          : "";
+        new Notification({
+          title: "Cobro pendiente de resolver",
+          body: `${importe} €. ${outcome.detail}.${codigo}`,
+        }).show();
+      },
+    });
+  } catch (e) {
+    reportMain("[agent-desktop] fallo recuperando cobros pendientes:", e);
+  }
+}
+
+/**
  * Si este dispositivo es un TOTEM (rol `kiosko`), abre su ventana kiosko con la carta
  * `/totem/<totem_token>`. El token se lee del PROPIO device con su JWT (`devices_select_own` solo
  * devuelve su fila). Un device que solo imprime (rol `agente`) no abre nada: sigue oculto en
@@ -236,7 +279,7 @@ async function maybeStartKiosk(): Promise<void> {
     const token = data?.totem_token as string | undefined;
     if (!token || !roles.includes("kiosko")) return;
 
-    registerTotemIpc(getDeviceClient, receiptPrinterStatus);
+    registerTotemIpc(getDeviceClient, receiptPrinterStatus, chargeJournal ?? undefined);
     const kioskWindow = openKioskWindow(`${PLATFORM_WEB_ORIGIN}/totem/${token}`);
     kioskWindow.on("close", (e) => {
       // El totem no se cierra a mano: si alguien lo intenta, se vuelve a mostrar (salvo al salir).
