@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validarEmail, validarIdioma, validarSlug } from "./tenant-input.mjs";
+import { validarCanales, validarEmail, validarIdioma, validarSlug } from "./tenant-input.mjs";
 
 /**
  * Un alta va contra producción: un dato mal formado ahí rompe el subdominio del cliente o
@@ -40,5 +40,35 @@ describe("validarIdioma", () => {
   });
   it("rechaza uno que dejaría la carta a medias", () => {
     expect(() => validarIdioma("fr")).toThrow(/no soportado/);
+  });
+});
+
+describe("validarCanales", () => {
+  it("por defecto se da de alta con el producto base", () => {
+    expect(validarCanales("qr-mesa")).toEqual(["qr-mesa"]);
+  });
+
+  it("un cliente con carta y totem lleva los dos", () => {
+    expect(validarCanales("qr-mesa,kiosko")).toEqual(["qr-mesa", "kiosko"]);
+  });
+
+  it("tolera espacios y no repite", () => {
+    expect(validarCanales(" qr-mesa , kiosko , qr-mesa ")).toEqual(["qr-mesa", "kiosko"]);
+  });
+
+  it("una cadena vacía es un cliente sin canales, que es una configuración legítima", () => {
+    // Un cliente dado de alta antes de decidir qué contrata. Se enciende luego desde Ajustes.
+    expect(validarCanales("")).toEqual([]);
+  });
+
+  it("un canal mal escrito se RECHAZA, no se guarda", () => {
+    /* Guardar "kiosco" con c dejaría el totem apagado sin que nada lo dijera, y el fallo
+       aparecería el día de la instalación en el local. */
+    expect(() => validarCanales("kiosco")).toThrow(/Canal desconocido/);
+    expect(() => validarCanales("qr-mesa,inventado")).toThrow(/inventado/);
+  });
+
+  it("el mensaje dice cuáles valen, para no tener que ir a buscarlo", () => {
+    expect(() => validarCanales("x")).toThrow(/qr-mesa/);
   });
 });
