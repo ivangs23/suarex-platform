@@ -86,13 +86,13 @@ export async function deviceRolesAndPinpad(
 ): Promise<{ roles: string[]; pinpadId: string | null }> {
   const { data, error } = await admin
     .from("devices")
-    .select("roles, pinpad_id")
+    .select("roles, payment_terminal_id")
     .eq("id", deviceId)
     .single();
   if (error) throw error;
   return {
     roles: (data.roles as string[]) ?? [],
-    pinpadId: (data.pinpad_id as string | null) ?? null,
+    pinpadId: (data.payment_terminal_id as string | null) ?? null,
   };
 }
 

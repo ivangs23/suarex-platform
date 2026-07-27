@@ -46,7 +46,7 @@ async function seedTotemDevice(pinpad: string | null) {
       venue_id: venueId,
       name: "Totem",
       auth_user_id: userId,
-      pinpad_id: pinpad,
+      payment_terminal_id: pinpad,
     })
     .select("id")
     .single();
@@ -189,5 +189,122 @@ describe("config de pago para el PANEL (owner/admin, #totem fase 6)", () => {
     } finally {
       await deleteTenantFixture(t);
     }
+  });
+});
+
+/**
+ * FASE 1 de los métodos de pago configurables: el esquema deja de hablar en Paytef y guarda
+ * `config`/`secrets` genéricos, pero la RPC vieja sigue viva.
+ *
+ * Ese segundo punto es el que de verdad se prueba aquí. En el local de un cliente hay un Electron
+ * con una build que llama a `get_payment_config_self()` esperando seis columnas concretas: si eso
+ * dejara de funcionar, ese totem no cobraría hasta actualizarse. Estos tests son lo que impide que
+ * un refactor del esquema pare una caja en horario de servicio.
+ */
+describe("config de pago genérica (#19/#20)", () => {
+  /** Escribe directamente el formato NUEVO, como hará el panel a partir de la fase 2. */
+  async function guardaFormatoNuevo(values: {
+    config: Record<string, string>;
+    secrets: Record<string, string>;
+    provider?: string;
+    mock?: boolean;
+  }) {
+    const { error } = await admin.from("tenant_payment_config").upsert({
+      tenant_id: tenant.tenantId,
+      provider: values.provider ?? "paytef",
+      config: values.config,
+      secrets: values.secrets,
+      mock: values.mock ?? false,
+    });
+    if (error) throw error;
+  }
+
+  it("la RPC nueva devuelve los objetos tal cual, más el terminal de ESTE dispositivo", async () => {
+    await guardaFormatoNuevo({
+      config: { accessKey: "AK-1", companyId: "C-1" },
+      secrets: { secretKey: "SK-1" },
+    });
+    const { client } = await seedTotemDevice("TERM-9");
+
+    const { data, error } = await client.rpc("get_payment_config_self_v2");
+    expect(error).toBeNull();
+    expect(data?.[0]).toMatchObject({
+      provider: "paytef",
+      config: { accessKey: "AK-1", companyId: "C-1" },
+      secrets: { secretKey: "SK-1" },
+      mock: false,
+      terminal_id: "TERM-9",
+    });
+  });
+
+  it("un agente VIEJO sigue viendo la config aunque ya esté guardada en el formato nuevo", async () => {
+    // Sin la caída a los objetos, la compatibilidad duraría solo hasta la primera vez que
+    // alguien tocara los ajustes de pago desde el panel.
+    await guardaFormatoNuevo({
+      config: { accessKey: "AK-2", companyId: "C-2" },
+      secrets: { secretKey: "SK-2" },
+    });
+    const { client } = await seedTotemDevice("TERM-8");
+
+    const { data, error } = await client.rpc("get_payment_config_self");
+    expect(error).toBeNull();
+    expect(data?.[0]).toMatchObject({
+      provider: "paytef",
+      access_key: "AK-2",
+      secret_key: "SK-2",
+      company_id: "C-2",
+      // El nombre de columna que el agente desplegado espera, no el nuevo.
+      pinpad_id: "TERM-8",
+    });
+  });
+
+  it("un proveedor que no es Paytef se guarda sin pelearse con ninguna restricción", async () => {
+    // El `check (provider in ('paytef'))` obligaba a una migración por proveedor nuevo. Quien
+    // decide si un proveedor existe es el registro del agente, no la base.
+    await guardaFormatoNuevo({
+      provider: "otro-tpv",
+      config: { loQueSea: "1" },
+      secrets: { token: "T-1" },
+    });
+    const { client } = await seedTotemDevice("TERM-7");
+
+    const { data } = await client.rpc("get_payment_config_self_v2");
+    expect(data?.[0]).toMatchObject({ provider: "otro-tpv", config: { loQueSea: "1" } });
+  });
+
+  it("un provider vacío sí se rechaza: es un dato corrupto, no un proveedor futuro", async () => {
+    const { error } = await admin.from("tenant_payment_config").upsert({
+      tenant_id: tenant.tenantId,
+      provider: "",
+      config: {},
+      secrets: {},
+    });
+    expect(error).not.toBeNull();
+  });
+
+  it("a un anónimo ni se le deja llamar: la RPC no está concedida a ese rol", async () => {
+    const { error } = await anonClient().rpc("get_payment_config_self_v2");
+    expect(error?.message).toContain("permission denied");
+  });
+
+  it("un usuario autenticado que NO es un dispositivo no obtiene nada", async () => {
+    /* Este es el aislamiento que de verdad importa: el owner del tenant SÍ puede ejecutar la
+       función (está concedida a `authenticated`), pero no tiene fila en `devices`, así que la
+       consulta acotada por `auth.uid()` no le devuelve ni el secreto ni nada. Sin este caso, el
+       test del anónimo daría una falsa sensación de seguridad: rechaza por el GRANT, no por el
+       acotado, y el GRANT no protege de un miembro del propio tenant. */
+    await guardaFormatoNuevo({ config: { accessKey: "AK-9" }, secrets: { secretKey: "SK-9" } });
+
+    const { data, error } = await tenant.client.rpc("get_payment_config_self_v2");
+    expect(error).toBeNull();
+    expect(data ?? []).toHaveLength(0);
+  });
+
+  it("un device NO puede leer los secretos por la tabla, ni con el formato nuevo", async () => {
+    await guardaFormatoNuevo({ config: { accessKey: "AK-3" }, secrets: { secretKey: "SK-3" } });
+    const { client } = await seedTotemDevice("TERM-6");
+
+    const { data } = await client.from("tenant_payment_config").select("secrets");
+    expect(data ?? [], "un device pudo leer los secretos por la tabla").toHaveLength(0);
   });
 });
