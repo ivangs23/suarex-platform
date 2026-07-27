@@ -7,7 +7,7 @@ import {
 import type { ChargeJournal } from "./charge-journal.js";
 import type { RecoveryDeps, RecoveryOutcome, SessionOutcome } from "./charge-recovery.js";
 import { recoverCharges } from "./charge-recovery.js";
-import { type PaytefBridgeConfig, pollPaytefSession } from "./paytef.js";
+import { paymentRegistry, resolvePaymentConfig } from "./resolve-payment.js";
 
 /**
  * Compone las piezas reales de la recuperación de cobros y la lanza AL ARRANCAR.
@@ -48,20 +48,19 @@ export async function runChargeRecovery(params: {
     },
     markPaid: (orderId) => markKioskoOrderPaid(client, orderId),
     pollSession: async (sessionId): Promise<SessionOutcome> => {
-      const cfg = await getPaymentConfigForDevice(client);
-      if (!cfg) return { kind: "unknown" };
-      const bridge: PaytefBridgeConfig = {
-        accessKey: cfg.accessKey,
-        secretKey: cfg.secretKey,
-        companyId: cfg.companyId,
-        pinpad: cfg.pinpadId ?? "",
-        mock: cfg.mock,
-      };
-      const interp = await pollPaytefSession(bridge, sessionId);
-      if (interp.kind !== "final") return { kind: "unknown" };
-      return interp.approved
-        ? { kind: "approved", authCode: interp.authCode }
-        : { kind: "declined", reason: interp.reason };
+      const device = await getPaymentConfigForDevice(client);
+      if (!device) return { kind: "unknown" };
+
+      const provider = paymentRegistry.get(device.provider);
+      /* Un proveedor que no sabe reconsultar una operación (`canPollSession`) no se le pregunta:
+         se dice "no consta" y el cobro acaba en manos de una persona con su código de
+         autorización. Fingir una consulta que el proveedor no soporta sería inventarse una
+         respuesta sobre dinero de un cliente. */
+      if (!provider?.canPollSession || !provider.pollSession) return { kind: "unknown" };
+
+      const config = resolvePaymentConfig(device.provider, device);
+      if (!config) return { kind: "unknown" };
+      return provider.pollSession(config, sessionId);
     },
     onSettled: (charge) => journal.append({ t: "settled", ref: charge.ref, at: Date.now() }),
     onApproved: (charge, authCode) =>

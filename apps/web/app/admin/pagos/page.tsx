@@ -1,13 +1,14 @@
 import { getPaymentConfigForManager } from "@suarex/db";
+import { PAYMENT_PROVIDERS } from "@suarex/payments";
 import { requireManager } from "@/lib/require-manager";
 import { PaymentConfigForm } from "./PaymentConfigForm";
 
 /**
- * Config de pago del negocio (Paytef, canal totem). `requireManager()` es la primera barrera;
+ * Config del método de pago del negocio (canal totem). `requireManager()` es la primera barrera;
  * `setPaymentConfigAction` la vuelve a comprobar por su cuenta vía `managerAction`.
  *
- * La clave secreta NO se lee aquí para la vista (ver `getPaymentConfigForManager`): solo se sabe
- * si hay una guardada, para que el navegador nunca reciba el secreto.
+ * Los secretos NO se leen aquí para la vista (ver `getPaymentConfigForManager`): solo se sabe
+ * cuáles hay guardados, para que el navegador nunca reciba ninguno.
  */
 export default async function AdminPagosPage() {
   const session = await requireManager();
@@ -17,14 +18,15 @@ export default async function AdminPagosPage() {
     <main>
       <h1>Pagos (datáfono del totem)</h1>
       <p>
-        Credenciales de Paytef para cobrar por datáfono en el totem. El pinpad de cada totem se
-        asigna en <a href="/admin/dispositivos">Dispositivos</a>.
+        Cómo cobra el totem. El terminal físico de cada totem se asigna en{" "}
+        <a href="/admin/dispositivos">Dispositivos</a>: es del aparato, no de la cuenta.
       </p>
       <PaymentConfigForm
-        accessKey={config?.accessKey ?? ""}
-        companyId={config?.companyId ?? ""}
+        providers={PAYMENT_PROVIDERS}
+        provider={config?.provider ?? ""}
+        config={config?.config ?? {}}
+        secretsSet={config?.secretsSet ?? []}
         mock={config?.mock ?? true}
-        hasSecret={config?.hasSecret ?? false}
       />
     </main>
   );

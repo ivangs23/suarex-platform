@@ -1,56 +1,71 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { tenantScoped } from "./client.js";
 
-/** Config de pago (Paytef) resuelta para un totem: credenciales de cuenta del tenant + el pinpad
- *  de ESTE dispositivo. `secretKey` es sensible; solo llega por la RPC acotada, nunca por SELECT. */
-export type PaytefConfig = {
+/**
+ * Config de pago resuelta para un totem: la de la CUENTA del tenant más el terminal de ESTE
+ * dispositivo.
+ *
+ * Deliberadamente sin vocabulario de ningún proveedor: qué claves llevan dentro `config` y
+ * `secrets` lo decide quien las declaró (`@suarex/payments`), y este paquete no tiene por qué
+ * saberlo. El `terminalId` viaja aparte porque no vive con la cuenta sino con el aparato, y es el
+ * agente -- que sí conoce al proveedor -- quien lo coloca bajo el nombre de campo que toque.
+ *
+ * Los secretos SOLO llegan por aquí (RPC acotada al propio device), nunca por un SELECT.
+ */
+export type DevicePaymentConfig = {
   provider: string;
-  accessKey: string;
-  secretKey: string;
-  companyId: string | null;
+  config: Record<string, string>;
+  secrets: Record<string, string>;
   mock: boolean;
-  pinpadId: string | null;
+  terminalId: string | null;
 };
 
 type PaymentConfigRow = {
   provider: string;
-  access_key: string;
-  secret_key: string;
-  company_id: string | null;
+  config: Record<string, string> | null;
+  secrets: Record<string, string> | null;
   mock: boolean;
-  pinpad_id: string | null;
+  terminal_id: string | null;
 };
 
 /**
- * Config de pago del tenant del DEVICE que llama (más su propio pinpad), vía la RPC
- * `get_payment_config_self` (SECURITY DEFINER): el rol `device` no puede leer
+ * Config de pago del tenant del DEVICE que llama (más su propio terminal), vía la RPC
+ * `get_payment_config_self_v2` (SECURITY DEFINER): el rol `device` no puede leer
  * `tenant_payment_config` directamente. `null` si el tenant no tiene config o quien llama no es
  * un device emparejado. Lo consume el agente en rol kiosko con el cliente del device.
+ *
+ * `_v2` y no la de siempre: la vieja sigue existiendo para los agentes ya desplegados, que
+ * esperan las columnas de Paytef. Ver `20260726000001_payment_providers.sql`.
  */
 export async function getPaymentConfigForDevice(
   client: SupabaseClient,
-): Promise<PaytefConfig | null> {
-  const { data, error } = await client.rpc("get_payment_config_self");
+): Promise<DevicePaymentConfig | null> {
+  const { data, error } = await client.rpc("get_payment_config_self_v2");
   if (error) throw error;
   const row = (data as PaymentConfigRow[] | null)?.[0];
   if (!row) return null;
   return {
     provider: row.provider,
-    accessKey: row.access_key,
-    secretKey: row.secret_key,
-    companyId: row.company_id ?? null,
+    config: row.config ?? {},
+    secrets: row.secrets ?? {},
     mock: row.mock,
-    pinpadId: row.pinpad_id ?? null,
+    terminalId: row.terminal_id ?? null,
   };
 }
 
-/** Config Paytef tal como la ve el PANEL (owner/admin): sin el secreto, solo si está puesto. El
- *  secreto nunca viaja al navegador; para cambiarlo se vuelve a teclear. `null` si no hay config. */
+/**
+ * Config tal como la ve el PANEL (owner/admin): todo menos los secretos.
+ *
+ * De los secretos solo sale QUÉ está puesto, nunca el valor. `secretsSet` es una lista y no un
+ * booleano porque un proveedor puede tener más de uno, y "hay algún secreto guardado" no permite
+ * decirle al dueño cuál le falta.
+ */
 export type PaymentConfigForManager = {
-  accessKey: string;
-  companyId: string | null;
+  provider: string;
+  config: Record<string, string>;
+  /** Nombres de los campos secretos que ya tienen valor guardado. */
+  secretsSet: string[];
   mock: boolean;
-  hasSecret: boolean;
 };
 
 /**
@@ -62,67 +77,89 @@ export async function getPaymentConfigForManager(
   tenantId: string,
 ): Promise<PaymentConfigForManager | null> {
   const { data, error } = await tenantScoped("tenant_payment_config", tenantId)
-    .select("access_key, company_id, mock, secret_key")
+    .select("provider, config, secrets, mock")
     .maybeSingle();
   if (error) throw error;
   if (!data) return null;
+
+  /* `secrets` SÍ se lee aquí (con service role) y NO se devuelve: de él solo sale la lista de
+     nombres con valor. Es la misma frontera que ya había con `secret_key` -- lo que no puede
+     pasar es que el valor baje al navegador, no que este proceso lo tenga en memoria un instante
+     para contar qué hay puesto. */
+  const secrets = (data.secrets as Record<string, unknown> | null) ?? {};
   return {
-    accessKey: (data.access_key as string) ?? "",
-    companyId: (data.company_id as string | null) ?? null,
+    provider: (data.provider as string) ?? "",
+    config: ((data.config as Record<string, string> | null) ?? {}) as Record<string, string>,
+    secretsSet: Object.entries(secrets)
+      .filter(([, value]) => typeof value === "string" && value.length > 0)
+      .map(([name]) => name),
     mock: (data.mock as boolean) ?? true,
-    hasSecret: typeof data.secret_key === "string" && data.secret_key.length > 0,
   };
 }
 
-/** No hay config Paytef todavía y no se dio la clave secreta: no se puede crear una a medias. */
+/** Primer alta sin los secretos que el proveedor exige: no se puede crear una config a medias. */
 export class MissingPaymentSecretError extends Error {
-  constructor() {
-    super("Falta la clave secreta de Paytef");
+  /** Los nombres de campo que faltan, para que quien llama los traduzca a etiquetas. */
+  readonly missing: string[];
+  constructor(missing: string[] = []) {
+    super(`Faltan secretos obligatorios: ${missing.join(", ")}`);
     this.name = "MissingPaymentSecretError";
+    this.missing = missing;
   }
 }
 
 /**
- * Alta/edición de la config Paytef del tenant (la gestiona owner/admin desde el panel; el rol se
- * verifica en la Server Action). Nunca devuelve el secreto.
+ * Alta/edición de la config de pago del tenant (owner/admin; el rol se comprueba en la Server
+ * Action). Nunca devuelve secretos.
  *
- * `secretKey` es OPCIONAL al editar: si viene vacío y ya hay una config, se CONSERVA la clave
- * guardada (no baja al navegador, así que no se puede reenviar; dejarla en blanco = no cambiarla).
- * En el primer alta sí es obligatoria -- sin ella lanza `MissingPaymentSecretError`.
+ * Los secretos que llegan se ESCRIBEN ENCIMA de los guardados, uno a uno, en vez de sustituir el
+ * objeto entero. Es la generalización de la regla de siempre -- "en blanco = no cambiar" -- y
+ * ahora importa más: con dos secretos, reemplazar el objeto borraría el que el dueño no ha
+ * tocado, dejando la cuenta a medias sin que nadie lo note hasta el siguiente cobro. Quien llama
+ * solo manda los que quiere cambiar (ver `splitByStorage` en `@suarex/payments`, que ya descarta
+ * los vacíos).
+ *
+ * `requiredSecrets` son los nombres que el proveedor declara obligatorios. Solo se exigen en el
+ * PRIMER alta: en una edición ya hay valor guardado y volver a pedirlo obligaría a teclear la
+ * clave cada vez que se corrige una errata en otro campo.
  */
 export async function setPaymentConfig(
   tenantId: string,
   input: {
-    accessKey: string;
-    secretKey?: string | null;
-    companyId?: string | null;
+    provider: string;
+    config: Record<string, string>;
+    /** Solo los secretos a CAMBIAR. Los ausentes conservan su valor guardado. */
+    secrets?: Record<string, string>;
     mock?: boolean;
+    requiredSecrets?: string[];
   },
 ): Promise<void> {
-  const common = {
-    provider: "paytef",
-    access_key: input.accessKey,
-    company_id: input.companyId ?? null,
-    mock: input.mock ?? true,
-    updated_at: new Date().toISOString(),
-  };
+  const nuevos = input.secrets ?? {};
+  const { data: existente, error: readError } = await tenantScoped(
+    "tenant_payment_config",
+    tenantId,
+  )
+    .select("secrets")
+    .maybeSingle();
+  if (readError) throw readError;
 
-  if (input.secretKey) {
-    const { error } = await tenantScoped("tenant_payment_config", tenantId).upsert(
-      { ...common, secret_key: input.secretKey },
-      "tenant_id",
-    );
-    if (error) throw error;
-    return;
-  }
+  const guardados = (existente?.secrets as Record<string, string> | null) ?? {};
+  const secrets = { ...guardados, ...nuevos };
 
-  // Sin secreto nuevo: se actualizan el resto de campos y se conserva el secreto existente. Si no
-  // había fila (update afecta 0 filas), es un primer alta sin clave: se rechaza.
-  const { data, error } = await tenantScoped("tenant_payment_config", tenantId)
-    .update(common)
-    .select("tenant_id");
+  const faltan = (input.requiredSecrets ?? []).filter((name) => !secrets[name]);
+  if (faltan.length > 0) throw new MissingPaymentSecretError(faltan);
+
+  const { error } = await tenantScoped("tenant_payment_config", tenantId).upsert(
+    {
+      provider: input.provider,
+      config: input.config,
+      secrets,
+      mock: input.mock ?? true,
+      updated_at: new Date().toISOString(),
+    },
+    "tenant_id",
+  );
   if (error) throw error;
-  if (!data || data.length === 0) throw new MissingPaymentSecretError();
 }
 
 /** Pedido kiosko leído por el device para cobrarlo: importe en céntimos (del SERVIDOR, no del

@@ -53,6 +53,9 @@ importers:
 
   apps/agent-desktop:
     dependencies:
+      '@suarex/payments':
+        specifier: workspace:*
+        version: link:../../packages/payments
       electron-updater:
         specifier: ^6.8.9
         version: 6.8.9
@@ -117,6 +120,9 @@ importers:
       '@suarex/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@suarex/payments':
+        specifier: workspace:*
+        version: link:../../packages/payments
       '@suarex/realtime':
         specifier: workspace:*
         version: link:../../packages/realtime
@@ -228,6 +234,15 @@ importers:
         version: 5.9.3
 
   packages/domain:
+    devDependencies:
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.5
+        version: 4.1.10(@types/node@26.1.1)(happy-dom@20.11.1)(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1))
+
+  packages/payments:
     devDependencies:
       typescript:
         specifier: ^5.9.3

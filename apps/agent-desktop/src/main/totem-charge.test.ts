@@ -1,11 +1,12 @@
 import type { SupabaseClient } from "@suarex/agent";
 import { describe, expect, it, vi } from "vitest";
+import type { ChargeJournal } from "./charge-journal.js";
 import { chargeKioskoOrder } from "./totem-charge.js";
 
 /**
  * Cliente de Supabase FALSO, con lo justo que tocan las tres funciones de `@suarex/db` que compone
  * `chargeKioskoOrder`: `readKioskoOrderForCharge` (from/select/eq/maybeSingle sobre `orders`),
- * `getPaymentConfigForDevice` (rpc `get_payment_config_self`) y `markKioskoOrderPaid` (rpc
+ * `getPaymentConfigForDevice` (rpc `get_payment_config_self_v2`) y `markKioskoOrderPaid` (rpc
  * `mark_kiosko_order_paid`). Devuelve un espía de `mark` para comprobar que se llama tras aprobar.
  */
 function fakeClient(over: {
@@ -25,17 +26,16 @@ function fakeClient(over: {
       }),
     }),
     rpc: (name: string, args?: unknown) => {
-      if (name === "get_payment_config_self") {
+      if (name === "get_payment_config_self_v2") {
         const config =
           over.config === undefined
             ? [
                 {
                   provider: "paytef",
-                  access_key: "AK",
-                  secret_key: "SK",
-                  company_id: "1",
+                  config: { accessKey: "AK", companyId: "1" },
+                  secrets: { secretKey: "SK" },
                   mock: true,
-                  pinpad_id: "PIN-1",
+                  terminal_id: "PIN-1",
                 },
               ]
             : over.config;
@@ -67,15 +67,47 @@ describe("chargeKioskoOrder (composición del totem en el desktop)", () => {
   });
 
   it("el importe cobrado sale del pedido (servidor), no del renderer", async () => {
-    // `charge` inyectado para inspeccionar el importe: el pedido es 12,00 € -> 1200 céntimos.
+    /* Ya no se inyecta un `charge` de mentira: el proveedor lo resuelve el registro a partir de
+       lo configurado, que es justo lo que se quiere probar. El importe se observa por el diario,
+       que apunta el `started` con el importe ANTES de cobrar -- el pedido son 12,00 € -> 1200. */
     const { client } = fakeClient({});
-    const charge = vi.fn(async () => ({ approved: true as const, authCode: "X" }));
-    await chargeKioskoOrder(client, "ord-1", { charge });
-    expect(charge).toHaveBeenCalledWith(
-      expect.objectContaining({ pinpad: "PIN-1", mock: true }),
-      1200,
-      expect.stringContaining("ord-1"),
-      expect.anything(),
-    );
+    const eventos: { t: string; amountCents?: number }[] = [];
+    const journal: ChargeJournal = {
+      append: async (event) => {
+        eventos.push(event);
+      },
+      pending: async () => [],
+      compact: async () => {},
+    };
+
+    const result = await chargeKioskoOrder(client, "ord-1", { journal });
+
+    expect(result.status).toBe("paid");
+    expect(eventos[0]).toMatchObject({ t: "started", amountCents: 1200 });
+  });
+
+  it("un método de pago que este agente no conoce no revienta: no se cobra y se dice", async () => {
+    // Una fila guardada por una versión más nueva del panel. Para el comensal es lo mismo que no
+    // tener terminal; lo que no puede es tumbar el totem.
+    const { client, mark } = fakeClient({
+      config: [{ provider: "de-marte", config: {}, secrets: {}, mock: true, terminal_id: null }],
+    });
+    const result = await chargeKioskoOrder(client, "ord-1");
+    expect(result.status).toBe("declined");
+    expect(mark).not.toHaveBeenCalled();
+  });
+
+  it("el terminal del DISPOSITIVO llega al proveedor con el nombre que él declaró", async () => {
+    /* La base guarda "el terminal de este dispositivo" sin saber que Paytef lo llama "pinpad".
+       Quien hace esa correspondencia es el driver, y esto lo fija. */
+    const { resolvePaymentConfig } = await import("./resolve-payment.js");
+    const resuelta = resolvePaymentConfig("paytef", {
+      provider: "paytef",
+      config: { accessKey: "AK" },
+      secrets: { secretKey: "SK" },
+      mock: false,
+      terminalId: "PIN-9",
+    });
+    expect(resuelta?.values).toMatchObject({ accessKey: "AK", secretKey: "SK", pinpad: "PIN-9" });
   });
 });
