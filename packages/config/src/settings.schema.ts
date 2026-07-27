@@ -24,3 +24,21 @@ export const tenantSettingsSchema = z.object({
 });
 
 export type TenantSettings = z.infer<typeof tenantSettingsSchema>;
+
+/** Los canales de venta que el producto conoce. Un cliente puede tener uno, los dos, o ninguno. */
+export type SalesChannel = "qr-mesa" | "kiosko";
+
+/**
+ * ¿Este cliente tiene encendido este canal?
+ *
+ * La regla es literal: lo que no está en la lista, no está encendido. Nada de "vacío significa
+ * todo", que es la clase de excepción que hace que un interruptor deje de significar lo que dice y
+ * que nadie se atreva luego a apagarlo por si acaso.
+ *
+ * De alcance COMERCIAL, no de seguridad: apaga la puerta de entrada del comensal (la carta, el
+ * totem), no es una barrera contra alguien que fabrique peticiones a mano. Para eso están la RLS
+ * y las cookies de mesa, que siguen donde estaban.
+ */
+export function hasChannel(channels: readonly string[], channel: SalesChannel): boolean {
+  return channels.includes(channel);
+}

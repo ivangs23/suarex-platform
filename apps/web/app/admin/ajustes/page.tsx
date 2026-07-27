@@ -36,6 +36,7 @@ export default async function AdminAjustesPage() {
         locale={settings?.locale ?? "es"}
         currency={settings?.currency ?? "EUR"}
         customDomain={customDomain ?? ""}
+        channels={settings?.channels ?? []}
       />
     </main>
   );

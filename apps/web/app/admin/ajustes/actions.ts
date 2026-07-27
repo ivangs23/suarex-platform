@@ -30,12 +30,26 @@ const ROOT_DOMAINS = resolveRootDomains(process.env);
  * vía `parseBranding`, que degrada con seguridad) -- guardar la marca sin volver a subir la
  * foto no debe borrarla.
  */
+/**
+ * Qué canales de venta quedan encendidos (#22). Se leen SIEMPRE los dos, y lo que no venga
+ * marcado queda apagado -- que es cómo funciona una casilla: si se interpretara "ausente = no
+ * tocar", apagar un canal desde el panel sería imposible, porque una casilla desmarcada no
+ * manda nada.
+ */
+function parseChannels(formData: FormData): string[] {
+  const canales: string[] = [];
+  if (formData.get("channel_qr") === "on") canales.push("qr-mesa");
+  if (formData.get("channel_kiosko") === "on") canales.push("kiosko");
+  return canales;
+}
+
 export const updateSettingsAction = managerAction(async (session, formData: FormData) => {
   const brandingFields = parseBrandingFields(formData);
   const fiscal = parseFiscalFields(formData);
   const locale = parseLocale(formData);
   const currency = parseCurrency(formData);
   const customDomain = parseCustomDomain(formData, ROOT_DOMAINS);
+  const channels = parseChannels(formData);
 
   // Punto de partida de cada imagen: la que ya está guardada (o null).
   const current = await getTenantSettings(session.tenantId);
@@ -62,6 +76,7 @@ export const updateSettingsAction = managerAction(async (session, formData: Form
     fiscal,
     locale,
     currency,
+    channels,
   });
 
   // El dominio propio vive en `tenants`, no en `tenant_settings`: escritura aparte. Va

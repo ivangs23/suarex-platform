@@ -127,3 +127,43 @@ export async function kioskoOrderInfo(orderId: string): Promise<KioskoOrderInfo>
     status: data.status as string,
   };
 }
+
+/**
+ * Enciende o apaga canales de un cliente, y devuelve una función para dejarlo como estaba.
+ *
+ * El seed da los dos canales a los dos tenants a propósito (ver `supabase/seed.sql`), así que un
+ * test que quiera comprobar el apagado tiene que apagarlo él y restaurarlo después: si lo dejara
+ * apagado, la siguiente suite encontraría una carta que no abre y el fallo aparecería en un test
+ * que no habla de esto.
+ */
+export async function withChannels(
+  tenantSlug: string,
+  channels: string[],
+): Promise<() => Promise<void>> {
+  const { data: tenant, error: tErr } = await admin
+    .from("tenants")
+    .select("id")
+    .eq("slug", tenantSlug)
+    .single();
+  if (tErr) throw tErr;
+  const tenantId = tenant.id as string;
+
+  const { data: previo, error: readErr } = await admin
+    .from("tenant_settings")
+    .select("channels")
+    .eq("tenant_id", tenantId)
+    .single();
+  if (readErr) throw readErr;
+  const anteriores = (previo?.channels as string[] | null) ?? [];
+
+  const set = async (valor: string[]) => {
+    const { error } = await admin
+      .from("tenant_settings")
+      .update({ channels: valor })
+      .eq("tenant_id", tenantId);
+    if (error) throw error;
+  };
+
+  await set(channels);
+  return () => set(anteriores);
+}

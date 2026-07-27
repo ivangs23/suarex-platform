@@ -1,4 +1,4 @@
-import { parseBranding } from "@suarex/config";
+import { hasChannel, parseBranding } from "@suarex/config";
 import {
   findDeviceByTotemToken,
   getCategories,
@@ -55,6 +55,14 @@ export default async function TotemPage({
     getTenantSettings(entry.tenantId).catch(() => null),
     listAssignableAllergens(entry.tenantId),
   ]);
+
+  /* El canal tiene que estar ENCENDIDO para este cliente (#22). Un dispositivo con rol kiosko no
+     basta: el rol dice qué es capaz de hacer el aparato, y el canal dice qué ha contratado el
+     negocio. Sin esto, "este cliente solo tiene QR" no sería una configuración -- sería una
+     promesa que nada respalda. */
+  if (!hasChannel(settings?.channels ?? [], "kiosko")) {
+    notFound();
+  }
 
   const branding = parseBranding(settings?.branding);
   const businessName = branding.name ?? tenant.slug;

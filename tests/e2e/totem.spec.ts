@@ -1,6 +1,11 @@
 import { expect, type Page, test } from "@playwright/test";
 import { clearAllRateLimits, deleteOrder, latestOrderForTenant } from "./helpers/orders-db.js";
-import { deleteDevice, kioskoOrderInfo, seedTotemDevice } from "./helpers/totem-db.js";
+import {
+  deleteDevice,
+  kioskoOrderInfo,
+  seedTotemDevice,
+  withChannels,
+} from "./helpers/totem-db.js";
 
 /**
  * EL RECORRIDO DEL TOTEM, de punta a punta.
@@ -310,4 +315,37 @@ test("sin datáfono (fuera de un totem) no se finge un cobro: se dice que no est
   } finally {
     await deleteOrder(orderId);
   }
+});
+
+test("un cliente sin el canal de totem no sirve totem, aunque el dispositivo exista", async ({
+  page,
+}) => {
+  /* El rol `kiosko` del dispositivo dice qué es capaz de hacer el aparato; el canal dice qué ha
+     contratado el negocio. Son cosas distintas y esto lo fija: el mismo totem que funciona arriba
+     deja de abrir en cuanto se apaga el canal, sin tocar nada del dispositivo. */
+  const restaurar = await withChannels("garum", ["qr-mesa"]);
+  try {
+    const response = await page.goto(`${ORIGIN}/totem/${token}`);
+    expect(response?.status()).toBe(404);
+  } finally {
+    await restaurar();
+  }
+
+  // Control positivo: restaurado el canal, el mismo token vuelve a abrir. Sin esto, el 404 podría
+  // venir de cualquier otra cosa y el test estaría verde sin probar nada.
+  await page.goto(`${ORIGIN}/totem/${token}`);
+  await expect(page.getByTestId("totem-welcome")).toBeVisible();
+});
+
+test("un cliente sin el canal de QR no sirve la carta de mesa", async ({ page }) => {
+  const restaurar = await withChannels("garum", ["kiosko"]);
+  try {
+    const response = await page.goto(`${ORIGIN}/1`);
+    expect(response?.status()).toBe(404);
+  } finally {
+    await restaurar();
+  }
+
+  await page.goto(`${ORIGIN}/1`);
+  await expect(page.getByTestId("mesa")).toBeVisible();
 });
