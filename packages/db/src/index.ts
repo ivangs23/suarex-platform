@@ -92,15 +92,20 @@ export type {
   DevicePaymentConfig,
   KioskoOrderForCharge,
   PaymentConfigForManager,
+  StripeConfigForManager,
+  StripeCredentials,
 } from "./payments.js";
 export {
   getPaymentConfigForDevice,
   getPaymentConfigForManager,
+  getStripeConfigForManager,
+  getStripeCredentials,
   MissingPaymentSecretError,
   markKioskoOrderPaid,
   readKioskoOrderForCharge,
   setDevicePinpad,
   setPaymentConfig,
+  setStripeConfig,
 } from "./payments.js";
 export type {
   EnabledPrinterRow,

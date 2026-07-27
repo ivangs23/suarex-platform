@@ -280,6 +280,16 @@ export async function seedCatalog(tenantId: string, label: string): Promise<Seed
     .single();
   if (venueError) throw venueError;
 
+  /* Credenciales de Stripe: una fila por tenant para que la cobertura cross-tenant de
+     `tenant-isolation.test.ts` tenga contra qué probar su control positivo (sin fila de B, un
+     UPDATE que no afecta a nadie pasaría en falso). Valores de mentira: no cobran nada. */
+  const { error: stripeError } = await admin.from("tenant_stripe_config").insert({
+    tenant_id: tenantId,
+    publishable_key: `pk_test_${label}`,
+    secrets: { secretKey: `sk_test_${label}` },
+  });
+  if (stripeError) throw stripeError;
+
   const { error: settingsError } = await admin
     .from("tenant_settings")
     .insert({ tenant_id: tenantId, branding: { colors: { primary: "#000000" } } });
