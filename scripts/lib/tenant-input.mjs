@@ -44,3 +44,29 @@ export function validarIdioma(idioma) {
   }
   return idioma;
 }
+
+const CANALES = new Set(["qr-mesa", "kiosko"]);
+
+/**
+ * Canales de venta de un cliente nuevo, tal y como llegan por `--canales qr-mesa,kiosko`.
+ *
+ * Se validan al dar de alta y no después porque los canales ya MANDAN: un cliente con totem
+ * creado sin su canal nace con el totem devolviendo 404, y el primero en descubrirlo sería quien
+ * fuera a instalarlo al local. Un canal mal escrito se rechaza en vez de guardarse: guardar
+ * "kiosco" con c dejaría el totem apagado sin que nada lo dijera.
+ */
+export function validarCanales(raw) {
+  const canales = [
+    ...new Set(
+      String(raw)
+        .split(",")
+        .map((c) => c.trim())
+        .filter(Boolean),
+    ),
+  ];
+  const malos = canales.filter((c) => !CANALES.has(c));
+  if (malos.length > 0) {
+    throw new Error(`Canal desconocido: ${malos.join(", ")}. Válidos: ${[...CANALES].join(", ")}.`);
+  }
+  return canales;
+}

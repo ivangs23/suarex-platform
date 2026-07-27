@@ -16,7 +16,7 @@
  */
 import { randomBytes } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
-import { validarEmail, validarIdioma, validarSlug } from "./lib/tenant-input.mjs";
+import { validarCanales, validarEmail, validarIdioma, validarSlug } from "./lib/tenant-input.mjs";
 
 const url = process.env.SUPABASE_URL;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -44,7 +44,7 @@ try {
 } catch (e) {
   console.error(`\n${e.message}\n`);
   console.error(
-    'Uso: node scripts/create-tenant.mjs --slug <slug> --nombre "<Nombre>" --email <email> [--password ...] [--dominio ...] [--tema generic] [--idioma es] [--moneda EUR]',
+    'Uso: node scripts/create-tenant.mjs --slug <slug> --nombre "<Nombre>" --email <email> [--password ...] [--dominio ...] [--tema generic] [--idioma es] [--moneda EUR] [--canales qr-mesa,kiosko]',
   );
   process.exit(1);
 }
@@ -53,6 +53,7 @@ const dominio = arg("dominio") ?? null;
 const tema = arg("tema") ?? "generic";
 const idioma = validarIdioma(arg("idioma") ?? "es");
 const moneda = (arg("moneda") ?? "EUR").toUpperCase();
+const canales = validarCanales(arg("canales") ?? "qr-mesa");
 const password = arg("password") ?? randomBytes(18).toString("base64url");
 
 // 1. Cliente. Upsert por slug: reejecutar no crea otro ni falla por el índice único.
@@ -89,11 +90,13 @@ let tenantId;
       branding: { name: nombre },
       locale: idioma,
       currency: moneda,
-      channels: ["qr-mesa"],
+      channels: canales,
       theme: tema,
     });
     if (error) throw new Error(`No se pudieron crear los ajustes: ${error.message}`);
-    console.log(`Ajustes creados (tema '${tema}', idioma ${idioma}, moneda ${moneda}).`);
+    console.log(
+      `Ajustes creados (tema '${tema}', idioma ${idioma}, moneda ${moneda}, canales ${canales.join("+") || "ninguno"}).`,
+    );
   }
 }
 
