@@ -89,11 +89,33 @@ describe("config de pago del totem (#totem fase 1)", () => {
     expect(cfg?.terminalId).toBe("02290357044");
   });
 
-  it("el device NO puede leer `tenant_payment_config` directamente (RLS lo niega)", async () => {
+  it("NADIE puede leer `tenant_payment_config` con un JWT de usuario, ni siquiera el owner", async () => {
+    /* Antes esto solo comprobaba el device, y pasaba por la policy: cero filas. El owner SÍ podía
+       leer la clave secreta en claro contra PostgREST con su sesión -- el panel no la enseñaba,
+       pero la fila era legible, y una sesión robada se llevaba la clave de cobro del negocio.
+       Retirado el privilegio (20260726000002), la respuesta es una denegación seca para todos:
+       los secretos salen SOLO por la RPC acotada al propio dispositivo. */
     const d = await seedTotemDevice(null);
-    const { data } = await d.client.from("tenant_payment_config").select("secrets");
-    // Sin policy que le aplique al rol device -> cero filas (el secreto no se filtra por SELECT).
-    expect(data).toEqual([]);
+    const { error: comoDevice } = await d.client.from("tenant_payment_config").select("secrets");
+    expect(comoDevice?.message).toContain("permission denied");
+
+    const { error: comoOwner } = await tenant.client
+      .from("tenant_payment_config")
+      .select("secrets");
+    expect(comoOwner?.message).toContain("permission denied");
+  });
+
+  it("y el totem sigue obteniendo el suyo por la RPC: no se ha cerrado el camino bueno", async () => {
+    // Control positivo del cierre anterior. Sin esto, un `revoke` de más pasaría por seguridad.
+    await setPaymentConfig(tenant.tenantId, {
+      provider: "paytef",
+      config: { accessKey: "AK-rpc" },
+      secrets: { secretKey: "SK-rpc" },
+      mock: true,
+    });
+    const d = await seedTotemDevice("TERM-rpc");
+    const cfg = await getPaymentConfigForDevice(d.client);
+    expect(cfg?.secrets).toEqual({ secretKey: "SK-rpc" });
   });
 
   it("un device sin config de pago (otro tenant) obtiene null", async () => {

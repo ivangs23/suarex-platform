@@ -15,6 +15,26 @@ import {
 const SHARED_READ_TABLES = new Set(["allergens"]);
 
 /**
+ * Tablas a las que `authenticated` NO tiene ningún privilegio, a propósito, y donde el
+ * aislamiento por tenant es por tanto irrelevante: no hay acceso que aislar.
+ *
+ * `tenant_payment_config` guarda las credenciales de cobro. El panel las lee y escribe con el
+ * service role (el rol se comprueba antes, en la Server Action) y el totem las obtiene por una
+ * RPC `SECURITY DEFINER` acotada a su propia fila de `devices`. Ningún camino legítimo la toca
+ * con un JWT de usuario, así que el privilegio se retiró entero
+ * (20260726000002_payment_secrets_lockdown.sql): con él, un owner podía sacar la clave secreta
+ * en claro contra PostgREST con su sesión.
+ *
+ * Se declara aquí en vez de excluir la tabla del descubrimiento: así, si alguien volviera a
+ * conceder el privilegio, este test la volvería a exigir aislada en vez de dejar de mirarla.
+ */
+const NO_AUTHENTICATED_ACCESS = new Set(["tenant_payment_config"]);
+
+/** Denegación de privilegio a nivel de GRANT (no de RLS): Postgres responde 42501 antes de que
+ *  ninguna policy llegue a evaluarse. */
+const GRANT_DENIED = "42501";
+
+/**
  * Columna que delimita el tenant en cada tabla descubierta. Todas usan `tenant_id`
  * salvo `tenants`, que se aísla por su propia `id` (ver
  * `20260721000003_test_introspection.sql` y `helpers/policy-check.ts`): la fila
@@ -107,18 +127,20 @@ const WRITE_FIXTURES: Record<string, WriteFixture> = {
     updateColumn: "locale",
     updateValue: "en",
   },
-  // Config de pago (sub-proyecto 4): solo owner/admin de su tenant la escribe; A no puede tocar
-  // la de B. El `secret_key` además ni se lee por SELECT (device), cubierto en
-  // `totem-payment-config.test.ts`.
+  /* Config de pago: desde 20260726000002 `authenticated` no tiene NINGÚN privilegio aquí (ver
+     `NO_AUTHENTICATED_ACCESS`), así que los rechazos ya no vienen de la policy sino del GRANT --
+     mismo código 42501, motivo distinto y más fuerte. El UPDATE deja de "afectar 0 filas" y pasa
+     a denegarse entero, igual que `order_counters`. */
   tenant_payment_config: {
     insertPayload: ({ tenantB }) => ({
       tenant_id: tenantB.tenantId,
-      access_key: "intruso",
-      secret_key: "intruso",
+      config: { accessKey: "intruso" },
+      secrets: { secretKey: "intruso" },
     }),
     expectedInsertRejection: RLS_REJECTION,
     updateColumn: "mock",
     updateValue: false,
+    expectedUpdateRejection: RLS_REJECTION,
   },
   products: {
     // category_id apunta a la categoría real de B: para que el trigger la aceptase
@@ -491,6 +513,15 @@ describe("aislamiento entre tenants", () => {
       // asumiendo siempre `tenant_id`.
       const scopeColumn = scopeColumnFor(table);
       const { data, error } = await tenantA.client.from(table).select(scopeColumn);
+
+      if (NO_AUTHENTICATED_ACCESS.has(table)) {
+        // Más fuerte que "no ve filas ajenas": no ve NINGUNA, ni las suyas, porque el rol no
+        // tiene el privilegio. Se afirma el código exacto para que un cambio silencioso de
+        // motivo -- p. ej. pasar a devolver cero filas por una policy -- no cuele como éxito.
+        expect(error?.code, `${table}: debería denegar por privilegio`).toBe(GRANT_DENIED);
+        continue;
+      }
+
       expect(error, `${table}: SELECT devolvió error inesperado`).toBeNull();
 
       // supabase-js no puede tipar el resultado de `.select()` con un nombre de columna

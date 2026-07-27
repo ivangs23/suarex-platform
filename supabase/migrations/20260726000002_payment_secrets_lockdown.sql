@@ -1,0 +1,24 @@
+-- LOS SECRETOS DE PAGO DEJAN DE SER LEGIBLES CON UN JWT DE USUARIO.
+--
+-- La policy `tenant_payment_config_manage` da acceso completo a owner/admin de su tenant. Eso
+-- basta para el aislamiento entre clientes -- nadie ve la cuenta de otro -- pero significa que un
+-- owner puede hacer `select secrets` directamente contra PostgREST con su sesión y sacar la clave
+-- secreta de Paytef en claro. El panel nunca la enseña, pero la fila es legible, así que una
+-- sesión de owner robada se lleva la clave de cobro del negocio.
+--
+-- Lo llamativo es que ese acceso no lo usa NADIE:
+--
+--   * El panel (`getPaymentConfigForManager` / `setPaymentConfig`, packages/db/src/payments.ts)
+--     lee y escribe con `tenantScoped`, o sea con el service role, que se salta la RLS. El rol se
+--     comprueba antes, en la Server Action (`managerAction`).
+--   * El totem lee por `get_payment_config_self_v2`, SECURITY DEFINER acotada a la fila `devices`
+--     del propio dispositivo. Es la ÚNICA vía por la que sale un secreto.
+--
+-- Así que el privilegio sobra por completo, y quitarlo no rompe ningún camino: cierra uno que
+-- solo servía para abusar de él.
+--
+-- La policy se conserva a propósito, aunque con el GRANT retirado ya no llegue a evaluarse para
+-- `authenticated`. Es defensa en profundidad: si alguien volviera a conceder el privilegio (una
+-- migración futura, un `grant all on all tables`), el aislamiento por tenant seguiría en pie en
+-- vez de quedar la tabla abierta de par en par.
+revoke all on public.tenant_payment_config from authenticated;
