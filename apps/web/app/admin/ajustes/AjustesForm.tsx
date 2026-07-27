@@ -18,6 +18,7 @@ type Props = {
   currency: string;
   /** Dominio propio ya guardado, o cadena vacía si el cliente no tiene. */
   customDomain: string;
+  channels: string[];
 };
 
 /** Formulario funcional (sin estilos) de ajustes del negocio. `encType` multipart para
@@ -112,6 +113,35 @@ export function AjustesForm(props: Props) {
             defaultValue={props.fiscal.taxRatePercent}
           />
         </label>
+      </fieldset>
+
+      {/* Qué canales tiene contratados este negocio. Es la traducción literal de la regla del
+          producto: la funcionalidad es la misma para todos y lo que cambia es qué se enciende.
+          Un canal apagado no se esconde en el panel -- se apaga de cara al comensal. */}
+      <fieldset>
+        <legend>Canales de venta</legend>
+        <label>
+          <input
+            type="checkbox"
+            name="channel_qr"
+            defaultChecked={props.channels.includes("qr-mesa")}
+            data-testid="channel-qr"
+          />
+          Carta por QR en las mesas
+        </label>
+        <label>
+          <input
+            type="checkbox"
+            name="channel_kiosko"
+            defaultChecked={props.channels.includes("kiosko")}
+            data-testid="channel-kiosko"
+          />
+          Totem de autopedido
+        </label>
+        <p>
+          Lo que quede desmarcado deja de servirse: la carta o el totem dejan de abrir para el
+          cliente, aunque el resto de la configuración siga guardada.
+        </p>
       </fieldset>
 
       <fieldset>

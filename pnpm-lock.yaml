@@ -17,9 +17,15 @@ importers:
       '@suarex/agent':
         specifier: workspace:*
         version: link:packages/agent
+      '@suarex/config':
+        specifier: workspace:*
+        version: link:packages/config
       '@suarex/db':
         specifier: workspace:*
         version: link:packages/db
+      '@suarex/payments':
+        specifier: workspace:*
+        version: link:packages/payments
       '@suarex/printing':
         specifier: workspace:*
         version: link:packages/printing

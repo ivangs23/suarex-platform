@@ -154,6 +154,8 @@ export type UpdateTenantSettingsInput = {
   fiscal: Record<string, unknown>;
   locale: string;
   currency: string;
+  /** Canales de venta encendidos. Ausente = no tocar los que ya hubiera. */
+  channels?: string[];
 };
 
 /**
@@ -181,6 +183,10 @@ export async function updateTenantSettings(
       fiscal: input.fiscal,
       locale: input.locale,
       currency: input.currency,
+      /* Los canales SÍ se escriben desde aquí (antes quedaban fuera de alcance y la columna era
+         decorativa: existía, se validaba, se leía, y no encendía nada). Ausente = no tocar, para
+         que guardar la marca no pueda apagarle los canales a un cliente por omisión. */
+      ...(input.channels ? { channels: input.channels } : {}),
       updated_at: new Date().toISOString(),
     },
     "tenant_id",

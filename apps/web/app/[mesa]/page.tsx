@@ -1,4 +1,4 @@
-import { parseBranding } from "@suarex/config";
+import { hasChannel, parseBranding } from "@suarex/config";
 import {
   findTableByToken,
   getCategories,
@@ -74,6 +74,11 @@ export default async function MenuPage({
     // reviente la carta a que un celíaco lea "sin alérgenos" sobre un plato con gluten.
     listAssignableAllergens(tenant.id),
   ]);
+
+  // Mismo criterio que el totem: sin el canal encendido, este cliente no sirve carta por QR.
+  if (!hasChannel(settings?.channels ?? [], "qr-mesa")) {
+    notFound();
+  }
 
   const branding = parseBranding(settings?.branding);
   const businessName = branding.name ?? tenant.slug;

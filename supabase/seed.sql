@@ -32,7 +32,12 @@ select
     }'::jsonb
   end,
   'es', 'EUR',
-  case t.slug when 'garum' then array['qr-mesa'] else array['kiosko'] end,
+  /* Los DOS canales en ambos, a propósito: este seed es la fixture con la que corren todas las
+     suites, y varias necesitan carta QR y totem sobre el mismo cliente. Que un canal apagado
+     cierre la puerta se prueba con tenants que los tests crean para eso (ver
+     `tenant-channels.test.ts`), no dejando el seed cojo -- eso solo haría que media suite
+     probara la configuración del seed en vez de lo que dice probar. */
+  array['qr-mesa', 'kiosko'],
   case t.slug when 'garum' then 'garum' else 'manuela' end
 from t;
 
