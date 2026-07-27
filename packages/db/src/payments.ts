@@ -174,7 +174,7 @@ export async function setDevicePinpad(
   pinpadId: string | null,
 ): Promise<void> {
   const { error } = await tenantScoped("devices", tenantId)
-    .update({ pinpad_id: pinpadId })
+    .update({ payment_terminal_id: pinpadId })
     .eq("id", deviceId);
   if (error) throw error;
 }

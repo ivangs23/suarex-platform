@@ -174,7 +174,7 @@ type DeviceRowDb = {
   venue_id: string;
   name: string;
   roles: string[];
-  pinpad_id: string | null;
+  payment_terminal_id: string | null;
   pairing_code: string | null;
   pairing_expires_at: string | null;
   paired_at: string | null;
@@ -193,7 +193,7 @@ type DeviceRowDb = {
 export async function listDevices(tenantId: string): Promise<DeviceRow[]> {
   const { data, error } = await tenantScoped("devices", tenantId)
     .select(
-      "id, tenant_id, venue_id, name, roles, pinpad_id, pairing_code, pairing_expires_at, paired_at, last_seen_at, printers",
+      "id, tenant_id, venue_id, name, roles, payment_terminal_id, pairing_code, pairing_expires_at, paired_at, last_seen_at, printers",
     )
     .order("created_at", { ascending: true });
   if (error) throw error;
@@ -204,7 +204,7 @@ export async function listDevices(tenantId: string): Promise<DeviceRow[]> {
     venueId: row.venue_id,
     name: row.name,
     roles: row.roles,
-    pinpadId: row.pinpad_id ?? null,
+    pinpadId: row.payment_terminal_id ?? null,
     hasPendingPairingCode: row.pairing_code !== null,
     pairingExpiresAt: row.pairing_expires_at,
     pairedAt: row.paired_at,
