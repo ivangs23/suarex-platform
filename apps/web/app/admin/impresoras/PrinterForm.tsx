@@ -16,8 +16,12 @@ type DeviceOption = { id: string; name: string; printers: string[] };
  * escape aunque haya lista (p. ej. una impresora recién enchufada que el device todavía no ha
  * reportado). Ambos ramos usan `name="printer_name"`, así que `createPrinterAction` no cambia.
  *
- * `device_id` es opcional ("Sin dispositivo" -> cadena vacía -> `device_id: null`). `venue_id`
- * viaja oculto, igual que en `TableForm`/`DeviceForm`.
+ * El DISPOSITIVO es quién saca esta impresora. Con una sola instalación en el local da igual;
+ * con dos -- el PC del mostrador con la carta por QR y el totem con su datáfono -- es lo que
+ * evita que las dos entreguen el mismo ticket y la cocina reciba la comanda por duplicado.
+ * Dejarlo sin asignar sigue valiendo (lo saca cualquiera), y por eso la página avisa cuando eso
+ * se junta con dos o más instalaciones. `venue_id` viaja oculto, igual que en
+ * `TableForm`/`DeviceForm`.
  */
 export function PrinterForm({ venueId, devices }: { venueId: string; devices: DeviceOption[] }) {
   const [connectionType, setConnectionType] = useState("network");
@@ -46,14 +50,14 @@ export function PrinterForm({ venueId, devices }: { venueId: string; devices: De
         <option value="usb">USB (impresora de Windows)</option>
       </select>
 
-      <label htmlFor="printer-device">Dispositivo (opcional)</label>
+      <label htmlFor="printer-device">Qué instalación la saca</label>
       <select
         id="printer-device"
         name="device_id"
         value={deviceId}
         onChange={(e) => setDeviceId(e.target.value)}
       >
-        <option value="">Sin dispositivo</option>
+        <option value="">Cualquiera (si solo hay una instalación)</option>
         {devices.map((device) => (
           <option key={device.id} value={device.id}>
             {device.name}

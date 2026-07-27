@@ -37,6 +37,21 @@ export default async function AdminImpresorasPage() {
   const venueGaps = await destinationsMissingPrinter(session.tenantId);
   const usbSinDispositivo = await usbPrintersWithoutDevice(session.tenantId);
 
+  /* Con DOS instalaciones o más en el mismo cliente, una impresora de red sin dueño la sacan
+     todas: la cocina recibe la misma comanda por duplicado. Y no es una carrera improbable --
+     todos los agentes reciben el mismo aviso de Realtime en el mismo instante al pasar un pedido
+     a pagado, así que el duplicado es lo normal. Se avisa aquí, que es donde se configura, en vez
+     de esperar a que alguien cuente los tickets. */
+  const redSinDuenno =
+    devices.length > 1
+      ? printers.filter(
+          (printer) =>
+            printer.enabled &&
+            !printer.deviceId &&
+            (printer.connection as { type?: string } | null)?.type === "network",
+        )
+      : [];
+
   const defaultVenueId = venues.find((venue) => venue.isDefault)?.id ?? venues[0]?.id;
   const deviceOptions = devices.map((device) => ({
     id: device.id,
@@ -65,6 +80,14 @@ export default async function AdminImpresorasPage() {
           ⚠ Impresora(s) USB sin dispositivo asignado:{" "}
           {usbSinDispositivo.map((p) => p.name).join(", ")}. No imprimen hasta que las ates a un
           dispositivo.
+        </p>
+      ) : null}
+
+      {redSinDuenno.length > 0 ? (
+        <p role="alert" data-testid="shared-printer-warning">
+          ⚠ Este cliente tiene {devices.length} instalaciones y estas impresoras de red no tienen
+          dueño: {redSinDuenno.map((printer) => printer.name).join(", ")}. Las sacan todas a la vez,
+          así que cada ticket saldrá repetido. Asigna a cada una qué instalación se encarga.
         </p>
       ) : null}
 

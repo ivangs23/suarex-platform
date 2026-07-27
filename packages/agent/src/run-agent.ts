@@ -112,19 +112,31 @@ async function enabledPrinterRows(client: SupabaseClient): Promise<PrinterRowDb[
 }
 
 /**
- * Impresoras habilitadas que este agente puede imprimir, con su `PrinterConfig` ya
- * construida por tipo. Puro (recibe las filas ya leídas y el propio device id):
- *   - RED (`connection.type === "network"`): cualquier agente del tenant la alcanza; el
- *     acotado por local (`venue_id`) lo aplica el bucle de impresión (igual que antes).
- *   - USB (`connection.type === "usb"`): SOLO si `device_id` es el propio dispositivo -- una
- *     impresora USB está físicamente en ESTE PC, así que ningún otro agente debe reclamarla.
- * Un tipo desconocido, o una USB de otro device, se ignora.
+ * Impresoras habilitadas que ESTA instalación saca, con su `PrinterConfig` ya construida por
+ * tipo. Pura (recibe las filas ya leídas y el propio device id).
+ *
+ * La regla es la misma para los dos tipos de conexión, y es la que permite que un local tenga
+ * VARIAS instalaciones del mismo programa sin pisarse:
+ *
+ *   - con `device_id`: la saca SOLO ese dispositivo. Es lo que hace posible el caso real de un
+ *     cliente con carta por QR y totem -- el PC del mostrador se encarga de cocina y barra, el
+ *     totem solo de su impresora de recibos, y cada ticket sale una vez.
+ *   - sin `device_id`: la saca cualquier agente. Es lo que ya había, y se conserva para que
+ *     ningún cliente en marcha se quede mudo el día que esto se despliegue. Con dos agentes y una
+ *     impresora sin dueño, los dos la sacan: por eso el panel lo avisa al configurarlo.
+ *
+ * En una USB el dueño no es una preferencia sino un hecho físico -- está enchufada a UN PC -- así
+ * que sin `device_id` no la reclama nadie: reclamarla desde otra máquina sería imprimir en un
+ * cable que no existe.
  */
-function resolvePrintersFromRows(rows: PrinterRowDb[], deviceId: string | null): ResolvedPrinter[] {
+export function resolvePrintersFromRows(
+  rows: PrinterRowDb[],
+  deviceId: string | null,
+): ResolvedPrinter[] {
   const resolved: ResolvedPrinter[] = [];
   for (const p of rows) {
     const conn = p.connection ?? {};
-    if (conn.type === "network") {
+    if (conn.type === "network" && (p.device_id === null || p.device_id === deviceId)) {
       resolved.push({
         id: p.id,
         venueId: p.venue_id,
@@ -139,6 +151,7 @@ function resolvePrintersFromRows(rows: PrinterRowDb[], deviceId: string | null):
         },
       });
     } else if (conn.type === "usb" && deviceId !== null && p.device_id === deviceId) {
+      // Sin cambios: una USB siempre ha exigido dueño, por el motivo físico de arriba.
       resolved.push({
         id: p.id,
         venueId: p.venue_id,
