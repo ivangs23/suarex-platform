@@ -6,7 +6,7 @@ import { createChargeJournal } from "./charge-journal.js";
 import type { RecoveryDeps, RecoveryOutcome, SessionOutcome } from "./charge-recovery.js";
 import { recoverCharges } from "./charge-recovery.js";
 import { chargeOrder } from "./kiosko.js";
-import type { PaytefBridgeConfig } from "./paytef.js";
+import type { ResolvedPaymentConfig } from "./payment-provider.js";
 
 /**
  * EL CASO QUE MOTIVA TODO ESTO, de punta a punta y con ficheros de verdad: el totem se apaga
@@ -18,11 +18,9 @@ import type { PaytefBridgeConfig } from "./paytef.js";
  * ninguna de las dos suites vería por su cuenta.
  */
 
-const CONFIG: PaytefBridgeConfig = {
-  accessKey: "AK",
-  secretKey: "SK",
-  companyId: "1",
-  pinpad: "PIN",
+const CONFIG: ResolvedPaymentConfig = {
+  provider: "paytef",
+  values: { accessKey: "AK", secretKey: "SK", companyId: "1", pinpad: "PIN" },
   mock: false,
 };
 

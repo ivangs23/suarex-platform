@@ -1,13 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ChargeEvent } from "./charge-journal.js";
 import { type ChargeOrderDeps, chargeOrder } from "./kiosko.js";
-import type { PaytefBridgeConfig } from "./paytef.js";
+import type { ResolvedPaymentConfig } from "./payment-provider.js";
 
-const CONFIG: PaytefBridgeConfig = {
-  accessKey: "AK",
-  secretKey: "SK",
-  companyId: "1",
-  pinpad: "PIN",
+const CONFIG: ResolvedPaymentConfig = {
+  provider: "paytef",
+  values: { accessKey: "AK", secretKey: "SK", companyId: "1", pinpad: "PIN" },
   mock: true,
 };
 

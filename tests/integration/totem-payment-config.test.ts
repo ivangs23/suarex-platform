@@ -72,25 +72,26 @@ afterAll(async () => {
 describe("config de pago del totem (#totem fase 1)", () => {
   it("el device obtiene la config Paytef de su tenant, con su propio pinpad", async () => {
     await setPaymentConfig(tenant.tenantId, {
-      accessKey: "MS4yaGc1",
-      secretKey: "un-secreto-de-prueba",
-      companyId: "115925",
+      provider: "paytef",
+      config: { accessKey: "MS4yaGc1", companyId: "115925" },
+      secrets: { secretKey: "un-secreto-de-prueba" },
       mock: true,
     });
     const d = await seedTotemDevice("02290357044");
 
     const cfg = await getPaymentConfigForDevice(d.client);
     expect(cfg).not.toBeNull();
-    expect(cfg?.accessKey).toBe("MS4yaGc1");
-    expect(cfg?.secretKey).toBe("un-secreto-de-prueba");
-    expect(cfg?.companyId).toBe("115925");
+    expect(cfg?.provider).toBe("paytef");
+    expect(cfg?.config).toEqual({ accessKey: "MS4yaGc1", companyId: "115925" });
+    expect(cfg?.secrets).toEqual({ secretKey: "un-secreto-de-prueba" });
     expect(cfg?.mock).toBe(true);
-    expect(cfg?.pinpadId).toBe("02290357044");
+    // El terminal viene del DISPOSITIVO, no de la cuenta.
+    expect(cfg?.terminalId).toBe("02290357044");
   });
 
   it("el device NO puede leer `tenant_payment_config` directamente (RLS lo niega)", async () => {
     const d = await seedTotemDevice(null);
-    const { data } = await d.client.from("tenant_payment_config").select("secret_key");
+    const { data } = await d.client.from("tenant_payment_config").select("secrets");
     // Sin policy que le aplique al rol device -> cero filas (el secreto no se filtra por SELECT).
     expect(data).toEqual([]);
   });
@@ -138,14 +139,19 @@ describe("config de pago para el PANEL (owner/admin, #totem fase 6)", () => {
       expect(await getPaymentConfigForManager(t.tenantId)).toBeNull();
 
       await setPaymentConfig(t.tenantId, {
-        accessKey: "AK1",
-        secretKey: "sk-oculta",
-        companyId: "42",
+        provider: "paytef",
+        config: { accessKey: "AK1", companyId: "42" },
+        secrets: { secretKey: "sk-oculta" },
         mock: false,
       });
       const cfg = await getPaymentConfigForManager(t.tenantId);
-      expect(cfg).toEqual({ accessKey: "AK1", companyId: "42", mock: false, hasSecret: true });
-      // El tipo no expone el secreto; se comprueba que tampoco viene por sorpresa en el objeto.
+      expect(cfg).toEqual({
+        provider: "paytef",
+        config: { accessKey: "AK1", companyId: "42" },
+        // Qué secretos hay puestos, nunca su valor.
+        secretsSet: ["secretKey"],
+        mock: false,
+      });
       expect(JSON.stringify(cfg)).not.toContain("sk-oculta");
     } finally {
       await deleteTenantFixture(t);
@@ -156,23 +162,26 @@ describe("config de pago para el PANEL (owner/admin, #totem fase 6)", () => {
     const t = await createTenantFixture(`pay-keep-${nonce()}`);
     try {
       await setPaymentConfig(t.tenantId, {
-        accessKey: "AK1",
-        secretKey: "sk-original",
-        companyId: "1",
+        provider: "paytef",
+        config: { accessKey: "AK1", companyId: "1" },
+        secrets: { secretKey: "sk-original" },
         mock: true,
       });
       // Segundo guardado sin secreto: cambia lo demás, conserva la clave.
-      await setPaymentConfig(t.tenantId, { accessKey: "AK2", companyId: "2", mock: false });
+      await setPaymentConfig(t.tenantId, {
+        provider: "paytef",
+        config: { accessKey: "AK2", companyId: "2" },
+        mock: false,
+      });
 
       const { data } = await admin
         .from("tenant_payment_config")
-        .select("access_key, company_id, mock, secret_key")
+        .select("config, secrets, mock")
         .eq("tenant_id", t.tenantId)
         .single();
-      expect(data?.access_key).toBe("AK2");
-      expect(data?.company_id).toBe("2");
+      expect(data?.config).toEqual({ accessKey: "AK2", companyId: "2" });
       expect(data?.mock).toBe(false);
-      expect(data?.secret_key).toBe("sk-original"); // no se pisó
+      expect(data?.secrets).toEqual({ secretKey: "sk-original" }); // no se pisó
     } finally {
       await deleteTenantFixture(t);
     }
@@ -182,7 +191,12 @@ describe("config de pago para el PANEL (owner/admin, #totem fase 6)", () => {
     const t = await createTenantFixture(`pay-nosec-${nonce()}`);
     try {
       await expect(
-        setPaymentConfig(t.tenantId, { accessKey: "AK1", mock: true }),
+        setPaymentConfig(t.tenantId, {
+          provider: "paytef",
+          config: { accessKey: "AK1" },
+          mock: true,
+          requiredSecrets: ["secretKey"],
+        }),
       ).rejects.toBeInstanceOf(MissingPaymentSecretError);
       // Y no dejó ninguna fila a medias.
       expect(await getPaymentConfigForManager(t.tenantId)).toBeNull();

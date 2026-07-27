@@ -1,5 +1,5 @@
 import type { ChargeEvent } from "./charge-journal.js";
-import type { PaytefBridgeConfig, PaytefResult, PaytefStatus } from "./paytef.js";
+import type { PaymentResult, PaymentStatus, ResolvedPaymentConfig } from "./payment-provider.js";
 
 // Orquestación del cobro de un pedido del totem: leer el importe (del SERVIDOR), resolver la
 // config del datáfono, cobrar por Paytef y, si aprueba, marcar el pedido pagado. Las
@@ -8,19 +8,19 @@ import type { PaytefBridgeConfig, PaytefResult, PaytefStatus } from "./paytef.js
 export type ChargeOrderDeps = {
   /** Lee el pedido kiosko con el JWT del device: importe (céntimos, de la base) y estado. */
   readOrder: (orderId: string) => Promise<{ amountCents: number; status: string } | null>;
-  /** Resuelve la config Paytef del totem (cuenta del tenant + pinpad). `null` si no hay. */
-  getConfig: () => Promise<PaytefBridgeConfig | null>;
-  /** Cobra por Paytef (o mock). */
+  /** Resuelve la config del método de pago de este totem (cuenta + terminal). `null` si no hay. */
+  getConfig: () => Promise<ResolvedPaymentConfig | null>;
+  /** Cobra con el proveedor configurado (o simula). */
   charge: (
-    config: PaytefBridgeConfig,
+    config: ResolvedPaymentConfig,
     amountCents: number,
     transactionReference: string,
     opts: {
-      onStatus?: (s: PaytefStatus, m: string) => void;
+      onStatus?: (s: PaymentStatus, m: string) => void;
       isCancelled?: () => boolean;
       onSession?: (sessionId: string) => void | Promise<void>;
     },
-  ) => Promise<PaytefResult>;
+  ) => Promise<PaymentResult>;
   /** Marca el pedido pagado tras aprobar (RPC acotada). `true` si marcó. */
   markPaid: (orderId: string) => Promise<boolean>;
   /**
@@ -75,7 +75,7 @@ export async function chargeOrder(
   deps: ChargeOrderDeps,
   orderId: string,
   opts: {
-    onStatus?: (s: PaytefStatus, m: string) => void;
+    onStatus?: (s: PaymentStatus, m: string) => void;
     isCancelled?: () => boolean;
     now?: () => number;
     /** Espera entre reintentos del marcado. Inyectable para no dormir de verdad en las pruebas. */

@@ -89,9 +89,9 @@ export {
 } from "./orders.js";
 export { checkPairRateLimit } from "./pair-rate-limit.js";
 export type {
+  DevicePaymentConfig,
   KioskoOrderForCharge,
   PaymentConfigForManager,
-  PaytefConfig,
 } from "./payments.js";
 export {
   getPaymentConfigForDevice,

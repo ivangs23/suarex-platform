@@ -39,7 +39,7 @@ test("el owner guarda la config Paytef y el secreto no reaparece; en blanco se c
     await page.goto(`${ORIGIN}/admin/pagos`);
     await page.getByLabel(/Clave de acceso/).fill("AK-e2e");
     await page.getByLabel(/Clave secreta/).fill("sk-e2e-secreta");
-    await page.getByLabel(/Company ID/).fill("999");
+    await page.getByLabel(/Identificador de comercio/).fill("999");
     await page.getByRole("button", { name: "Guardar" }).click();
     await expect(page.getByTestId("payment-config-ok")).toBeVisible();
 
@@ -51,7 +51,7 @@ test("el owner guarda la config Paytef y el secreto no reaparece; en blanco se c
     expect(await page.content()).not.toContain("sk-e2e-secreta");
 
     // Guardar de nuevo sin tocar el secreto lo conserva.
-    await page.getByLabel(/Company ID/).fill("111");
+    await page.getByLabel(/Identificador de comercio/).fill("111");
     await page.getByRole("button", { name: "Guardar" }).click();
     await expect(page.getByTestId("payment-config-ok")).toBeVisible();
   } finally {
