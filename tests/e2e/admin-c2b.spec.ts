@@ -77,7 +77,7 @@ test("#7: elegir la impresora USB de un desplegable poblado por el dispositivo",
   const name = `USB DROPDOWN ${Date.now()}`;
   await page.getByLabel("Nombre", { exact: true }).fill(name);
   await page.getByLabel("Tipo de conexión").selectOption("usb");
-  await page.getByLabel("Dispositivo (opcional)").selectOption({ label: deviceName });
+  await page.getByLabel("Qué instalación la saca").selectOption({ label: deviceName });
 
   // El campo del nombre Windows ahora es un <select>: se ELIGE la impresora reportada, no se
   // teclea. `selectOption` fallaría si el campo siguiera siendo un input de texto.
