@@ -5,6 +5,7 @@ import {
   type SettingsSnapshot,
   snapshotDemoSettings,
 } from "./helpers/admin-d3-db.js";
+import { withChannels } from "./helpers/totem-db.js";
 
 const STAFF_PASSWORD = process.env.STAFF_SEED_PASSWORD;
 const OWNER_PASSWORD = process.env.OWNER_SEED_PASSWORD;
@@ -111,5 +112,45 @@ test("un staff no ve ajustes ni personal", async ({ page }) => {
   for (const path of ["/admin/ajustes", "/admin/personal"]) {
     await page.goto(`http://garum.localhost:3000${path}`);
     await expect(page).toHaveURL(/\/staff\/login/, { timeout: 15_000 });
+  }
+});
+
+test("la puesta en marcha dice qué falta y enlaza a donde se arregla", async ({ page }) => {
+  /* El seed de garum está completo salvo por lo del totem: tiene el canal encendido (los dos, ver
+     `supabase/seed.sql`) pero ni dispositivo de kiosko ni impresora de recibos ni datos de cobro.
+     O sea, exactamente el estado de un cliente a medio instalar, que es para lo que existe esta
+     pantalla. */
+  await login(page, "owner@garum.local", OWNER_PASSWORD as string);
+  await page.goto("http://garum.localhost:3000/admin/instalacion");
+  await expect(page.locator("h1")).toHaveText("Puesta en marcha");
+
+  // No se da por listo lo que no lo está.
+  await expect(page.getByTestId("setup-pending")).toBeVisible();
+  await expect(page.getByTestId("setup-ready")).toHaveCount(0);
+
+  // Lo que ya está hecho consta hecho: si todo saliera en rojo, la lista no diría nada.
+  const items = page.getByTestId("setup-item");
+  await expect(items.filter({ hasText: "Carta" }).first()).toHaveAttribute("data-status", "ok");
+  await expect(items.filter({ hasText: "Mesas con QR" })).toHaveAttribute("data-status", "ok");
+
+  // Y lo que falta se nombra y se enlaza, en vez de dejar al instalador adivinando.
+  const cobro = items.filter({ hasText: "Datos de cobro" });
+  await expect(cobro).toHaveAttribute("data-status", "falta");
+  await expect(cobro.getByRole("link")).toHaveAttribute("href", "/admin/pagos");
+});
+
+test("un cliente sin totem no ve los pasos del datáfono", async ({ page }) => {
+  // Pedirle un terminal a quien solo tiene carta por QR es cómo una lista deja de leerse.
+  const restaurar = await withChannels("garum", ["qr-mesa"]);
+  try {
+    await login(page, "owner@garum.local", OWNER_PASSWORD as string);
+    await page.goto("http://garum.localhost:3000/admin/instalacion");
+    const items = page.getByTestId("setup-item");
+    await expect(items.filter({ hasText: "Datos de cobro" })).toHaveCount(0);
+    await expect(items.filter({ hasText: "Impresora de recibos" })).toHaveCount(0);
+    // Control positivo: lo común sí sigue saliendo.
+    await expect(items.filter({ hasText: "Carta" }).first()).toHaveCount(1);
+  } finally {
+    await restaurar();
   }
 });
