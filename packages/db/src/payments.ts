@@ -215,3 +215,110 @@ export async function setDevicePinpad(
     .eq("id", deviceId);
   if (error) throw error;
 }
+
+/**
+ * Credenciales de Stripe de un cliente, tal como las ve el PANEL: la clave pública sí, los
+ * secretos no. De ellos solo sale QUÉ está puesto -- mismo criterio que con el datáfono.
+ */
+export type StripeConfigForManager = {
+  publishableKey: string | null;
+  /** Nombres de los secretos ya guardados (`secretKey`, `webhookSecret`). Nunca su valor. */
+  secretsSet: string[];
+};
+
+/** Credenciales resueltas para COBRAR, con los secretos dentro. Solo se usa en el servidor. */
+export type StripeCredentials = {
+  publishableKey: string | null;
+  secretKey: string | null;
+  webhookSecret: string | null;
+};
+
+/**
+ * Credenciales de Stripe de este cliente, para el panel. `null` si aún no tiene ninguna.
+ *
+ * Los secretos se leen aquí (service role) y NO se devuelven: de ellos solo sale la lista de
+ * nombres con valor. La misma frontera que ya rige para el datáfono -- lo que no puede pasar es
+ * que el valor baje al navegador.
+ */
+export async function getStripeConfigForManager(
+  tenantId: string,
+): Promise<StripeConfigForManager | null> {
+  const { data, error } = await tenantScoped("tenant_stripe_config", tenantId)
+    .select("publishable_key, secrets")
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+
+  const secrets = (data.secrets as Record<string, unknown> | null) ?? {};
+  return {
+    publishableKey: (data.publishable_key as string | null) ?? null,
+    secretsSet: Object.entries(secrets)
+      .filter(([, value]) => typeof value === "string" && value.length > 0)
+      .map(([name]) => name),
+  };
+}
+
+/**
+ * Credenciales completas para cobrar en nombre de ESTE cliente. Solo servidor.
+ *
+ * Devuelve `null` en cada campo que falte en vez de lanzar: quien llama decide qué hacer, y
+ * durante la migración eso es caer a las variables de entorno para que ningún cliente en marcha
+ * deje de cobrar el día del despliegue.
+ */
+export async function getStripeCredentials(tenantId: string): Promise<StripeCredentials> {
+  const { data, error } = await tenantScoped("tenant_stripe_config", tenantId)
+    .select("publishable_key, secrets")
+    .maybeSingle();
+  if (error) throw error;
+
+  const secrets = (data?.secrets as Record<string, string> | null) ?? {};
+  const texto = (valor: unknown): string | null =>
+    typeof valor === "string" && valor.trim() !== "" ? valor : null;
+
+  return {
+    publishableKey: texto(data?.publishable_key),
+    secretKey: texto(secrets.secretKey),
+    webhookSecret: texto(secrets.webhookSecret),
+  };
+}
+
+/**
+ * Alta/edición de las credenciales de Stripe de un cliente (owner/admin; el rol se comprueba en
+ * la Server Action).
+ *
+ * Los secretos se escriben ENCIMA uno a uno, no sustituyendo el objeto: son dos -- la clave
+ * secreta y el secreto del webhook -- y reemplazarlo entero borraría el que el dueño no ha
+ * tocado. Con la clave secreta eso sería dejar al cliente sin cobrar; con el secreto del webhook,
+ * peor: se cobraría y los pedidos no se marcarían pagados, así que el comensal pagaría y la
+ * cocina no vería nada.
+ */
+export async function setStripeConfig(
+  tenantId: string,
+  input: {
+    publishableKey?: string | null;
+    /** Solo los secretos a CAMBIAR. Los ausentes conservan su valor guardado. */
+    secrets?: Record<string, string>;
+  },
+): Promise<void> {
+  const { data: existente, error: readError } = await tenantScoped("tenant_stripe_config", tenantId)
+    .select("publishable_key, secrets")
+    .maybeSingle();
+  if (readError) throw readError;
+
+  const guardados = (existente?.secrets as Record<string, string> | null) ?? {};
+
+  const { error } = await tenantScoped("tenant_stripe_config", tenantId).upsert(
+    {
+      // Ausente = no tocar, igual que con el resto de ajustes: guardar los secretos no puede
+      // borrar la clave pública por omisión.
+      publishable_key:
+        input.publishableKey === undefined
+          ? ((existente?.publishable_key as string | null) ?? null)
+          : input.publishableKey,
+      secrets: { ...guardados, ...(input.secrets ?? {}) },
+      updated_at: new Date().toISOString(),
+    },
+    "tenant_id",
+  );
+  if (error) throw error;
+}

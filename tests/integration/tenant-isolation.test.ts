@@ -28,7 +28,7 @@ const SHARED_READ_TABLES = new Set(["allergens"]);
  * Se declara aquí en vez de excluir la tabla del descubrimiento: así, si alguien volviera a
  * conceder el privilegio, este test la volvería a exigir aislada en vez de dejar de mirarla.
  */
-const NO_AUTHENTICATED_ACCESS = new Set(["tenant_payment_config"]);
+const NO_AUTHENTICATED_ACCESS = new Set(["tenant_payment_config", "tenant_stripe_config"]);
 
 /** Denegación de privilegio a nivel de GRANT (no de RLS): Postgres responde 42501 antes de que
  *  ninguna policy llegue a evaluarse. */
@@ -140,6 +140,20 @@ const WRITE_FIXTURES: Record<string, WriteFixture> = {
     expectedInsertRejection: RLS_REJECTION,
     updateColumn: "mock",
     updateValue: false,
+    expectedUpdateRejection: RLS_REJECTION,
+  },
+  /* Credenciales de Stripe del canal QR: mismo razonamiento que `tenant_payment_config` --
+     `authenticated` no tiene privilegio ninguno, así que los rechazos vienen del GRANT y no de la
+     policy. Mismo código, motivo más fuerte. */
+  tenant_stripe_config: {
+    insertPayload: ({ tenantB }) => ({
+      tenant_id: tenantB.tenantId,
+      publishable_key: "pk_intruso",
+      secrets: { secretKey: "sk_intruso" },
+    }),
+    expectedInsertRejection: RLS_REJECTION,
+    updateColumn: "publishable_key",
+    updateValue: "pk_pisada",
     expectedUpdateRejection: RLS_REJECTION,
   },
   products: {
