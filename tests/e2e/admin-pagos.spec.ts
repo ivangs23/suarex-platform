@@ -1,4 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
+import { deleteStripeConfig } from "./helpers/orders-db.js";
 import {
   deleteDevice,
   deletePaymentConfig,
@@ -36,23 +37,28 @@ test("el owner guarda la config Paytef y el secreto no reaparece; en blanco se c
 }) => {
   await loginOwner(page);
   try {
+    /* La página tiene ahora DOS secciones -- cobro por QR (Stripe) y cobro en el totem
+       (datáfono) -- y ambas tienen una "clave secreta". Se acota a la del totem, que es de la que
+       habla este test; buscar por etiqueta en toda la página encontraría las dos. */
     await page.goto(`${ORIGIN}/admin/pagos`);
-    await page.getByLabel(/Clave de acceso/).fill("AK-e2e");
-    await page.getByLabel(/Clave secreta/).fill("sk-e2e-secreta");
-    await page.getByLabel(/Identificador de comercio/).fill("999");
-    await page.getByRole("button", { name: "Guardar" }).click();
+    const totem = page.getByTestId("pagos-totem");
+    await totem.getByLabel(/Clave de acceso/).fill("AK-e2e");
+    await totem.getByLabel(/Clave secreta/).fill("sk-e2e-secreta");
+    await totem.getByLabel(/Identificador de comercio/).fill("999");
+    await totem.getByRole("button", { name: "Guardar" }).click();
     await expect(page.getByTestId("payment-config-ok")).toBeVisible();
 
     // Al recargar, la clave de acceso persiste y el secreto NO baja al navegador (campo vacío,
     // placeholder de "guardada"); su valor no aparece en el HTML.
     await page.goto(`${ORIGIN}/admin/pagos`);
-    await expect(page.getByLabel(/Clave de acceso/)).toHaveValue("AK-e2e");
-    await expect(page.getByLabel(/Clave secreta/)).toHaveValue("");
+    const totem2 = page.getByTestId("pagos-totem");
+    await expect(totem2.getByLabel(/Clave de acceso/)).toHaveValue("AK-e2e");
+    await expect(totem2.getByLabel(/Clave secreta/)).toHaveValue("");
     expect(await page.content()).not.toContain("sk-e2e-secreta");
 
     // Guardar de nuevo sin tocar el secreto lo conserva.
-    await page.getByLabel(/Identificador de comercio/).fill("111");
-    await page.getByRole("button", { name: "Guardar" }).click();
+    await totem2.getByLabel(/Identificador de comercio/).fill("111");
+    await totem2.getByRole("button", { name: "Guardar" }).click();
     await expect(page.getByTestId("payment-config-ok")).toBeVisible();
   } finally {
     await deletePaymentConfig("garum");
@@ -84,5 +90,34 @@ test("el owner activa el rol kiosko de un dispositivo y le fija el pinpad", asyn
     expect(final.roles).toContain("kiosko");
   } finally {
     await deleteDevice(deviceId);
+  }
+});
+
+test("las credenciales de Stripe se guardan y el secreto no reaparece", async ({ page }) => {
+  /* Cada cliente cobra contra SU cuenta de Stripe, así que esto decide a dónde va el dinero de
+     sus comensales. Lo que no puede pasar bajo ningún concepto es que la clave secreta vuelva al
+     navegador una vez guardada. */
+  await loginOwner(page);
+  try {
+    await page.goto(`${ORIGIN}/admin/pagos`);
+    const qr = page.getByTestId("pagos-qr");
+
+    await qr.getByLabel(/Clave pública/).fill("pk_test_e2e");
+    await qr.getByLabel(/Clave secreta/).fill("sk_test_e2e_SECRETO");
+    await qr.getByLabel(/Secreto del webhook/).fill("whsec_e2e_SECRETO");
+    await qr.getByRole("button", { name: "Guardar" }).click();
+    await expect(page.getByTestId("stripe-config-ok")).toBeVisible();
+
+    await page.goto(`${ORIGIN}/admin/pagos`);
+    const qr2 = page.getByTestId("pagos-qr");
+    // La pública sí vuelve: su trabajo es bajar al navegador a montar el formulario de tarjeta.
+    await expect(qr2.getByLabel(/Clave pública/)).toHaveValue("pk_test_e2e");
+    // Los secretos, jamás. Ni en el campo ni en ningún rincón del HTML.
+    await expect(qr2.getByLabel(/Clave secreta/)).toHaveValue("");
+    const html = await page.content();
+    expect(html).not.toContain("sk_test_e2e_SECRETO");
+    expect(html).not.toContain("whsec_e2e_SECRETO");
+  } finally {
+    await deleteStripeConfig("garum");
   }
 });

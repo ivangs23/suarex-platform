@@ -1,6 +1,6 @@
 "use server";
 
-import { MissingPaymentSecretError, setPaymentConfig } from "@suarex/db";
+import { MissingPaymentSecretError, setPaymentConfig, setStripeConfig } from "@suarex/db";
 import { type ConfigValues, findProvider, missingFields, splitByStorage } from "@suarex/payments";
 import { revalidatePath } from "next/cache";
 import { parseOptionalBoolean, requiredString } from "@/lib/form-parse";
@@ -74,6 +74,39 @@ export const setPaymentConfigAction = managerAction(
       }
       throw error;
     }
+    revalidatePath("/admin/pagos");
+    return { ok: true };
+  },
+);
+
+/**
+ * Credenciales de Stripe del canal QR.
+ *
+ * Cada cliente tiene su PROPIA cuenta, así que esto no es una preferencia sino lo que determina a
+ * dónde va el dinero. Mismo patrón de seguridad que el resto del panel: el `tenantId` sale de la
+ * sesión verificada, nunca del formulario.
+ *
+ * Los secretos en blanco significan "no lo cambies" -- no bajan al navegador, así que no se pueden
+ * reenviar. Y se guardan uno a uno: son dos, y borrar el del webhook sin querer haría que se
+ * cobrara y los pedidos NO se marcaran pagados, con el comensal pagando y la cocina sin ver nada.
+ */
+export const setStripeConfigAction = managerAction(
+  async (session, _prev: PaymentConfigState, formData: FormData): Promise<PaymentConfigState> => {
+    const publishableKey = formData.get("publishable_key");
+    const secrets: Record<string, string> = {};
+    for (const campo of ["secretKey", "webhookSecret"] as const) {
+      const valor = formData.get(campo);
+      const texto = typeof valor === "string" ? valor.trim() : "";
+      if (texto !== "") secrets[campo] = texto;
+    }
+
+    await setStripeConfig(session.tenantId, {
+      // La clave pública SÍ se puede vaciar a propósito: es visible y cambiarla es una decisión.
+      publishableKey:
+        typeof publishableKey === "string" ? publishableKey.trim() || null : undefined,
+      secrets,
+    });
+
     revalidatePath("/admin/pagos");
     return { ok: true };
   },

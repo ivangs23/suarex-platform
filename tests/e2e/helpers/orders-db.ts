@@ -247,3 +247,19 @@ export async function productIdByName(tenantSlug: string, nameEs: string): Promi
   if (error) throw error;
   return data.id as string;
 }
+
+/** Borra las credenciales de Stripe de un cliente, para que un test no deje configurada una
+ *  cuenta de mentira que la siguiente suite se encuentre. */
+export async function deleteStripeConfig(tenantSlug: string): Promise<void> {
+  const { data: tenant, error: tErr } = await admin
+    .from("tenants")
+    .select("id")
+    .eq("slug", tenantSlug)
+    .single();
+  if (tErr) throw tErr;
+  const { error } = await admin
+    .from("tenant_stripe_config")
+    .delete()
+    .eq("tenant_id", tenant.id as string);
+  if (error) throw error;
+}
