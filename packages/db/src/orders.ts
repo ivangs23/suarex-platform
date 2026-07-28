@@ -395,19 +395,37 @@ export type MarkPaidOutcome = "marked" | "already-paid" | "order-not-found";
  * "order-not-found" (no existe ninguna fila con ese payment intent) -- un
  * único UPDATE no puede por sí mismo distinguir esos dos casos.
  */
-export async function markOrderPaid(paymentIntentId: string): Promise<MarkPaidOutcome> {
-  const { data: updated, error: updateError } = await ordersTableForPaymentResolution()
+export async function markOrderPaid(
+  paymentIntentId: string,
+  /**
+   * Acota la marca al negocio dueño del webhook que trae el evento.
+   *
+   * Un id de PaymentIntent solo existe dentro de la cuenta que lo creó, así que la colisión entre
+   * negocios es teórica -- pero el webhook por negocio SABE de quién es el evento, y no usar ese
+   * dato sería tirar gratis una capa de aislamiento. Opcional porque la ruta antigua (la del
+   * entorno, común a todos) no puede saberlo.
+   */
+  tenantId?: string,
+): Promise<MarkPaidOutcome> {
+  /* El filtro se añade encadenando sobre el mismo builder en vez de con un ayudante genérico:
+     los tipos de postgrest son demasiado profundos para envolverlos sin que `tsc` se rinda
+     (TS2589), y esto se lee igual de bien. */
+  let update = ordersTableForPaymentResolution()
     .update({ status: "paid", paid_at: new Date().toISOString() })
     .eq("stripe_payment_intent_id", paymentIntentId)
-    .eq("status", "pending")
-    .select("id");
+    .eq("status", "pending");
+  if (tenantId) update = update.eq("tenant_id", tenantId);
+
+  const { data: updated, error: updateError } = await update.select("id");
   if (updateError) throw updateError;
   if ((updated ?? []).length > 0) return "marked";
 
-  const { data: existing, error: selectError } = await ordersTableForPaymentResolution()
+  let lookup = ordersTableForPaymentResolution()
     .select("id")
-    .eq("stripe_payment_intent_id", paymentIntentId)
-    .maybeSingle();
+    .eq("stripe_payment_intent_id", paymentIntentId);
+  if (tenantId) lookup = lookup.eq("tenant_id", tenantId);
+
+  const { data: existing, error: selectError } = await lookup.maybeSingle();
   if (selectError) throw selectError;
 
   return existing ? "already-paid" : "order-not-found";

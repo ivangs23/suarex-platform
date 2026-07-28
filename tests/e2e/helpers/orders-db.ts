@@ -287,3 +287,19 @@ export async function setStripeConfigForTest(
   );
   if (error) throw error;
 }
+
+/** Ata un PaymentIntent conocido a un pedido, para poder dispararle un webhook firmado. */
+export async function setPaymentIntentForTest(orderId: string, intentId: string): Promise<void> {
+  const { error } = await admin
+    .from("orders")
+    .update({ stripe_payment_intent_id: intentId })
+    .eq("id", orderId);
+  if (error) throw error;
+}
+
+/** Estado actual de un pedido, para comprobar si el webhook lo marcó pagado. */
+export async function orderStatusForTest(orderId: string): Promise<string> {
+  const { data, error } = await admin.from("orders").select("status").eq("id", orderId).single();
+  if (error) throw error;
+  return data.status as string;
+}

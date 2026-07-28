@@ -33,6 +33,33 @@ export async function findTenantByHost(
 }
 
 /**
+ * El tenant con ese slug, o `null`.
+ *
+ * Existe para el webhook por negocio (`/api/webhook/stripe/<slug>`): ahí el slug llega en la URL
+ * y hay que resolverlo ANTES de saber ningún tenantId -- la misma situación que `findTenantByHost`
+ * y por el mismo motivo, así que reutiliza su exención documentada. Búsqueda de UNA fila por
+ * columna con índice único, nunca un barrido.
+ *
+ * Que el slug lo controle quien llama no abre nada: en el webhook solo elige con qué secreto
+ * verificar la firma, y un slug equivocado hace que la firma no cuadre.
+ */
+export async function findTenantBySlug(slug: string): Promise<Tenant | null> {
+  const { data, error } = await tenantsTableForHostResolution()
+    .select("id, slug, name, status")
+    .eq("slug", slug)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+
+  return {
+    id: data.id as string,
+    slug: data.slug as string,
+    name: data.name as string,
+    status: data.status as Tenant["status"],
+  };
+}
+
+/**
  * ¿Hay un tenant ACTIVO sirviendo este dominio propio? Es la pregunta que hace Caddy antes
  * de pedir un certificado on-demand (ver `/api/tls-check`).
  *
