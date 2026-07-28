@@ -1,14 +1,22 @@
 import { markOrderPaid } from "@suarex/db";
 import { NextResponse } from "next/server";
 import type Stripe from "stripe";
-import { stripeClient } from "@/lib/stripe";
+import { stripeClientWithKey, stripeEnvCredentials } from "@/lib/stripe";
 
 // `constructEvent` usa criptografía de Node; el runtime edge no sirve aquí.
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
-  const secret = process.env.STRIPE_WEBHOOK_SECRET;
-  if (!secret) return NextResponse.json({ error: "Sin configurar" }, { status: 500 });
+  /* Sigue verificando con las credenciales del ENTORNO, igual que hasta ahora. Verificar una firma
+     exige saber de antemano con qué secreto, y eso no se puede deducir de un evento que aún no se
+     ha verificado -- el pez que se muerde la cola. La salida es una ruta por negocio, donde el
+     secreto se sabe por la URL; eso es la fase siguiente. Hasta entonces esta ruta solo sirve a
+     los negocios que cobran con el entorno, que hoy son todos. */
+  const entorno = stripeEnvCredentials();
+  const secret = entorno.webhookSecret;
+  if (!secret || !entorno.secretKey) {
+    return NextResponse.json({ error: "Sin configurar" }, { status: 500 });
+  }
 
   const signature = request.headers.get("stripe-signature");
   if (!signature) return NextResponse.json({ error: "Sin firma" }, { status: 400 });
@@ -18,7 +26,11 @@ export async function POST(request: Request) {
 
   let event: Stripe.Event;
   try {
-    event = stripeClient().webhooks.constructEvent(payload, signature, secret);
+    event = stripeClientWithKey(entorno.secretKey).webhooks.constructEvent(
+      payload,
+      signature,
+      secret,
+    );
   } catch {
     return NextResponse.json({ error: "Firma inválida" }, { status: 400 });
   }

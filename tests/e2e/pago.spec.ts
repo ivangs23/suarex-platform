@@ -4,8 +4,10 @@ import {
   clearRateLimit,
   deleteOrder,
   deleteOrdersForTenant,
+  deleteStripeConfig,
   firstProductIdOfTenant,
   latestOrderForTenant,
+  setStripeConfigForTest,
   tableIdForToken,
 } from "./helpers/orders-db.js";
 
@@ -104,6 +106,52 @@ test("una mesa no puede saturar la cocina: al superar el tope se rechaza (429)",
     expect(estados[10]).toBe(429);
   } finally {
     // Los 10 pedidos son reales: se borran todos los de la mesa.
+    await deleteOrdersForTenant("garum");
+  }
+});
+
+test("un negocio con credenciales de Stripe a medias no cobra con la cuenta de otro", async ({
+  page,
+}) => {
+  /* El fallo que esto impide: crear el cobro con la clave secreta del negocio y montar el
+     formulario con la clave pública del entorno -- de OTRA cuenta -- lo que da un cobro que no se
+     puede confirmar. Antes que mezclar, no se cobra y se dice.
+
+     De paso prueba que la elección de credenciales está CABLEADA en la ruta, y no solo probada
+     como función suelta: con una clave secreta falsa ni siquiera se llega a hablar con Stripe. */
+  await setStripeConfigForTest("garum", {
+    publishableKey: null,
+    secrets: { secretKey: "sk_test_falsa_a_medias" },
+  });
+  try {
+    await page.goto(QR_MESA_1);
+    const productId = await firstProductIdOfTenant("garum");
+    const response = await page.request.post("http://garum.localhost:3000/api/orders", {
+      data: { lines: [{ productId, quantity: 1, extraIds: [], notes: null }] },
+    });
+
+    expect(response.ok()).toBeFalsy();
+  } finally {
+    await deleteStripeConfig("garum");
+    await deleteOrdersForTenant("garum");
+  }
+});
+
+test("sin credenciales propias se sigue cobrando con las del entorno", async ({ page }) => {
+  // Control positivo del anterior, y la garantía de que nadie deja de cobrar al desplegar esto.
+  await deleteStripeConfig("garum");
+  await page.goto(QR_MESA_1);
+  const productId = await firstProductIdOfTenant("garum");
+  const response = await page.request.post("http://garum.localhost:3000/api/orders", {
+    data: { lines: [{ productId, quantity: 1, extraIds: [], notes: null }] },
+  });
+
+  try {
+    expect(response.ok()).toBeTruthy();
+    const payload = (await response.json()) as { publishableKey?: string };
+    // La clave pública viaja CON el cobro: es lo que el formulario usa para montarse.
+    expect(payload.publishableKey).toBeTruthy();
+  } finally {
     await deleteOrdersForTenant("garum");
   }
 });
