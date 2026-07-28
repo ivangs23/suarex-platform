@@ -10,7 +10,7 @@ import {
 } from "@suarex/db";
 import { NextResponse } from "next/server";
 import { readMesaToken } from "@/lib/mesa-cookie";
-import { stripeClient } from "@/lib/stripe";
+import { resolveStripeKeys, stripeClientWithKey } from "@/lib/stripe";
 
 // Mensaje genérico para cualquier fallo que NO sea un `OrderCartError`: el
 // llamante es un comensal anónimo que escaneó un QR, así que nunca debe recibir
@@ -104,13 +104,24 @@ export async function POST(request: Request) {
   // es un riesgo económico: el cliente nunca llega a recibir `client_secret`, así
   // que ese PaymentIntent (si llegó a crearse) jamás puede confirmarse.
   try {
-    // Forma Connect: si el tenant tiene cuenta conectada, el cargo se crea SOBRE
-    // ella y el dinero va a su cuenta, no a la de la plataforma. Sin cuenta
-    // conectada (desarrollo local, o un tenant que aún no ha completado el
-    // onboarding) se cobra contra la cuenta de la plataforma.
-    const connectedAccount = await getTenantStripeAccount(table.tenantId);
+    /* Con QUÉ cuenta se cobra: la del propio negocio si tiene credenciales guardadas, y si no las
+       del entorno -- que es como funcionaba antes, para que nadie deje de cobrar el día del
+       despliegue. La clave pública que se devuelve más abajo sale de AQUÍ, de la misma elección,
+       para que no pueda pertenecer a una cuenta distinta de la que crea el cobro. */
+    const elegidas = await resolveStripeKeys(table.tenantId);
+    if (elegidas.kind === "incompleta") {
+      throw new Error(
+        `Stripe sin configurar para este negocio: falta ${elegidas.missing.join(", ")}`,
+      );
+    }
 
-    const intent = await stripeClient().paymentIntents.create(
+    // Cuenta conectada (Stripe Connect). Se conserva para no romper un despliegue que la use,
+    // pero es incompatible con las credenciales propias: si el negocio tiene su cuenta, la clave
+    // secreta ya habla con ella y no hay ninguna cuenta "sobre la que" cobrar.
+    const connectedAccount =
+      elegidas.kind === "entorno" ? await getTenantStripeAccount(table.tenantId) : null;
+
+    const intent = await stripeClientWithKey(elegidas.keys.secretKey).paymentIntents.create(
       {
         amount: order.totalCents,
         currency: order.currency.toLowerCase(),
@@ -130,6 +141,10 @@ export async function POST(request: Request) {
       // conectada solo se puede confirmar si Stripe.js se inicializa contra esa misma cuenta.
       // Sin esto, un tenant con Connect vería el formulario de pago fallar al confirmar.
       connectedAccount,
+      /* La clave pública viaja CON el cobro, y no como variable de build, por dos motivos: puede
+         variar por negocio, y sale de la misma elección que acaba de crear el PaymentIntent -- así
+         no hay forma de montar el formulario contra una cuenta distinta de la que va a cobrar. */
+      publishableKey: elegidas.keys.publishableKey,
     });
   } catch (error) {
     console.error(

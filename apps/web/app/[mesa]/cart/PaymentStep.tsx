@@ -41,9 +41,13 @@ function stripeFor(publishableKey: string, connectedAccount: string | null) {
 
 export function PaymentStep() {
   const cart = useCart();
-  const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
 
   if (!cart?.pago) return null;
+
+  /* La clave sale del propio cobro (la devuelve `POST /api/orders`) y no de una variable de build.
+     Cada negocio cobra en su cuenta, así que una clave horneada al compilar solo podría servir a
+     uno -- y montar el formulario con la de otra cuenta da un cobro que no se confirma. */
+  const publishableKey = cart.pago.publishableKey;
 
   // Sin clave publicable configurada no se puede pintar el formulario. Es un fallo de
   // despliegue, no del comensal: se le dice que no se puede cobrar y puede volver a su pedido.

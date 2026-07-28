@@ -263,3 +263,27 @@ export async function deleteStripeConfig(tenantSlug: string): Promise<void> {
     .eq("tenant_id", tenant.id as string);
   if (error) throw error;
 }
+
+/** Fija credenciales de Stripe de mentira para un cliente. Nunca cobran: sirven para comprobar
+ *  QUÉ credenciales elige el servidor, no para hablar con Stripe. */
+export async function setStripeConfigForTest(
+  tenantSlug: string,
+  values: { publishableKey?: string | null; secrets?: Record<string, string> },
+): Promise<void> {
+  const { data: tenant, error: tErr } = await admin
+    .from("tenants")
+    .select("id")
+    .eq("slug", tenantSlug)
+    .single();
+  if (tErr) throw tErr;
+
+  const { error } = await admin.from("tenant_stripe_config").upsert(
+    {
+      tenant_id: tenant.id as string,
+      publishable_key: values.publishableKey ?? null,
+      secrets: values.secrets ?? {},
+    },
+    { onConflict: "tenant_id" },
+  );
+  if (error) throw error;
+}

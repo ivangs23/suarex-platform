@@ -70,7 +70,15 @@ type CartState = {
    * `connectedAccount` viaja porque un cargo directo sobre la cuenta de un cliente solo se
    * confirma si Stripe.js se inicializa contra esa misma cuenta.
    */
-  pago: { clientSecret: string; publicToken: string; connectedAccount: string | null } | null;
+  pago: {
+    clientSecret: string;
+    publicToken: string;
+    connectedAccount: string | null;
+    /** Clave pública de la cuenta que acaba de crear ESTE cobro. Viaja con él y no como variable
+     *  de build: cada negocio cobra en su propia cuenta, y montar el formulario con la clave de
+     *  otra produce un cobro que no se puede confirmar. */
+    publishableKey: string;
+  } | null;
   /**
    * Cobro por Paytef en curso (canal kiosko / totem), o `null`. El totem no usa Stripe: el
    * pedido se crea por `/api/kiosko/orders` y el cobro lo hace el agente-desktop por el datáfono
@@ -294,6 +302,7 @@ export function CartProvider({
         publicToken?: string;
         clientSecret?: string;
         connectedAccount?: string | null;
+        publishableKey?: string;
       };
       if (!response.ok || !payload.publicToken || !payload.clientSecret) {
         setError(payload.error ?? strings.orderError);
@@ -307,6 +316,7 @@ export function CartProvider({
       setEnviando(false);
       setPago({
         clientSecret: payload.clientSecret,
+        publishableKey: payload.publishableKey ?? "",
         publicToken: payload.publicToken,
         connectedAccount: payload.connectedAccount ?? null,
       });
