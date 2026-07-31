@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { makeUsbSink, type WinspoolBinding } from "./usb-sink-winspool.js";
 
 function fakeBinding(overrides: Partial<WinspoolBinding> = {}): WinspoolBinding & {
@@ -51,5 +51,39 @@ describe("makeUsbSink", () => {
     const sink = makeUsbSink(b);
     await expect(sink(buffer, "NOPE")).rejects.toThrow(/impresora/i);
     expect(b.calls.closed).toBe(0);
+  });
+});
+
+/**
+ * La carga del binding nativo tiene que ocurrir UNA vez por proceso. No es una optimización:
+ * `koffi.struct` registra el tipo en una tabla global y la segunda llamada lanza
+ * `Duplicate type name`. Con dos consumidores (imprimir prueba y arrancar el agente) eso se
+ * manifestaba como un emparejamiento que fallaba con un mensaje que no hablaba de impresoras.
+ */
+describe("loadWinspoolBinding", () => {
+  it("carga una sola vez aunque se pida muchas veces, y desde varios sitios a la vez", async () => {
+    let structsRegistrados = 0;
+    vi.doMock("koffi", () => ({
+      default: {
+        load: () => ({ func: () => () => 0 }),
+        struct: (nombre: string) => {
+          structsRegistrados += 1;
+          // Igual que koffi de verdad: el registro es global y no admite repetidos.
+          if (structsRegistrados > 1) throw new Error(`Duplicate type name '${nombre}'`);
+          return {};
+        },
+        as: (valor: unknown) => valor,
+      },
+    }));
+
+    const { loadWinspoolBinding } = await import("./usb-sink-winspool.js");
+
+    // En paralelo, que es el caso que una caché del RESULTADO (y no de la promesa) no cubre.
+    const [a, b] = await Promise.all([loadWinspoolBinding(), loadWinspoolBinding()]);
+    const c = await loadWinspoolBinding();
+
+    expect(structsRegistrados).toBe(1);
+    expect(a).toBe(b);
+    expect(b).toBe(c);
   });
 });

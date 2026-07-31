@@ -24,6 +24,21 @@ const bakedEnv = {
   "import.meta.env.UPDATE_FEED_URL": JSON.stringify(process.env.UPDATE_FEED_URL ?? ""),
 };
 
+/* Un build sin estas variables produce una app que ARRANCA y no funciona: ventana normal, menú
+   normal, y cada parte fallando por su lado con un error que no señala la causa. No se aborta el
+   build -- `turbo build` corre sin envs y comprobar que compila sigue siendo útil -- pero sí se
+   dice aquí, que es donde todavía cuesta un minuto arreglarlo. La app lo repite al arrancar y en
+   su propia ventana, por si este aviso pasó de largo en un log de CI. */
+const SIN_HORNEAR = ["SUPABASE_URL", "SUPABASE_ANON_KEY", "PLATFORM_WEB_ORIGIN"].filter(
+  (nombre) => !process.env[nombre],
+);
+if (SIN_HORNEAR.length > 0) {
+  console.warn(
+    `\n  AVISO: se está compilando sin ${SIN_HORNEAR.join(", ")}.\n` +
+      "  El ejecutable resultante arrancará, pero no podrá conectarse a nada.\n",
+  );
+}
+
 export default defineConfig({
   main: {
     plugins: [

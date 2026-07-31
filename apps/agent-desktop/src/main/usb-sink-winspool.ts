@@ -50,7 +50,30 @@ export function makeUsbSink(binding: WinspoolBinding): UsbRawSink {
  * funciones koffi (out-params, structs) puede necesitar ajuste en el PC Windows real. El
  * botón "Imprimir ticket de prueba" (Task 6) la ejercita de forma aislada.
  */
-export async function loadWinspoolBinding(): Promise<WinspoolBinding> {
+/**
+ * UNA carga por proceso.
+ *
+ * `koffi.struct` registra el tipo en una tabla GLOBAL del proceso, y llamarlo dos veces con el
+ * mismo nombre lanza `Duplicate type name 'DOC_INFO_1W'`. Hay dos consumidores -- el botón de
+ * imprimir prueba y el arranque del agente -- así que el segundo en llegar reventaba. En la
+ * práctica eso rompía el EMPAREJAMIENTO entero: emparejar arranca el agente, y el error subía
+ * hasta la interfaz como "Error inesperado al emparejar", que no dice nada de impresoras.
+ *
+ * Se guarda la PROMESA, no el resultado: dos llamadas casi simultáneas comparten una sola carga
+ * en vez de arrancar dos y volver al mismo choque.
+ *
+ * Un fallo aquí se cachea también, a propósito. No es transitorio -- falta la DLL, o una firma
+ * está mal -- y reintentar volvería a registrar el struct, cambiando la causa real por un
+ * "Duplicate type name" que despista.
+ */
+let bindingCargado: Promise<WinspoolBinding> | null = null;
+
+export function loadWinspoolBinding(): Promise<WinspoolBinding> {
+  bindingCargado ??= cargarWinspoolBinding();
+  return bindingCargado;
+}
+
+async function cargarWinspoolBinding(): Promise<WinspoolBinding> {
   const koffi = (await import("koffi")).default;
   const winspool = koffi.load("winspool.drv");
 

@@ -1,4 +1,5 @@
 import type { AgentActivity } from "../main/agent-activity.js";
+import { mensajeDeConfigIncompleta } from "../main/config-check.js";
 import type {
   ExportDiagnosticsResult,
   PairIpcResult,
@@ -12,6 +13,8 @@ type AgentStatus = {
   running: boolean;
   deviceId: string | null;
   platform: string;
+  /** Variables que faltaban al generar este ejecutable. Vacío en un build sano. */
+  configFaltante?: string[];
   activity: AgentActivity;
 };
 
@@ -55,6 +58,18 @@ function setDisabled(ids: string[], disabled: boolean): void {
  * de verde y este es justo el dato por el que se abre la app.
  */
 function renderStatus(status: AgentStatus): void {
+  /* Un ejecutable incompleto se dice ANTES que cualquier otra cosa, y pisa al resto del estado.
+     "Sin emparejar" sería verdad, pero mandaría a pedir un código de emparejamiento que no puede
+     funcionar: el problema no es este equipo, es el instalador. */
+  const faltante = status.configFaltante ?? [];
+  if (faltante.length > 0) {
+    $("status").dataset.state = "error";
+    $("status-title").textContent = "Instalación incompleta";
+    $("status-detail").textContent = mensajeDeConfigIncompleta(faltante);
+    setDisabled(["pair", "unpair", "refresh", "test"], true);
+    return;
+  }
+
   const state = status.running ? "running" : status.paired ? "paired" : "idle";
   $("status").dataset.state = state;
 

@@ -9,7 +9,8 @@ import {
   startAgent,
   stopAgent,
 } from "./agent-runner.js";
-import { PLATFORM_WEB_ORIGIN } from "./baked-config.js";
+import { PLATFORM_WEB_ORIGIN, SUPABASE_ANON_KEY, SUPABASE_URL } from "./baked-config.js";
+import { faltaEnConfigHorneada } from "./config-check.js";
 import { loadCredentials, saveCredentials } from "./config-store.js";
 import { formatDiagnostics } from "./diagnostics.js";
 import { type PairError, pairDevice } from "./pairing.js";
@@ -126,6 +127,14 @@ export function registerIpc(
       // recibir un error. `process` no está disponible en el renderer (contextIsolation),
       // así que viaja por aquí.
       platform: process.platform,
+      // Qué le falta a este ejecutable. La ventana lo dice en el sitio del estado, que es lo
+      // primero que se mira: sin esto, un build incompleto se manifiesta como tres fallos
+      // distintos, y ninguno de los tres señala la causa.
+      configFaltante: faltaEnConfigHorneada({
+        SUPABASE_URL,
+        SUPABASE_ANON_KEY,
+        PLATFORM_WEB_ORIGIN,
+      }),
       // Estado de impresión acumulado, para que la ventana ya muestre lo que va pasando nada
       // más abrirse (sin esperar al primer tick que llegue por `agent-activity`).
       activity: getActivity(),
