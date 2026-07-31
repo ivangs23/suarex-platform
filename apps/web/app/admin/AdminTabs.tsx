@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import styles from "./admin.module.css";
 
@@ -19,11 +20,22 @@ const TABS = [
 
 /**
  * Pestañas del panel. `"use client"` solo para leer la ruta activa y marcarla con
- * `aria-current`: sin eso, en un panel de siete secciones no hay forma de saber dónde se
+ * `aria-current`: sin eso, en un panel de diez secciones no hay forma de saber dónde se
  * está, y el subrayado de la pestaña activa es lo que lo dice de un vistazo.
  *
- * Los enlaces siguen siendo `<a>` normales -- navegación del servidor, sin estado de
- * cliente ni router propio.
+ * `Link`, no `<a>`.
+ *
+ * Con `<a>`, cada clic en una pestaña era una carga de documento entera: el navegador
+ * descartaba la aplicación y la volvía a montar de cero -- 2,7 MB de JavaScript otra vez, más
+ * de medio segundo de espera con la pantalla en blanco, y el árbol de React reconstruido para
+ * cambiar la parte de abajo. Diez veces por sesión de trabajo.
+ *
+ * Con `Link` el servidor sigue haciendo exactamente el mismo trabajo -- estas páginas siguen
+ * siendo componentes de servidor y `requireManager()` se ejecuta igual en cada una: no se
+ * relaja ninguna comprobación. Lo que cambia es el transporte: viaja la respuesta ya
+ * renderizada de la sección nueva, unos kilobytes, y la cabecera con las pestañas ni se
+ * desmonta. Además Next precarga la sección al pasar por encima, así que el clic suele caer
+ * sobre algo que ya está.
  */
 export function AdminTabs() {
   const pathname = usePathname();
@@ -31,7 +43,7 @@ export function AdminTabs() {
   return (
     <nav className={styles.tabs} aria-label="Secciones del panel">
       {TABS.map((tab) => (
-        <a
+        <Link
           key={tab.href}
           className={styles.tab}
           href={tab.href}
@@ -40,7 +52,7 @@ export function AdminTabs() {
           aria-current={pathname === tab.href ? "page" : undefined}
         >
           {tab.label}
-        </a>
+        </Link>
       ))}
     </nav>
   );

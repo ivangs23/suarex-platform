@@ -2,6 +2,7 @@ import { resolveRootDomains } from "@suarex/config";
 import { findTenantByHost } from "@suarex/db";
 import { createServerClient } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
+import { necesitaRefresco } from "./lib/session-refresh";
 
 // Ver resolveRootDomains (@suarex/config/tenant-host.ts): recorta y descarta entradas
 // vacías, y lanza fuera de `development` si la variable no está definida en vez de
@@ -81,6 +82,12 @@ async function refreshStaffSession(request: NextRequest, response: NextResponse)
   // sirviéndose con normalidad. Esto no relaja ninguna autorización:
   // `getStaffSession()` sigue fallando cerrado si el JWT ya no es válido.
   try {
+    // Antes de tocar la red, mirar si hace falta. `getSession()` lee la cookie que ya viene
+    // en la petición y cuesta 0 ms; `getUser()` es una ida y vuelta a Supabase (32 ms
+    // medidos, vista subir a 579 ms) que con un token de una hora sobra en casi todas las
+    // peticiones. Ver `necesitaRefresco` para por qué esto no relaja ninguna comprobación.
+    const { data } = await supabase.auth.getSession();
+    if (!necesitaRefresco(data.session?.expires_at, Date.now())) return;
     await supabase.auth.getUser();
   } catch {
     // Degradación intencional -- ver comentario de arriba. Nada que
