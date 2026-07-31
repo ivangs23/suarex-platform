@@ -36,14 +36,19 @@ import { PLATFORM_WEB_ORIGIN } from "./baked-config.js";
  * del catálogo. Robar este PC no permite reescribir los precios del negocio.
  */
 
-/** Ancho de la barra lateral, en píxeles CSS. Debe coincidir con `--sidebar` en styles.css:
- * el renderer pinta la barra y esta vista se coloca justo a su derecha. */
-export const SIDEBAR_WIDTH = 208;
+/** Alto de la cabecera, en píxeles CSS. Debe coincidir con `--topbar` en styles.css: el renderer
+ * pinta la cabecera y esta vista se coloca justo debajo, ocupando TODO el ancho.
+ *
+ * Antes esto era el ancho de una barra lateral. Se cambió a una cabecera porque en un PC de
+ * mostrador 208 px de barra siempre visible eran 208 px menos de comandas, y porque el estado de
+ * las impresoras se lee mejor encima de lo que estás mirando que en un lateral. */
+export const HEADER_HEIGHT = 56;
 
 /** Secciones de la plataforma que se pueden incrustar, y su ruta. */
 export const WEB_SECTIONS = {
   productos: "/admin/catalogo",
   pedidos: "/staff",
+  cierre: "/admin/cierre",
 } as const;
 
 export type WebSection = keyof typeof WEB_SECTIONS;
@@ -106,15 +111,15 @@ function ensureView(window: BrowserWindow): WebContentsView {
   return view;
 }
 
-/** Coloca la vista a la derecha de la barra lateral, ocupando el resto de la ventana. */
+/** Coloca la vista justo debajo de la cabecera, ocupando el resto de la ventana. */
 export function layoutWebPanel(window: BrowserWindow): void {
   if (!view || currentSection === null) return;
   const { width, height } = window.getContentBounds();
   view.setBounds({
-    x: SIDEBAR_WIDTH,
-    y: 0,
-    width: Math.max(0, width - SIDEBAR_WIDTH),
-    height,
+    x: 0,
+    y: HEADER_HEIGHT,
+    width,
+    height: Math.max(0, height - HEADER_HEIGHT),
   });
 }
 

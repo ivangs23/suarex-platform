@@ -23,6 +23,8 @@ contextBridge.exposeInMainWorld("agent", {
     platform: string;
     activity: AgentActivity;
   }> => ipcRenderer.invoke("get-status"),
+  /** Últimas líneas del registro de este equipo, de más reciente a más antigua. */
+  readLog: (maxLines?: number): Promise<string[]> => ipcRenderer.invoke("read-log", maxLines),
   confirmUnpair: (): Promise<boolean> => ipcRenderer.invoke("confirm-unpair"),
   unpair: (): Promise<{ ok: boolean }> => ipcRenderer.invoke("unpair"),
   exportDiagnostics: (): Promise<ExportDiagnosticsResult> =>

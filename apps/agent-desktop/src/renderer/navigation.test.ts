@@ -124,3 +124,68 @@ describe("navegación de la barra lateral", () => {
     ).toBe(true);
   });
 });
+
+describe("menú de inicio y vuelta atrás", () => {
+  /** El armazón mínimo con lo que la navegación toca: cabecera, botón de atrás y dos paneles. */
+  function conMenu() {
+    const root = document.createElement("div");
+    root.innerHTML = `
+      <header class="topbar" data-on-menu="true">
+        <button id="back" hidden>← Menú</button>
+        <h1 id="topbar-title">SuarEx</h1>
+      </header>
+      <section class="panel menu" data-panel="menu">
+        <button class="nav-item" data-section="config"></button>
+        <button class="nav-item" data-section="pedidos"></button>
+      </section>
+      <section class="panel" data-panel="config" hidden></section>
+      <section class="panel" data-panel="pedidos" hidden></section>`;
+    return root;
+  }
+
+  it("en el inicio no hay botón de atrás: uno que no lleva a ningún sitio estorba", async () => {
+    const root = conMenu();
+    const { irA } = setupNavigation(root);
+    await irA("menu");
+
+    expect(root.querySelector<HTMLButtonElement>("#back")?.hidden).toBe(true);
+    expect(root.querySelector<HTMLElement>('[data-panel="menu"]')?.hidden).toBe(false);
+  });
+
+  it("dentro de una sección aparece el atrás y el título dice dónde estás", async () => {
+    const root = conMenu();
+    const { irA } = setupNavigation(root);
+    await irA("pedidos");
+
+    expect(root.querySelector<HTMLButtonElement>("#back")?.hidden).toBe(false);
+    expect(root.querySelector<HTMLElement>("#topbar-title")?.textContent).toBe("Comandas");
+    expect(root.querySelector<HTMLElement>('[data-panel="menu"]')?.hidden).toBe(true);
+  });
+
+  it("el botón de atrás devuelve al menú", async () => {
+    const root = conMenu();
+    const { irA } = setupNavigation(root);
+    await irA("config");
+
+    root.querySelector<HTMLButtonElement>("#back")?.click();
+    await Promise.resolve();
+
+    expect(root.querySelector<HTMLElement>('[data-panel="menu"]')?.hidden).toBe(false);
+    expect(root.querySelector<HTMLButtonElement>("#back")?.hidden).toBe(true);
+  });
+
+  it("al volver al menú se avisa al proceso principal, para que retire la vista incrustada", async () => {
+    /* Sin ese aviso, la vista de la plataforma seguiría superpuesta y taparía el menú entero:
+       el usuario vería las comandas con el botón de atrás encima y nada más. */
+    const avisos: string[] = [];
+    const root = conMenu();
+    const { irA } = setupNavigation(root, async (s) => {
+      avisos.push(s);
+      return { ok: true };
+    });
+
+    await irA("pedidos");
+    await irA("menu");
+    expect(avisos).toEqual(["pedidos", "menu"]);
+  });
+});

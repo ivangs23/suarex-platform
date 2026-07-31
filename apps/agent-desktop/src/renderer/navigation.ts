@@ -14,9 +14,23 @@ export type ShowSection = (section: string) => Promise<{ ok: boolean }>;
  * lateral entera muerta cuando falló el preload, que es justo cuando más falta hace poder
  * moverse por la app para leer el mensaje de error.
  */
+/** Cómo se llama cada sección en la cabecera. La pantalla de inicio lleva la marca, no un título. */
+const TITULOS: Record<string, string> = {
+  menu: "SuarEx",
+  config: "Configuración",
+  impresoras: "Impresoras",
+  productos: "Productos",
+  pedidos: "Comandas",
+  cierre: "Cierre de caja",
+  logs: "Registro",
+};
+
 export function setupNavigation(root: ParentNode, showSection?: ShowSection) {
   const navItems = [...root.querySelectorAll<HTMLButtonElement>(".nav-item")];
   const panels = [...root.querySelectorAll<HTMLElement>(".panel")];
+  const topbar = root.querySelector<HTMLElement>(".topbar");
+  const back = root.querySelector<HTMLButtonElement>("#back");
+  const title = root.querySelector<HTMLElement>("#topbar-title");
 
   async function irA(section: string): Promise<void> {
     for (const boton of navItems) {
@@ -25,6 +39,13 @@ export function setupNavigation(root: ParentNode, showSection?: ShowSection) {
     for (const panel of panels) {
       panel.hidden = panel.dataset.panel !== section;
     }
+
+    /* En el inicio no hay a dónde volver, así que el botón no está -- uno que no hace nada es
+       peor que ninguno. El resto de la cabecera se queda: el estado tiene que verse siempre. */
+    const enMenu = section === "menu";
+    if (back) back.hidden = enMenu;
+    if (topbar) topbar.dataset.onMenu = String(enMenu);
+    if (title) title.textContent = TITULOS[section] ?? section;
 
     if (!showSection) return;
 
@@ -47,6 +68,7 @@ export function setupNavigation(root: ParentNode, showSection?: ShowSection) {
   for (const boton of navItems) {
     boton.addEventListener("click", () => void irA(boton.dataset.section as string));
   }
+  back?.addEventListener("click", () => void irA("menu"));
 
   return { irA };
 }

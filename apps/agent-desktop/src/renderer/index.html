@@ -7,42 +7,20 @@
   </head>
   <body>
     <div class="shell">
-      <!-- Barra lateral. Su ancho debe coincidir con SIDEBAR_WIDTH (main/web-panel.ts):
-           el panel incrustado de la plataforma se coloca justo a su derecha, en píxeles. -->
-      <nav class="sidebar" aria-label="Secciones">
-        <div class="brand">
-          <span class="brand-mark" aria-hidden="true">S</span>
-          <span class="brand-text">
-            <strong>SuarEx</strong>
-            <span>Agente</span>
-          </span>
-        </div>
+      <!-- CABECERA. Sustituye a la barra lateral: el menú vive en su propia pantalla y desde
+           una sección solo se necesita saber dónde estás y cómo volver. Así la vista incrustada
+           de la plataforma ocupa todo el ancho -- en un PC de mostrador, 208 px de barra siempre
+           visible eran 208 px menos de comandas.
+           Su alto debe coincidir con HEADER_HEIGHT (main/web-panel.ts): la vista incrustada se
+           coloca justo debajo, en píxeles. -->
+      <header class="topbar" data-on-menu="true">
+        <button class="back" type="button" id="back" hidden>← Menú</button>
+        <span class="brand-mark" aria-hidden="true">S</span>
+        <h1 class="topbar-title" id="topbar-title">SuarEx</h1>
 
-        <ul class="nav" role="tablist">
-          <li>
-            <button class="nav-item" type="button" data-section="config" role="tab">
-              <span class="nav-icon" aria-hidden="true">⚙️</span> Configuración
-            </button>
-          </li>
-          <li>
-            <button class="nav-item" type="button" data-section="impresoras" role="tab">
-              <span class="nav-icon" aria-hidden="true">🖨️</span> Impresoras
-            </button>
-          </li>
-          <li>
-            <button class="nav-item" type="button" data-section="productos" role="tab">
-              <span class="nav-icon" aria-hidden="true">📖</span> Productos
-            </button>
-          </li>
-          <li>
-            <button class="nav-item" type="button" data-section="pedidos" role="tab">
-              <span class="nav-icon" aria-hidden="true">🧾</span> Pedidos
-            </button>
-          </li>
-        </ul>
-
-        <!-- El estado vive en la barra lateral, no dentro de una sección: es lo que se
-             quiere ver de un vistazo, se esté donde se esté. -->
+        <!-- El estado va aquí y no dentro de una sección: es lo que se quiere ver de un vistazo,
+             se esté donde se esté -- y sobre todo en Comandas, donde una impresora caída
+             significa que la cocina no está recibiendo nada. -->
         <div class="side-status" id="status" data-state="loading">
           <span class="dot" aria-hidden="true"></span>
           <span class="status-text">
@@ -50,10 +28,34 @@
             <span class="status-detail" id="status-detail"></span>
           </span>
         </div>
-      </nav>
+      </header>
 
       <main class="content">
-        <section class="panel" data-panel="config">
+        <!-- LA PANTALLA DE INICIO. Botones grandes porque el PC de un mostrador se toca con las
+             manos ocupadas, y porque de aquí se sale a una sección y se vuelve: no es una barra
+             que compita por el espacio con lo que de verdad se está mirando. -->
+        <section class="panel menu" data-panel="menu">
+          <button class="nav-item" type="button" data-section="config">
+            <span class="nav-icon" aria-hidden="true">⚙️</span> Configuración
+          </button>
+          <button class="nav-item" type="button" data-section="impresoras">
+            <span class="nav-icon" aria-hidden="true">🖨️</span> Impresoras
+          </button>
+          <button class="nav-item" type="button" data-section="productos">
+            <span class="nav-icon" aria-hidden="true">📖</span> Productos
+          </button>
+          <button class="nav-item" type="button" data-section="pedidos">
+            <span class="nav-icon" aria-hidden="true">🧾</span> Comandas
+          </button>
+          <button class="nav-item" type="button" data-section="cierre">
+            <span class="nav-icon" aria-hidden="true">💶</span> Cierre de caja
+          </button>
+          <button class="nav-item" type="button" data-section="logs">
+            <span class="nav-icon" aria-hidden="true">📋</span> Registro
+          </button>
+        </section>
+
+        <section class="panel" data-panel="config" hidden>
           <header class="panel-head">
             <h1>Configuración</h1>
             <p>Vincula este equipo con el negocio para que reciba e imprima los pedidos.</p>
@@ -149,6 +151,20 @@
         </section>
         <section class="panel panel-web" data-panel="pedidos" hidden>
           <div class="web-fallback" id="web-fallback-pedidos"></div>
+        </section>
+        <section class="panel panel-web" data-panel="cierre" hidden>
+          <div class="web-fallback" id="web-fallback-cierre"></div>
+        </section>
+
+        <!-- El registro NO puede ser una vista incrustada: es un fichero en el disco de ESTA
+             máquina, y es justo lo que se mira cuando algo va mal aquí y no en la plataforma. -->
+        <section class="panel" data-panel="logs" hidden>
+          <header class="panel-head">
+            <h1>Registro</h1>
+            <p>Lo que ha ido pasando en este equipo. Lo más reciente, arriba.</p>
+          </header>
+          <button type="button" id="logs-refresh">Actualizar</button>
+          <div class="log" id="logs-content" role="log"></div>
         </section>
       </main>
     </div>
