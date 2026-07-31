@@ -5,6 +5,18 @@
  * buscador ni jerarquía. Encontrar un producto era desplazarse a ojo.
  */
 
+/* Ancho máximo de la pantalla, compartido por la cabecera, el buscador y las dos columnas.
+ *
+ * Sin él, en un monitor de 1.568 px el título quedaba a la izquierda del todo y su contador a
+ * 1.500 px de distancia, el botón "Buscar" a otro tanto, y las tarjetas se estiraban a lo
+ * ancho para contener 700 px de contenido. Nada de eso necesita el ancho de la pantalla; solo
+ * lo ocupaba porque estaba ahí. */
+.head,
+.toolbar,
+.layout {
+  max-width: 88rem;
+}
+
 .head {
   display: flex;
   flex-wrap: wrap;
@@ -139,44 +151,227 @@
   color: inherit;
 }
 
+/* UNA superficie con filas separadas por una línea, no una tarjeta por producto.
+ *
+ * Con 184 productos, 184 tarjetas con su borde y su sombra son 184 rectángulos compitiendo
+ * por la atención en una pantalla donde lo que se busca es UN nombre. La lista es el objeto;
+ * cada producto es una fila dentro de ella. */
 .items {
-  display: grid;
-  gap: 0.6rem;
-  margin: 0 0 1.5rem;
-  padding: 0;
-  list-style: none;
-}
-
-.item {
   background: var(--admin-surface);
   border: 1px solid var(--admin-border);
   border-radius: var(--admin-radius);
   box-shadow: var(--admin-shadow);
-  padding: 0.85rem 1rem;
+  overflow: hidden;
+  margin: 0 0 1.25rem;
+  padding: 0;
+  list-style: none;
 }
 
+/* Identidad a la izquierda, acciones a la derecha, EN LA MISMA LÍNEA mientras quepan. Antes
+   cada producto gastaba cinco filas apiladas -- unos 250 px de alto para enseñar un nombre y
+   un precio, que con la carta real de garum daba una página de 45.000 px. */
+.item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 1rem;
+  padding: 0.5rem 0.85rem;
+  border-bottom: 1px solid var(--admin-border);
+}
+
+.item:last-child {
+  border-bottom: 0;
+}
+
+/* La fila bajo el cursor se marca: en una lista densa es lo que evita editar el producto de
+   al lado. La que tiene un formulario abierto se queda marcada, que es dónde estás. */
+.item:hover,
+.item:has(details[open]) {
+  background: var(--admin-surface-alt);
+}
+
+/* Ancho ACOTADO, no "todo lo que haya".
+ *
+ * Estirado, en un monitor de 3.440 px el precio acababa a más de mil píxeles de su nombre:
+ * dos datos que se leen juntos, separados por medio metro de vacío. Con la cota se leen de
+ * un vistazo, los precios caen todos en la misma vertical -- lo que permite recorrer la
+ * columna hacia abajo buscando uno -- y las acciones caben al lado en vez de irse al borde
+ * de la pantalla. El hueco sobrante se queda a la derecha, sin repartir.
+ *
+ * Con las cinco acciones (643 px de etiquetas medidos) no hay ancho de pantalla en el que
+ * quepa todo en una línea sin dejar el nombre en 240 px, así que en la práctica el producto
+ * ocupa dos: identidad arriba, acciones debajo. 92 px por fila frente a los ~250 px de antes,
+ * y el reparto no cambia de una pantalla a otra -- que es lo que permite ir al mismo sitio
+ * sin mirar. */
 .itemHead {
+  flex: 0 1 30rem;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 2.25rem minmax(0, 1fr) 6rem;
+  align-items: center;
+  gap: 0 0.7rem;
+}
+
+/* Columnas fijas: el nombre arranca en la misma vertical tenga foto o no. Sin esto, media
+   lista iría indentada y la otra media no, según qué producto tenga imagen. */
+.thumb {
+  grid-column: 1;
+}
+
+.itemIdent {
+  grid-column: 2;
+  min-width: 0;
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 0.5rem 0.75rem;
+  gap: 0 0.5rem;
+}
+
+/* A la derecha de su columna y con cifras de ancho fijo: así los decimales caen unos sobre
+   otros y "9,50 €" y "22,00 €" se comparan sin leerlos. */
+.itemPrice {
+  grid-column: 3;
+  justify-self: end;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .itemName {
   font-weight: 600;
-}
-
-.itemPrice {
-  font-variant-numeric: tabular-nums;
-  color: var(--admin-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Ruta de la categoría. Al buscar es lo que distingue dos productos con el MISMO nombre
    (p. ej. las muchas "COPA" de bodegas distintas). */
 .itemPath {
   flex: 1 1 100%;
-  font-size: 0.76rem;
+  font-size: 0.74rem;
   color: var(--admin-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --- Acciones de la fila -------------------------------------------------------------- */
+
+/* Pegadas al bloque del producto, no empujadas al borde derecho: en un monitor ancho, unas
+   acciones a 1.100 px de la fila que modifican obligan a un viaje de ida y vuelta con la
+   vista para comprobar que estás en el producto correcto. */
+/* Sangradas hasta donde empieza el nombre. Cuando caben al lado del precio la sangría es solo
+   una separación; cuando la ventana estrecha y bajan de línea, es lo que las ata visualmente
+   al producto de arriba en vez de dejarlas flotando en el borde de la fila. */
+.actions {
+  flex: 1 1 auto;
+  padding-left: calc(2.25rem + 0.7rem);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+/* Con un formulario abierto el grupo entero ocupa la fila completa: un editor de producto
+   metido en la columna derecha sería ilegible. */
+.actions:has(details[open]) {
+  flex: 1 0 100%;
+}
+
+.actions .details[open] {
+  flex: 1 0 100%;
+}
+
+/* Ocultar/Mostrar y Borrar son las dos que HACEN algo, así que se separan de las tres que
+   solo abren un formulario. */
+.toggleForm {
+  margin-left: 0.5rem;
+}
+
+/* El acento morado marca la acción PRINCIPAL de un formulario ("Guardar cambios"). Aquí hay
+   uno por fila, y ocho iguales seguidos dibujan una columna morada que no destaca nada:
+   destacar todo es no destacar. Se queda en un botón neutro. */
+.toggleForm button[type="submit"] {
+  border-color: var(--admin-border);
+  color: var(--admin-text);
+}
+
+/* Los botones de la fila, más pequeños que los de un formulario: aquí hay cinco por producto
+   y con el tamaño normal la lista se convierte en una pared de botones. */
+.actions button {
+  padding: 0.28rem 0.6rem;
+  font-size: 0.82rem;
+}
+
+/* Borrar, en reposo, sin recuadro.
+ *
+ * Sigue siendo rojo -- en este panel el rojo significa "no se puede deshacer" y eso no se
+ * negocia -- pero un botón perfilado repetido en 184 filas dibuja una columna roja por el
+ * borde de la pantalla, y una alarma constante deja de leerse como alarma. Al pasar por
+ * encima recupera su recuadro: en el momento en que puede pulsarse, se ve entero. */
+.actions button[data-danger="true"] {
+  border-color: transparent;
+  background: none;
+}
+
+.actions button[data-danger="true"]:hover {
+  border-color: color-mix(in srgb, var(--admin-danger) 45%, var(--admin-border));
+  background: color-mix(in srgb, var(--admin-danger) 7%, transparent);
+}
+
+/* --- Alérgenos y extras --------------------------------------------------------------- */
+
+.itemMeta {
+  flex: 1 0 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.9rem;
+  padding-left: calc(2.25rem + 0.7rem);
+  font-size: 0.78rem;
+  color: var(--admin-muted);
+}
+
+.metaLine {
+  margin: 0;
+}
+
+.metaLabel {
+  font-weight: 600;
+  margin-right: 0.35rem;
+}
+
+.extras {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Cada extra en una pastilla en vez de una fila con su botón debajo: un producto con cinco
+   extras ocupaba diez líneas él solo. */
+.extra {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.1rem 0.45rem;
+  border: 1px solid var(--admin-border);
+  border-radius: 999px;
+  background: var(--admin-surface);
+  white-space: nowrap;
+}
+
+/* El borrado de un extra es lo más pequeño de la fila, pero sigue siendo rojo: en este panel
+   el rojo significa "no se puede deshacer", y eso no cambia por ser un extra. */
+.extra button {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 0.72rem;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .badge {
@@ -232,17 +427,75 @@
   margin: 0 0 0.75rem;
 }
 
+/* Desplegables.
+ *
+ * El resumen se pinta como un control, no como un enlace suelto con el triángulo del
+ * navegador: en una fila hay tres seguidos y sin una forma reconocible no se leen como el
+ * grupo de acciones que son. El chevron se dibuja aquí para poder girarlo al abrir -- que es
+ * lo que dice, sin texto, si el formulario está desplegado. */
 .details {
   margin-top: 0.6rem;
   font-size: 0.85rem;
 }
 
 .details > summary {
-  cursor: pointer;
-  color: var(--admin-accent);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
   width: fit-content;
+  padding: 0.28rem 0.55rem;
+  border-radius: 7px;
+  color: var(--admin-muted);
+  font-size: 0.82rem;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+
+.details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.details > summary::before {
+  content: "";
+  width: 0.36rem;
+  height: 0.36rem;
+  border-right: 1.5px solid currentcolor;
+  border-bottom: 1.5px solid currentcolor;
+  transform: rotate(-45deg);
+  transition: transform 120ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .details > summary::before {
+    transition: none;
+  }
+}
+
+.details > summary:hover {
+  background: var(--admin-surface-alt);
+  color: var(--admin-text);
 }
 
 .details[open] > summary {
   margin-bottom: 0.6rem;
+  background: color-mix(in srgb, var(--admin-accent) 10%, transparent);
+  color: var(--admin-accent);
+  font-weight: 600;
+}
+
+.details[open] > summary::before {
+  transform: rotate(45deg);
+}
+
+/* En una fila de la lista el desplegable es un control más de la barra de acciones, no un
+   bloque con su propio margen. Abierto, una línea lo separa del resto: si no, el editor de un
+   producto y la fila del siguiente se leen como lo mismo. */
+.actions .details {
+  margin-top: 0;
+}
+
+.actions .details[open] {
+  padding-top: 0.15rem;
+  border-top: 1px solid var(--admin-border);
 }

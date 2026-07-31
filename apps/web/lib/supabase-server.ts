@@ -17,7 +17,27 @@ export async function staffServerClient() {
     cookies: {
       getAll: () => cookieStore.getAll(),
       setAll: (items) => {
-        for (const item of items) cookieStore.set(item.name, item.value, item.options);
+        /* Escribir cookies desde un Server Component LANZA en Next: la respuesta ya se está
+         * transmitiendo y no hay cabeceras que modificar. Y aquí se acaba escribiendo sin
+         * querer: cuando el access token ha caducado, `getClaims()` lo rota y auth-js intenta
+         * guardar el nuevo par de cookies. Sin este try/catch, el panel devolvía un 500 --
+         * "Cookies can only be modified in a Server Action or Route Handler" -- a la primera
+         * visita después de una hora, en vez de servir la página.
+         *
+         * Tragarlo es lo correcto, no un parche: quien SÍ puede escribir esas cookies es
+         * `proxy.ts`, que refresca la sesión en cada petición a `/staff` antes de llegar
+         * aquí (ver `refreshStaffSession`). Esta ruta es la de un token ya refrescado ahí, o
+         * la de una petición que se refrescará en la siguiente. Nada de autorización depende
+         * de que esta escritura ocurra: `resolveStaffSession` sigue leyendo el claim
+         * verificado y fallando cerrado si no vale.
+         *
+         * Lo que NO se hace es dejar el `setAll` vacío: en un Route Handler o una Server
+         * Action, donde sí se puede escribir, la rotación tiene que persistirse. */
+        try {
+          for (const item of items) cookieStore.set(item.name, item.value, item.options);
+        } catch {
+          // Componente de servidor: no se puede escribir. Ver arriba.
+        }
       },
     },
   });

@@ -181,86 +181,103 @@ export default async function AdminCatalogoPage({
                           height={40}
                         />
                       ) : null}
-                      <span className={styles.itemName}>{product.nameI18n.es}</span>
+                      {/* Identidad del producto en su propia columna: así el nombre arranca
+                          siempre a la misma altura, tenga foto o no. */}
+                      <div className={styles.itemIdent}>
+                        <span className={styles.itemName}>{product.nameI18n.es}</span>
+                        {product.isAvailable ? null : (
+                          <span className={`${styles.badge} ${styles.badgeHidden}`}>Oculto</span>
+                        )}
+                        {/* La ruta completa es lo que distingue dos productos con el MISMO
+                            nombre al buscar (las muchas "COPA" de bodegas distintas). */}
+                        <span className={styles.itemPath}>{categoryPath}</span>
+                      </div>
                       <span className={styles.itemPrice}>
                         {formatCents(Math.round(product.price * 100), locale, currency)}
                       </span>
-                      {product.isAvailable ? null : (
-                        <span className={`${styles.badge} ${styles.badgeHidden}`}>Oculto</span>
-                      )}
-                      {/* La ruta completa es lo que distingue dos productos con el MISMO
-                          nombre al buscar (las muchas "COPA" de bodegas distintas). */}
-                      <span className={styles.itemPath}>{categoryPath}</span>
                     </div>
 
-                    {allergenNames.length > 0 ? (
-                      <p className={styles.count}>Alérgenos: {allergenNames.join(", ")}</p>
+                    <div className={styles.actions}>
+                      <details className={styles.details}>
+                        <summary>Editar producto</summary>
+                        <ProductEditForm
+                          productId={product.id}
+                          name={product.nameI18n.es ?? ""}
+                          description={product.descriptionI18n?.es ?? ""}
+                          price={product.price}
+                          allergenIds={product.allergenIds}
+                          allergens={allergenOptions}
+                          imagePath={product.imageUrl}
+                          imageUrl={product.imageUrl ? catalogImageUrl(product.imageUrl) : null}
+                          taxRate={product.taxRate}
+                        />
+                      </details>
+
+                      <details className={styles.details}>
+                        <summary>Grupos de opciones</summary>
+                        <OptionGroupsForm productId={product.id} groups={product.optionGroups} />
+                      </details>
+
+                      <details className={styles.details}>
+                        <summary>Mover producto</summary>
+                        <MoveProductForm
+                          productId={product.id}
+                          currentCategoryId={categoryId}
+                          sortOrder={product.sortOrder}
+                          options={moveOptions}
+                        />
+                      </details>
+
+                      {/* Ocultar y Borrar se separan del resto: no abren un formulario, hacen
+                          algo. Y Borrar va el último, lo más lejos posible del que se pulsa
+                          cien veces al día. */}
+                      <form className={styles.toggleForm} action={setProductAvailabilityAction}>
+                        <input type="hidden" name="product_id" value={product.id} />
+                        <input
+                          type="hidden"
+                          name="is_available"
+                          value={product.isAvailable ? "false" : "true"}
+                        />
+                        <button type="submit">{product.isAvailable ? "Ocultar" : "Mostrar"}</button>
+                      </form>
+                      <ConfirmDeleteForm
+                        action={deleteProductAction}
+                        hiddenName="product_id"
+                        hiddenValue={product.id}
+                        confirmMessage={`Borrar el producto "${product.nameI18n.es}" borra TAMBIÉN sus extras. Esta acción no se puede deshacer. ¿Continuar?`}
+                        label="Borrar producto"
+                      />
+                    </div>
+
+                    {allergenNames.length > 0 || product.extras.length > 0 ? (
+                      <div className={styles.itemMeta}>
+                        {allergenNames.length > 0 ? (
+                          <p className={styles.metaLine}>
+                            <span className={styles.metaLabel}>Alérgenos</span>
+                            {allergenNames.join(", ")}
+                          </p>
+                        ) : null}
+                        {product.extras.length > 0 ? (
+                          <ul className={styles.extras}>
+                            {product.extras.map((extra) => (
+                              <li key={extra.id} className={styles.extra}>
+                                <span>
+                                  {extra.nameI18n.es} +
+                                  {formatCents(Math.round(extra.price * 100), locale, currency)}
+                                </span>
+                                <ConfirmDeleteForm
+                                  action={deleteExtraAction}
+                                  hiddenName="extra_id"
+                                  hiddenValue={extra.id}
+                                  confirmMessage={`Borrar el extra "${extra.nameI18n.es}". ¿Continuar?`}
+                                  label="Borrar extra"
+                                />
+                              </li>
+                            ))}
+                          </ul>
+                        ) : null}
+                      </div>
                     ) : null}
-
-                    <details className={styles.details}>
-                      <summary>Editar producto</summary>
-                      <ProductEditForm
-                        productId={product.id}
-                        name={product.nameI18n.es ?? ""}
-                        description={product.descriptionI18n?.es ?? ""}
-                        price={product.price}
-                        allergenIds={product.allergenIds}
-                        allergens={allergenOptions}
-                        imagePath={product.imageUrl}
-                        imageUrl={product.imageUrl ? catalogImageUrl(product.imageUrl) : null}
-                        taxRate={product.taxRate}
-                      />
-                    </details>
-
-                    <details className={styles.details}>
-                      <summary>Grupos de opciones</summary>
-                      <OptionGroupsForm productId={product.id} groups={product.optionGroups} />
-                    </details>
-
-                    <details className={styles.details}>
-                      <summary>Mover producto</summary>
-                      <MoveProductForm
-                        productId={product.id}
-                        currentCategoryId={categoryId}
-                        sortOrder={product.sortOrder}
-                        options={moveOptions}
-                      />
-                    </details>
-
-                    {product.extras.length > 0 ? (
-                      <ul>
-                        {product.extras.map((extra) => (
-                          <li key={extra.id}>
-                            {extra.nameI18n.es} (+
-                            {formatCents(Math.round(extra.price * 100), locale, currency)})
-                            <ConfirmDeleteForm
-                              action={deleteExtraAction}
-                              hiddenName="extra_id"
-                              hiddenValue={extra.id}
-                              confirmMessage={`Borrar el extra "${extra.nameI18n.es}". ¿Continuar?`}
-                              label="Borrar extra"
-                            />
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
-
-                    <form action={setProductAvailabilityAction}>
-                      <input type="hidden" name="product_id" value={product.id} />
-                      <input
-                        type="hidden"
-                        name="is_available"
-                        value={product.isAvailable ? "false" : "true"}
-                      />
-                      <button type="submit">{product.isAvailable ? "Ocultar" : "Mostrar"}</button>
-                    </form>
-                    <ConfirmDeleteForm
-                      action={deleteProductAction}
-                      hiddenName="product_id"
-                      hiddenValue={product.id}
-                      confirmMessage={`Borrar el producto "${product.nameI18n.es}" borra TAMBIÉN sus extras. Esta acción no se puede deshacer. ¿Continuar?`}
-                      label="Borrar producto"
-                    />
                   </li>
                 );
               })}
