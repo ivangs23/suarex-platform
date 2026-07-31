@@ -27,7 +27,15 @@ const bakedEnv = {
 export default defineConfig({
   main: {
     plugins: [
-      externalizeDepsPlugin({ exclude: ["@suarex/agent", "@suarex/printing", "@suarex/db"] }),
+      /* Los paquetes del workspace se publican como TypeScript sin compilar (`main` apunta a
+         `src/index.ts`), así que TIENEN que entrar en el bundle: dejarlos fuera hace que Electron
+         intente cargar un `.ts` en tiempo de ejecución y la app muera al arrancar con
+         ERR_UNKNOWN_FILE_EXTENSION. Cada paquete nuevo que use el proceso principal hay que
+         añadirlo aquí -- y no lo atrapa ningún test, porque las suites corren con vitest y no por
+         este build. */
+      externalizeDepsPlugin({
+        exclude: ["@suarex/agent", "@suarex/printing", "@suarex/db", "@suarex/payments"],
+      }),
     ],
     define: bakedEnv,
     build: { rollupOptions: { external: ["koffi"] } },
