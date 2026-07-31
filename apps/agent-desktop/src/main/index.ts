@@ -36,7 +36,7 @@ import { openKioskWindow, registerTotemIpc } from "./totem-window.js";
 import { TRAY_ICON_DATA_URL } from "./tray-icon.js";
 import { startAutoUpdate } from "./updater.js";
 import { ensureWatchdogTask } from "./watchdog.js";
-import { destroyWebPanel, layoutWebPanel } from "./web-panel.js";
+import { destroyWebPanel, layoutWebPanel, setWebPanelReporter } from "./web-panel.js";
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -155,6 +155,9 @@ if (!gotLock) {
     const logSink = realLogSink();
     logger = createLogger(logSink, () => new Date().toISOString());
     logger.info(`Arranque. Versión ${app.getVersion()}, plataforma ${process.platform}.`);
+    // Los fallos del panel incrustado (página que no carga, JavaScript que revienta) van al
+    // MISMO registro. Sin esto, lo único observable desde fuera era un recuadro en blanco.
+    setWebPanelReporter((mensaje) => logger?.error(mensaje));
 
     // El diario de cobros, junto a los datos de la app: es lo que sobrevive a un tirón del
     // enchufe a mitad de un pago. Se crea aquí para que exista ANTES de que se pueda cobrar.

@@ -11,6 +11,10 @@ const ROOT_DOMAINS = resolveRootDomains(process.env);
 
 const TENANT_ID_HEADER = "x-suarex-tenant-id";
 const TENANT_SLUG_HEADER = "x-suarex-tenant-slug";
+/** Ruta pedida. Un componente de servidor no puede saberla de otra forma, y `requireManager`
+ * la necesita para que el login devuelva a donde se iba. Se fija SIEMPRE aquí, así que lo que
+ * mande el cliente con este nombre nunca sobrevive. */
+const PATH_HEADER = "x-suarex-path";
 
 // `NextResponse.rewrite`/`.next` only strip a client's own request headers when
 // `request: { headers }` is passed: that's what makes Next set
@@ -23,6 +27,7 @@ function stripForgedTenantHeaders(request: NextRequest): Headers {
   const stripped = new Headers(request.headers);
   stripped.delete(TENANT_ID_HEADER);
   stripped.delete(TENANT_SLUG_HEADER);
+  stripped.delete(PATH_HEADER);
   return stripped;
 }
 
@@ -124,6 +129,7 @@ export async function proxy(request: NextRequest) {
   const headers = new Headers(request.headers);
   headers.set(TENANT_ID_HEADER, tenant.id);
   headers.set(TENANT_SLUG_HEADER, tenant.slug);
+  headers.set(PATH_HEADER, request.nextUrl.pathname);
 
   const response = NextResponse.next({ request: { headers } });
 

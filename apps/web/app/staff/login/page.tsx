@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
 import { useState } from "react";
 import styles from "../staff.module.css";
+import { mensajeDeErrorDeLogin } from "./login-error";
+import { destinoTrasLogin } from "./next-path";
 
 // Construido una sola vez por montaje del módulo: NEXT_PUBLIC_* se inlinea en
 // build time, así que estos valores están disponibles en el navegador sin
@@ -29,11 +31,14 @@ export default function StaffLoginPage() {
 
     setSubmitting(false);
     if (signInError) {
-      setError("Email o contraseña incorrectos");
+      setError(mensajeDeErrorDeLogin(signInError));
       return;
     }
 
-    router.push("/staff");
+    // A donde se iba antes de toparse con el login. Se lee de `window` y no con
+    // `useSearchParams` para no arrastrar la frontera de Suspense que ese hook obliga a poner:
+    // aquí solo hace falta en el momento de enviar, no durante el render.
+    router.push(destinoTrasLogin(new URLSearchParams(window.location.search).get("next")));
   }
 
   return (

@@ -47,6 +47,9 @@ importers:
       sharp:
         specifier: ^0.34.5
         version: 0.34.5
+      stripe:
+        specifier: ^22.3.2
+        version: 22.3.2(@types/node@26.1.1)
       turbo:
         specifier: ^2.5.0
         version: 2.10.5
@@ -6139,6 +6142,10 @@ snapshots:
   stripe@22.3.2(@types/node@25.9.5):
     optionalDependencies:
       '@types/node': 25.9.5
+
+  stripe@22.3.2(@types/node@26.1.1):
+    optionalDependencies:
+      '@types/node': 26.1.1
 
   styled-jsx@5.1.6(react@19.2.7):
     dependencies:
