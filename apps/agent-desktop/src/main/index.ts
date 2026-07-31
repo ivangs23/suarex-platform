@@ -22,9 +22,10 @@ import {
   startAgent,
   stopAgent,
 } from "./agent-runner.js";
-import { PLATFORM_WEB_ORIGIN } from "./baked-config.js";
+import { PLATFORM_WEB_ORIGIN, SUPABASE_ANON_KEY, SUPABASE_URL } from "./baked-config.js";
 import { type ChargeJournal, createChargeJournal } from "./charge-journal.js";
 import { runChargeRecovery } from "./charge-recovery-runner.js";
+import { faltaEnConfigHorneada, mensajeDeConfigIncompleta } from "./config-check.js";
 import { loadCredentials, saveCredentials } from "./config-store.js";
 import { registerIpc } from "./ipc.js";
 import { createLogger, type Logger } from "./logger.js";
@@ -49,6 +50,14 @@ let logger: Logger | null = null;
 // El diario de cobros vive junto a los datos de la app y se crea en `whenReady`, igual que el
 // logger: hasta entonces `app.getPath("userData")` no está disponible.
 let chargeJournal: ChargeJournal | null = null;
+
+/** Qué le falta a ESTE ejecutable, calculado una vez al cargar. La ventana lo pregunta por IPC
+ * para poder decirlo en pantalla en vez de dejar que cada parte falle por su lado. */
+const CONFIG_FALTANTE = faltaEnConfigHorneada({
+  SUPABASE_URL,
+  SUPABASE_ANON_KEY,
+  PLATFORM_WEB_ORIGIN,
+});
 function reportMain(msg: string, err?: unknown): void {
   if (logger) logger.error(msg, err);
   else console.error(msg, err);
@@ -158,6 +167,15 @@ if (!gotLock) {
     // Los fallos del panel incrustado (página que no carga, JavaScript que revienta) van al
     // MISMO registro. Sin esto, lo único observable desde fuera era un recuadro en blanco.
     setWebPanelReporter((mensaje) => logger?.error(mensaje));
+
+    /* Un ejecutable incompleto se dice en la PRIMERA línea del registro, antes de intentar nada.
+       Si no, lo único que queda escrito es el fallo derivado ("no hay sesión guardada") y quien
+       lo lea buscará donde no es. No se aborta: la ventana tiene que abrirse para poder explicarlo
+       -- salir en silencio sería otra vez un fallo sin rastro, y encima el watchdog reintentaría
+       en bucle algo que ningún reintento arregla. */
+    if (CONFIG_FALTANTE.length > 0) {
+      logger.error(mensajeDeConfigIncompleta(CONFIG_FALTANTE));
+    }
 
     // El diario de cobros, junto a los datos de la app: es lo que sobrevive a un tirón del
     // enchufe a mitad de un pago. Se crea aquí para que exista ANTES de que se pueda cobrar.
