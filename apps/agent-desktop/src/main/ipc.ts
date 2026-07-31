@@ -165,6 +165,27 @@ export function registerIpc(
   // Exportar diagnóstico: la app corre oculta en bandeja, así que su registro vive en un
   // fichero al que el owner no llega solo. Esto lo vuelca -- metadatos, estado de impresión y el
   // log -- a un fichero de texto que elige, para poder enviárnoslo cuando algo va mal.
+  /**
+   * Las últimas líneas del registro de ESTE equipo.
+   *
+   * Se lee del disco y no de un buffer en memoria a propósito: lo que se busca aquí es por qué
+   * algo falló, y muchas veces falló antes de este arranque -- un buffer se habría vaciado justo
+   * con lo que hace falta. Se devuelven las últimas y del revés: lo recién ocurrido es lo que se
+   * viene a mirar, y hacer bajar mil líneas para llegar a ello es lo mismo que no enseñarlo.
+   */
+  ipcMain.handle("read-log", async (_e, maxLines = 300): Promise<string[]> => {
+    const { readFile } = await import("node:fs/promises");
+    const { join } = await import("node:path");
+    const path = join(app.getPath("userData"), "logs", "agent.log");
+    try {
+      const raw = await readFile(path, "utf8");
+      return raw.split(/\r?\n/).filter(Boolean).slice(-maxLines).reverse();
+    } catch {
+      // Sin fichero todavía (equipo recién instalado) no es un error: es que no ha pasado nada.
+      return [];
+    }
+  });
+
   ipcMain.handle("export-diagnostics", async (): Promise<ExportDiagnosticsResult> => {
     const creds = loadCredentials(realConfigBackend());
     const contenido = formatDiagnostics(

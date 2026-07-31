@@ -25,6 +25,7 @@ type AgentApi = {
   exportDiagnostics(): Promise<ExportDiagnosticsResult>;
   probeNetworkPrinters(): Promise<ProbeNetworkPrintersResult>;
   showSection(section: string): Promise<ShowWebPanelResult>;
+  readLog(maxLines?: number): Promise<string[]>;
   onActivity(cb: (activity: AgentActivity) => void): () => void;
 };
 
@@ -162,7 +163,23 @@ async function refreshPrinters(): Promise<void> {
 // permisos que en el navegador, y la sesión es de la PERSONA que entra, no del dispositivo
 // -- que solo puede imprimir. Config e Impresoras son locales.
 const { irA } = setupNavigation(document, agent ? (s) => agent.showSection(s) : undefined);
-void irA("config");
+// Se arranca en el MENÚ, no en una sección: quien abre la app no siempre viene a lo mismo, y
+// aterrizar en Configuración hacía que pareciera lo principal cuando es lo que menos se toca.
+void irA("menu");
+
+/* El registro se lee al entrar y con el botón, no en bucle: se viene aquí a mirar algo concreto
+   que ya ha pasado, y un refresco automático moviendo las líneas bajo el cursor estorba más que
+   ayuda mientras se busca. */
+async function pintaRegistro(): Promise<void> {
+  const destino = $("logs-content");
+  if (!agent) return;
+  const lineas = await agent.readLog();
+  destino.textContent = lineas.length > 0 ? lineas.join("\n") : "Todavía no hay nada registrado.";
+}
+$("logs-refresh")?.addEventListener("click", () => void pintaRegistro());
+document
+  .querySelector<HTMLButtonElement>('.nav-item[data-section="logs"]')
+  ?.addEventListener("click", () => void pintaRegistro());
 
 if (!agent) {
   renderSinPuente();
