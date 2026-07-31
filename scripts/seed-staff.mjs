@@ -103,7 +103,18 @@ async function seedUser({ tenantId, slug, role, emailPrefix, password }) {
     }
     userId = user.user.id;
   } else {
-    console.log(`Usuario ${email} ya existía, se reutiliza.`);
+    /* Se REESCRIBE la contraseña, no solo se reutiliza la cuenta.
+       `.env.test` se regenera con `pnpm db:env`, y con contraseñas nuevas: una cuenta creada en
+       una generación anterior seguía viva con la contraseña vieja, así que sembrar decía "ok" y
+       el panel rechazaba el acceso con las credenciales que el propio fichero anuncia. El síntoma
+       -- "email o contraseña incorrectos" con la contraseña correcta delante -- no apunta a
+       ninguna parte, y se pierde un rato largo buscándolo. Sembrar es dejar el entorno como dice
+       el fichero, también cuando ya existía. */
+    const { error: passwordError } = await admin.auth.admin.updateUserById(userId, { password });
+    if (passwordError) {
+      throw new Error(`No se pudo actualizar la contraseña de ${email}: ${passwordError.message}`);
+    }
+    console.log(`Usuario ${email} ya existía: contraseña puesta al día.`);
   }
 
   const { data: existingMembership } = await admin
