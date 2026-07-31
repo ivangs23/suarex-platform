@@ -75,6 +75,27 @@ export function isSameOrigin(url: string, origin: string): boolean {
   }
 }
 
+/**
+ * Cuándo merece la pena registrar un fallo de carga.
+ *
+ * Chromium reporta `ERR_ABORTED` (-3) en cada navegación que se cancela sola: una redirección,
+ * un `router.push`, o cerrar la vista a media carga. Son el caso NORMAL, y registrarlos llenaría
+ * el registro de líneas rojas que no significan nada -- que es la forma más rápida de que nadie
+ * vuelva a mirarlo. `0` es "sin error".
+ *
+ * Pura y exportada porque es la única decisión con criterio de todo el reenvío de sucesos.
+ */
+export function esFalloDeCargaRelevante(errorCode: number): boolean {
+  return errorCode !== 0 && errorCode !== -3;
+}
+
+/** A dónde van los sucesos del panel. Lo inyecta `index.ts` con el logger a fichero. */
+export type PanelReporter = (mensaje: string) => void;
+let reportar: PanelReporter = () => {};
+export function setWebPanelReporter(fn: PanelReporter): void {
+  reportar = fn;
+}
+
 let view: WebContentsView | null = null;
 let currentSection: WebSection | null = null;
 
@@ -105,6 +126,27 @@ function ensureView(window: BrowserWindow): WebContentsView {
     if (isSameOrigin(url, PLATFORM_WEB_ORIGIN)) return;
     event.preventDefault();
     shell.openExternal(url);
+  });
+
+  /* Lo que pase aquí dentro va al registro de la máquina.
+   *
+   * Sin esto el panel es una caja negra: si la página no carga o su JavaScript revienta, lo
+   * único que ve el usuario es un recuadro en blanco o un error genérico, y desde fuera no hay
+   * NADA que mirar. Este es justo el equipo que está a 300 km, así que el rastro tiene que
+   * quedar en su disco, que es lo que luego se exporta con "Exportar diagnóstico". */
+  view.webContents.on("did-fail-load", (_e, errorCode, errorDescription, url) => {
+    if (!esFalloDeCargaRelevante(errorCode)) return;
+    reportar(`Panel: no se pudo cargar ${url} (${errorDescription}, ${errorCode})`);
+  });
+
+  view.webContents.on("console-message", (_e, level, message, line, sourceId) => {
+    // Solo errores (nivel 3). El resto es ruido de desarrollo del propio Next.
+    if (level !== 3) return;
+    reportar(`Panel: error en la página — ${message} (${sourceId}:${line})`);
+  });
+
+  view.webContents.on("render-process-gone", (_e, details) => {
+    reportar(`Panel: la vista se cayó (${details.reason}).`);
   });
 
   window.contentView.addChildView(view);

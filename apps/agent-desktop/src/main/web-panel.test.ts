@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isSameOrigin } from "./web-panel.js";
+import { esFalloDeCargaRelevante, isSameOrigin } from "./web-panel.js";
 
 /**
  * `isSameOrigin` es la guarda que impide que el panel incrustado se convierta en un
@@ -54,5 +54,28 @@ describe("isSameOrigin", () => {
     // desde luego no a cualquiera.
     expect(isSameOrigin(`${ORIGEN}/admin`, "")).toBe(false);
     expect(isSameOrigin("https://lo-que-sea.com", "")).toBe(false);
+  });
+});
+
+/**
+ * El registro de esta máquina es lo ÚNICO que se puede mirar cuando el panel falla en un equipo
+ * a 300 km. Vale lo que valga su señal/ruido: si se llena de líneas rojas que no significan
+ * nada, deja de mirarse, y entonces da igual lo que registre.
+ */
+describe("esFalloDeCargaRelevante", () => {
+  it("ignora ERR_ABORTED: es el caso normal, no un fallo", () => {
+    // Chromium lo emite en cada redirección y en cada `router.push`. Registrarlo pintaría de
+    // rojo el funcionamiento correcto -- p. ej. cada vez que /admin manda al login.
+    expect(esFalloDeCargaRelevante(-3)).toBe(false);
+  });
+
+  it("ignora el 0, que es 'sin error'", () => {
+    expect(esFalloDeCargaRelevante(0)).toBe(false);
+  });
+
+  it("registra lo que sí deja al usuario sin panel", () => {
+    expect(esFalloDeCargaRelevante(-105)).toBe(true); // ERR_NAME_NOT_RESOLVED
+    expect(esFalloDeCargaRelevante(-102)).toBe(true); // ERR_CONNECTION_REFUSED
+    expect(esFalloDeCargaRelevante(-7)).toBe(true); // ERR_TIMED_OUT
   });
 });

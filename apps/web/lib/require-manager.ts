@@ -1,3 +1,4 @@
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { resolveStaffSession } from "./staff-session";
 import { staffServerClient } from "./supabase-server";
@@ -30,13 +31,22 @@ export function isManagerRole(role: string): role is ManagerRole {
  * se ejecuta. Las dos barreras son independientes, cada una para su propia
  * amenaza; ninguna es backstop de la otra.
  */
+/** La ruta que se está sirviendo, que el proxy deja en una cabecera. Sin ella no hay a dónde
+ * volver, y entonces el login manda a su destino por defecto: mejor eso que adivinar. */
+async function rutaActual(): Promise<string> {
+  return (await headers()).get("x-suarex-path") ?? "/staff";
+}
+
 export async function requireManager(): Promise<ManagerSession> {
   const tenant = await requireTenant();
   const client = await staffServerClient();
   const session = await resolveStaffSession(client, { id: tenant.id, slug: tenant.slug });
 
   if (!session || !isManagerRole(session.role)) {
-    redirect("/staff/login");
+    // Con `next` para volver a donde se iba. Sigue siendo el MISMO destino para los tres casos
+    // (sin sesión, otro tenant, personal sin permisos de gestión): `next` es la ruta que la
+    // persona acaba de pedir, así que no revela nada que no supiera ya.
+    redirect(`/staff/login?next=${encodeURIComponent(await rutaActual())}`);
   }
 
   return { userId: session.userId, tenantId: session.tenantId, role: session.role };
