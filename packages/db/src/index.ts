@@ -117,7 +117,12 @@ export { reservePrinted, selectUnprintedOrders, unprintedPaidOrders } from "./pr
 export { destinationsMissingPrinter, usbPrintersWithoutDevice } from "./printer-coverage.js";
 export { checkOrderRateLimit, checkRateLimit } from "./rate-limit.js";
 export type { StaffOrder, StaffOrderItem, StationStatus } from "./staff-orders.js";
-export { listActiveOrders, markStationDone, reprintOrder } from "./staff-orders.js";
+export {
+  listActiveOrders,
+  markStationDone,
+  paidOrdersBetween,
+  reprintOrder,
+} from "./staff-orders.js";
 export { removeProductImage, uploadBrandingImage, uploadProductImage } from "./storage.js";
 export { findTableByToken } from "./tables.js";
 export type { UpdateTenantSettingsInput } from "./tenants.js";

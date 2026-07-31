@@ -5,6 +5,12 @@ import {
   type SettingsSnapshot,
   snapshotDemoSettings,
 } from "./helpers/admin-d3-db.js";
+import {
+  deleteOrder,
+  findOrderByPublicToken,
+  firstProductIdOfTenant,
+  markOrderPaidForTest,
+} from "./helpers/orders-db.js";
 import { withChannels } from "./helpers/totem-db.js";
 
 const STAFF_PASSWORD = process.env.STAFF_SEED_PASSWORD;
@@ -152,5 +158,54 @@ test("un cliente sin totem no ve los pasos del datáfono", async ({ page }) => {
     await expect(items.filter({ hasText: "Carta" }).first()).toHaveCount(1);
   } finally {
     await restaurar();
+  }
+});
+
+test("el cierre de caja resume lo cobrado hoy y cuadra", async ({ page }) => {
+  /* Esto se pasa a la gestoría, así que lo que importa es que los números cuadren: el desglose
+     de IVA tiene que sumar exactamente el total cobrado. Se crea un pedido real y se marca
+     pagado, como haría el webhook. */
+  const productId = await firstProductIdOfTenant("garum", "barra");
+  await page.goto("http://garum.localhost:3000/m/11111111-1111-1111-1111-111111111111");
+  const response = await page.request.post("http://garum.localhost:3000/api/orders", {
+    data: { lines: [{ productId, quantity: 2, extraIds: [], notes: null }] },
+  });
+  expect(response.ok()).toBeTruthy();
+  const { publicToken } = (await response.json()) as { publicToken: string };
+  const { orderId } = await findOrderByPublicToken(publicToken);
+
+  try {
+    await markOrderPaidForTest(orderId);
+
+    await login(page, "owner@garum.local", OWNER_PASSWORD as string);
+    await page.goto("http://garum.localhost:3000/admin/cierre");
+    await expect(page.locator("h1")).toHaveText("Cierre de caja");
+
+    // El pedido recién pagado consta.
+    await expect(page.getByTestId("cierre-vacio")).toHaveCount(0);
+    await expect(
+      page.getByTestId("cierre-canal").filter({ hasText: "Carta por QR" }),
+    ).toBeVisible();
+
+    // Y el desglose de IVA suma lo cobrado, al céntimo.
+    const total = await page.getByTestId("cierre-total-importe").innerText();
+    const filas = await page.getByTestId("cierre-tipo-iva").all();
+    const aCentimos = (texto: string) =>
+      Math.round(
+        Number(
+          texto
+            .replace(/[^\d,.-]/g, "")
+            .replace(".", "")
+            .replace(",", "."),
+        ) * 100,
+      );
+    let suma = 0;
+    for (const fila of filas) {
+      const celdas = await fila.locator("td").allInnerTexts();
+      suma += aCentimos(celdas[3] ?? "0");
+    }
+    expect(suma).toBe(aCentimos(total));
+  } finally {
+    await deleteOrder(orderId);
   }
 });

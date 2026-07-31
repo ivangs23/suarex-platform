@@ -155,3 +155,43 @@ export async function reprintOrder(tenantId: string, orderId: string): Promise<b
   if (error) throw error;
   return (data?.length ?? 0) > 0;
 }
+
+/**
+ * Los pedidos COBRADOS de un día, con lo justo para cuadrar la caja.
+ *
+ * El corte va por `paid_at` y no por `created_at`: lo que se contabiliza es cuándo entró el
+ * dinero, no cuándo alguien abrió la carta. Un pedido creado a las 23:55 y pagado a las 00:05
+ * cuenta en el día siguiente, que es donde lo va a buscar quien cuadre la caja.
+ *
+ * `from`/`to` llegan ya resueltos como instantes por quien llama, porque el día de un negocio
+ * depende de su zona horaria y este paquete no la conoce.
+ */
+export async function paidOrdersBetween(
+  tenantId: string,
+  from: string,
+  to: string,
+): Promise<
+  { channel: string; totalCents: number; lines: { lineCents: number; taxRate: number }[] }[]
+> {
+  const { data, error } = await tenantScoped("orders", tenantId)
+    .select("channel, total, order_items(line_total, tax_rate)")
+    .not("paid_at", "is", null)
+    .gte("paid_at", from)
+    .lt("paid_at", to);
+  if (error) throw error;
+
+  type Fila = {
+    channel: string | null;
+    total: string | number;
+    order_items: { line_total: string | number; tax_rate: string | number }[] | null;
+  };
+
+  return (data as unknown as Fila[]).map((row) => ({
+    channel: row.channel ?? "qr-mesa",
+    totalCents: Math.round(Number(row.total) * 100),
+    lines: (row.order_items ?? []).map((item) => ({
+      lineCents: Math.round(Number(item.line_total) * 100),
+      taxRate: Number(item.tax_rate),
+    })),
+  }));
+}

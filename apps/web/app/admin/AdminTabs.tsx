@@ -11,6 +11,7 @@ const TABS = [
   { href: "/admin/impresoras", label: "Impresoras" },
   { href: "/admin/pagos", label: "Pagos" },
   { href: "/admin/ajustes", label: "Ajustes" },
+  { href: "/admin/cierre", label: "Cierre de caja" },
   { href: "/admin/personal", label: "Personal" },
   // Al final del todo a propósito: se mira cuando ya se ha configurado, no antes.
   { href: "/admin/instalacion", label: "Puesta en marcha" },
