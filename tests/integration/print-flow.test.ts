@@ -1,3 +1,4 @@
+import { toTicketOrder } from "@suarex/agent";
 import { createPendingOrder, reservePrinted, unprintedPaidOrders } from "@suarex/db";
 import { type PrinterConfig, printToPrinter } from "@suarex/printing";
 import { buildTicketLines, type TicketBranding, type TicketOrder } from "@suarex/ticket";
@@ -191,17 +192,11 @@ async function runPrintFlowOnce(
   const pendingOrders = await unprintedPaidOrders(tenantId);
 
   for (const order of pendingOrders) {
-    const ticketOrder: TicketOrder = {
-      orderNumber: order.orderNumber,
-      tableLabel: order.tableLabel,
-      createdAt: order.createdAt,
-      items: order.items.map((item) => ({
-        name: item.name,
-        quantity: item.quantity,
-        destination: item.destination,
-        extras: [],
-      })),
-    };
+    /* La MISMA función que usa el agente, no una copia. Antes esto reimplementaba el mapeo, con
+       el mismo `extras: []` que tenía producción -- así que el test estaba de acuerdo con el
+       fallo y no podía verlo. Un test que copia lo que prueba solo comprueba que sabes
+       copiar. */
+    const ticketOrder: TicketOrder = toTicketOrder(order);
     const neededDestinations = new Set(order.items.map((item) => item.destination));
 
     for (const printer of printers) {

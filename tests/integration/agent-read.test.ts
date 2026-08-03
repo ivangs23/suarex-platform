@@ -109,7 +109,9 @@ describe("selectUnprintedOrders (pura)", () => {
 });
 
 // --- helpers de siembra (un venue con un pedido pagado de cocina, sin imprimir) ---
-async function seedPaidKitchenOrder(tenant: TenantFixture): Promise<string> {
+async function seedPaidKitchenOrder(
+  tenant: TenantFixture,
+): Promise<{ orderId: string; tableLabel: string }> {
   // is_default: false -- este helper puede llamarse más de una vez para el mismo tenant
   // (los dos `it` de más abajo siembran ambos en tenantA) y `venues` tiene un índice único
   // parcial `(tenant_id) where is_default` (20260721000001_core_tenancy.sql); un segundo
@@ -144,7 +146,7 @@ async function seedPaidKitchenOrder(tenant: TenantFixture): Promise<string> {
   const { data: table } = await admin
     .from("tables")
     .insert({ tenant_id: tenant.tenantId, venue_id: venueId, label: `mesa-${nonce()}` })
-    .select("id")
+    .select("id, label")
     .single();
   await admin.from("printers").insert({
     tenant_id: tenant.tenantId,
@@ -166,7 +168,7 @@ async function seedPaidKitchenOrder(tenant: TenantFixture): Promise<string> {
     .from("orders")
     .update({ status: "paid", paid_at: new Date().toISOString() })
     .eq("id", order.orderId);
-  return order.orderId;
+  return { orderId: order.orderId, tableLabel: table?.label as string };
 }
 
 let tenantA: TenantFixture;
@@ -185,7 +187,7 @@ afterAll(async () => {
 
 describe("unprintedPaidOrdersForDevice (JWT del device)", () => {
   it("un device del tenant A ve, con SU JWT, exactamente lo que ve la ruta service-role de A", async () => {
-    const orderId = await seedPaidKitchenOrder(tenantA);
+    const { orderId } = await seedPaidKitchenOrder(tenantA);
     // Sesión de dispositivo del tenant A (rol device, JWT con tenant_role=device).
     const deviceClient = await signInAs(tenantA.tenantId, "device");
     deviceUserIds.push(deviceClient.userId);
@@ -197,10 +199,28 @@ describe("unprintedPaidOrdersForDevice (JWT del device)", () => {
   });
 
   it("un device del tenant B NO ve los pedidos de A (aislamiento por RLS)", async () => {
-    const orderId = await seedPaidKitchenOrder(tenantA);
+    const { orderId } = await seedPaidKitchenOrder(tenantA);
     const deviceB = await signInAs(tenantB.tenantId, "device");
     deviceUserIds.push(deviceB.userId);
     const viaDeviceB = await unprintedPaidOrdersForDevice(deviceB);
     expect(viaDeviceB.some((o) => o.id === orderId)).toBe(false);
+  });
+
+  it("el pedido que ve el DEVICE lleva la etiqueta de la mesa", async () => {
+    /* La regresión que costó una comanda mal impresa. La política de `tables` excluye al rol
+       `device` a propósito -- un PC de mostrador robado no debe entregar los tokens de los QR --
+       así que al imprimir, `tables(label)` volvía nulo y TODA comanda de mesa salía como
+       "PARA LLEVAR". Se descubrió pagando un pedido de verdad y leyendo los bytes del cable.
+
+       Los tests que había comparaban device contra service-role por ID, y por ID coincidían: el
+       pedido estaba, solo le faltaba el dato. Por eso esto afirma sobre la ETIQUETA, y desde el
+       cliente del DEVICE, que es quien imprime. */
+    const { orderId, tableLabel } = await seedPaidKitchenOrder(tenantA);
+    const deviceClient = await signInAs(tenantA.tenantId, "device");
+    deviceUserIds.push(deviceClient.userId);
+
+    const desdeDevice = await unprintedPaidOrdersForDevice(deviceClient);
+    const pedido = desdeDevice.find((o) => o.id === orderId);
+    expect(pedido?.tableLabel).toBe(tableLabel);
   });
 });
