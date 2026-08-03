@@ -38,6 +38,8 @@ function base(over: Partial<SetupFacts> = {}): SetupFacts {
       },
     ],
     payment: { configured: false, missing: [], mock: true },
+    fiscalTaxRate: 0.1,
+    stripe: { publishableKey: true, secretKey: true, entorno: false },
     ...over,
   };
 }
@@ -346,5 +348,78 @@ describe("isSetupComplete", () => {
     expect(isSetupComplete([{ id: "x", label: "X", status: "falta" }])).toBe(false);
     expect(isSetupComplete([{ id: "x", label: "X", status: "aviso" }])).toBe(true);
     expect(isSetupComplete([{ id: "x", label: "X", status: "ok" }])).toBe(true);
+  });
+});
+
+describe("el IVA por defecto del negocio", () => {
+  it("sin configurar es una falta, no un aviso", () => {
+    /* Sin él se asume un 10 % en cada pedido. Para un bar que solo sirve en mesa suele acertar, y
+       por eso es peligroso: nadie lo nota hasta que vende una botella para llevar al 21 % y
+       descubre que lleva meses emitiendo tickets mal. Un tipo impositivo se decide. */
+    const items = buildSetupChecklist(base({ fiscalTaxRate: null }));
+    expect(estado(items, "iva")).toBe("falta");
+    expect(isSetupComplete(items)).toBe(false);
+  });
+
+  it("configurado lo dice en porcentaje, que es como se piensa", () => {
+    const detalle = (t: number | null) =>
+      buildSetupChecklist(base({ fiscalTaxRate: t })).find((i) => i.id === "iva")?.detail;
+    expect(detalle(0.1)).toBe("10 %");
+    expect(detalle(0.21)).toBe("21 %");
+    expect(detalle(0.04)).toBe("4 %");
+    expect(detalle(0)).toBe("0 %");
+  });
+
+  it("un cero es un tipo válido, no 'sin configurar'", () => {
+    // Exento existe. Confundirlo con "no lo ha puesto" obligaría a mentir para quitar el aviso.
+    expect(estado(buildSetupChecklist(base({ fiscalTaxRate: 0 })), "iva")).toBe("ok");
+  });
+
+  it("se le pide igual a un cliente de solo totem", () => {
+    // El IVA no depende del canal: se cobra igual por QR que por datáfono.
+    const items = ids(buildSetupChecklist(base({ channels: ["kiosko"], fiscalTaxRate: null })));
+    expect(items).toContain("iva");
+  });
+});
+
+describe("con qué cuenta de Stripe cobra la carta por QR", () => {
+  const conStripe = (stripe: Partial<SetupFacts["stripe"]>) =>
+    buildSetupChecklist(
+      base({ stripe: { publishableKey: false, secretKey: false, entorno: false, ...stripe } }),
+    );
+
+  it("con sus dos claves, listo", () => {
+    expect(estado(conStripe({ publishableKey: true, secretKey: true }), "stripe")).toBe("ok");
+  });
+
+  it("sin ninguna y sin entorno, no se puede cobrar", () => {
+    const items = conStripe({});
+    expect(estado(items, "stripe")).toBe("falta");
+    expect(isSetupComplete(items)).toBe(false);
+  });
+
+  it("sin las suyas pero con las del entorno: avisa de a quién le llega el dinero", () => {
+    /* Este es el que se escapaba. Se cobra, todo parece ir bien, y el dinero entra en NUESTRA
+       cuenta en vez de en la del cliente. No es un fallo que se vea en pantalla: se descubre
+       cuadrando el banco. Aviso y no falta porque el sistema funciona -- lo que está mal es el
+       destino del dinero, y eso es una decisión, no un bloqueo técnico. */
+    const items = conStripe({ entorno: true });
+    expect(estado(items, "stripe")).toBe("aviso");
+    expect(items.find((i) => i.id === "stripe")?.detail).toContain("no en la suya");
+    expect(isSetupComplete(items)).toBe(true);
+  });
+
+  it("una sola de las dos claves es peor que ninguna", () => {
+    /* La pública y la secreta identifican la MISMA cuenta. Con una sola, el cobro se crea con una
+       cuenta y el formulario se monta con otra: un pago que no se puede confirmar. Ni siquiera cae
+       al entorno -- `pickStripeKeys` lo rechaza -- así que aquí es falta con o sin red. */
+    expect(estado(conStripe({ publishableKey: true, entorno: true }), "stripe")).toBe("falta");
+    expect(estado(conStripe({ secretKey: true, entorno: true }), "stripe")).toBe("falta");
+  });
+
+  it("a un cliente de solo totem no se le menciona Stripe", () => {
+    // Cobra por datáfono. Pedirle claves de una pasarela que no usa es ruido.
+    const items = ids(buildSetupChecklist(base({ channels: ["kiosko"] })));
+    expect(items).not.toContain("stripe");
   });
 });

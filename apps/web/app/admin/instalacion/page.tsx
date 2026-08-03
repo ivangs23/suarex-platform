@@ -1,5 +1,6 @@
 import {
   getPaymentConfigForManager,
+  getStripeConfigForManager,
   getTenantSettings,
   listAdminCatalog,
   listDevices,
@@ -29,18 +30,27 @@ import { buildSetupChecklist, isSetupComplete, type SetupFacts } from "./checkli
 export default async function AdminInstalacionPage() {
   const session = await requireManager();
 
-  const [settings, venues, catalog, tables, devices, printers, payment] = await Promise.all([
-    getTenantSettings(session.tenantId),
-    listVenues(session.tenantId),
-    listAdminCatalog(session.tenantId),
-    listTables(session.tenantId),
-    listDevices(session.tenantId),
-    listPrinters(session.tenantId),
-    getPaymentConfigForManager(session.tenantId),
-  ]);
+  const [settings, venues, catalog, tables, devices, printers, payment, stripe] = await Promise.all(
+    [
+      getTenantSettings(session.tenantId),
+      listVenues(session.tenantId),
+      listAdminCatalog(session.tenantId),
+      listTables(session.tenantId),
+      listDevices(session.tenantId),
+      listPrinters(session.tenantId),
+      getPaymentConfigForManager(session.tenantId),
+      getStripeConfigForManager(session.tenantId),
+    ],
+  );
 
   const ahora = Date.now();
   const provider = payment ? findProvider(payment.provider) : null;
+
+  /* El IVA del negocio se guarda como jsonb, así que puede llegar cualquier cosa. Solo cuenta
+     como configurado si es un número usable; un `"10"` o un `null` valen lo mismo que nada. */
+  const taxRateBruto = (settings?.fiscal as { taxRate?: unknown } | undefined)?.taxRate;
+  const fiscalTaxRate =
+    typeof taxRateBruto === "number" && Number.isFinite(taxRateBruto) ? taxRateBruto : null;
 
   const facts: SetupFacts = {
     channels: settings?.channels ?? [],
@@ -86,6 +96,16 @@ export default async function AdminInstalacionPage() {
             )
           : [],
       mock: payment?.mock ?? true,
+    },
+    fiscalTaxRate,
+    stripe: {
+      publishableKey: Boolean(stripe?.publishableKey),
+      // Por su NOMBRE, nunca por su valor: el secreto no sale de la base ni para esto.
+      secretKey: stripe?.secretsSet.includes("secretKey") ?? false,
+      // La red de seguridad heredada. Se lee en el servidor y solo como sí/no.
+      entorno: Boolean(
+        process.env.STRIPE_SECRET_KEY && process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
+      ),
     },
   };
 

@@ -60,6 +60,18 @@ export type SetupFacts = {
     missing: string[];
     mock: boolean;
   };
+  /** IVA por defecto del negocio (`tenant_settings.fiscal.taxRate`), o `null` si nadie lo puso. */
+  fiscalTaxRate: number | null;
+  /**
+   * Credenciales de Stripe de ESTE cliente, por presencia y nunca por valor: los secretos
+   * guardados no salen de la base, así que aquí solo llega si están o no.
+   */
+  stripe: {
+    publishableKey: boolean;
+    secretKey: boolean;
+    /** Hay claves en el entorno como red de seguridad (camino heredado, en retirada). */
+    entorno: boolean;
+  };
 };
 
 /** Cuánto puede llevar un dispositivo sin dar señales antes de que sea noticia. */
@@ -132,11 +144,91 @@ export function buildSetupChecklist(facts: SetupFacts): CheckItem[] {
     );
   }
 
+  items.push(comprobarIva(facts));
+  if (tieneQr) items.push(comprobarStripe(facts));
+
   items.push(...comprobarDispositivos(facts));
   items.push(...comprobarImpresoras(facts, tieneTotem));
   if (tieneTotem) items.push(...comprobarTotem(facts));
 
   return items;
+}
+
+/**
+ * El IVA por defecto del negocio.
+ *
+ * Sin él, el pedido se crea asumiendo un 10 % (ver `apps/web/app/api/orders/route.ts`). Para un
+ * bar que solo sirve en mesa suele acertar, y por eso es tan peligroso: nadie lo nota. El día que
+ * ese cliente venda una botella para llevar -- 21 % -- el ticket sale mal, el desglose del cierre
+ * sale mal, y lleva meses saliendo mal.
+ *
+ * Va como falta y no como aviso a propósito: un tipo impositivo se decide, no se hereda de un
+ * valor por defecto que nadie eligió.
+ */
+function comprobarIva(facts: SetupFacts): CheckItem {
+  if (facts.fiscalTaxRate === null) {
+    return item(
+      "iva",
+      "IVA por defecto",
+      "falta",
+      "Sin configurar se asume un 10 % en cada pedido, acierte o no. Decídelo antes de la primera venta.",
+      "/admin/ajustes",
+    );
+  }
+  const porcentaje = `${(facts.fiscalTaxRate * 100).toFixed((facts.fiscalTaxRate * 100) % 1 === 0 ? 0 : 1)} %`;
+  return item("iva", "IVA por defecto", "ok", porcentaje, "/admin/ajustes");
+}
+
+/**
+ * Con qué cuenta de Stripe cobra la carta por QR.
+ *
+ * Solo aparece si el canal de QR está encendido: a un cliente que solo tiene totem, que cobra por
+ * datáfono, pedirle claves de Stripe es ruido.
+ *
+ * Las tres respuestas posibles importan por motivos distintos, y la del medio es la que se
+ * escapaba: sin claves propias SÍ se cobra -- con las del entorno -- así que todo parece
+ * funcionar. Lo que pasa es que el dinero entra en NUESTRA cuenta y no en la del cliente. No es un
+ * fallo técnico, es un problema de a quién le llega el dinero, y no se descubre mirando la
+ * pantalla: se descubre cuadrando el banco a fin de mes.
+ *
+ * La etiqueta dice "Cobro por QR" y no "Cobro de la carta por QR" por una razón práctica: los
+ * tests de punta a punta filtran los pasos por su texto, y "carta" chocaría con el paso "Carta".
+ */
+function comprobarStripe(facts: SetupFacts): CheckItem {
+  const { publishableKey, secretKey, entorno } = facts.stripe;
+
+  if (publishableKey && secretKey) {
+    return item("stripe", "Cobro por QR", "ok", "con su propia cuenta", "/admin/pagos");
+  }
+
+  /* Una sola de las dos es el caso PEOR, peor que ninguna: la pública y la secreta identifican la
+     misma cuenta, así que crear el cobro con una y montar el formulario con la otra da un cobro
+     que no se puede confirmar. `pickStripeKeys` lo rechaza por eso mismo, y aquí se dice antes. */
+  if (publishableKey !== secretKey) {
+    return item(
+      "stripe",
+      "Cobro por QR",
+      "falta",
+      `Solo está ${publishableKey ? "la clave pública" : "la clave secreta"}. Con una sola no se cobra: hacen falta las dos, y de la misma cuenta.`,
+      "/admin/pagos",
+    );
+  }
+
+  return entorno
+    ? item(
+        "stripe",
+        "Cobro por QR",
+        "aviso",
+        "Este cliente no tiene su cuenta de Stripe: los cobros entran en la cuenta del entorno, no en la suya.",
+        "/admin/pagos",
+      )
+    : item(
+        "stripe",
+        "Cobro por QR",
+        "falta",
+        "Sin credenciales de Stripe no se puede pagar la carta por QR.",
+        "/admin/pagos",
+      );
 }
 
 function comprobarDispositivos(facts: SetupFacts): CheckItem[] {
