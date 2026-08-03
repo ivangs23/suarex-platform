@@ -53,6 +53,21 @@ export function buildTicketLines(
         text: `${item.quantity}x  ${sanitizeForThermal(item.name)}`,
         align: "left",
       });
+      /* La nota del comensal, en NEGRITA y pegada a su línea.
+       *
+       * El campo se llama "Notas para la cocina" en la carta, se guardaba bien... y no se
+       * imprimía. O sea que quien escribía "sin gluten" o "alergia a los frutos secos" veía que
+       * lo recogían y la cocina no se enteraba nunca. Va antes que las extras porque puede ser
+       * un dato de seguridad, y destacada porque en una comanda de veinte líneas el texto plano
+       * se pasa por alto. */
+      if (item.notes) {
+        lines.push({
+          kind: "text",
+          text: `   >> ${sanitizeForThermal(item.notes)}`,
+          align: "left",
+          bold: true,
+        });
+      }
       for (const extra of item.extras) {
         lines.push({ kind: "text", text: `   + ${sanitizeForThermal(extra)}`, align: "left" });
       }

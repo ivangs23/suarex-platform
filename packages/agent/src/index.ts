@@ -15,4 +15,4 @@ export type {
   NetworkPrinterProbe,
   PrintFailure,
 } from "./run-agent.js";
-export { probeNetworkPrinters, runAgent, runAgentTick } from "./run-agent.js";
+export { probeNetworkPrinters, runAgent, runAgentTick, toTicketOrder } from "./run-agent.js";

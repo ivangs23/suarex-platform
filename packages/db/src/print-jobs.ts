@@ -6,7 +6,8 @@ export type PrintableItem = {
   quantity: number;
   destination: "cocina" | "barra";
   notes: string | null;
-  /** Nombres de las extras de la línea. La comanda hoy no las pinta; el RECIBO sí. */
+  /** Nombres de las extras de la línea. Las pintan la comanda Y el recibo: son algo que hay que
+   *  emplatar y que el cliente ya ha pagado. */
   extras: string[];
   /** Total de la línea en céntimos (unidad × cantidad, extras incluidas). Solo el recibo lo usa. */
   lineCents: number;

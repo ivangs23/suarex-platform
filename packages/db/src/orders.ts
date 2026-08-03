@@ -281,11 +281,40 @@ export async function createPendingOrder(input: {
   if (numberError) throw numberError;
   const orderNumber = numberData as number;
 
+  /**
+   * La etiqueta de la mesa se COPIA en el pedido, no se lee al imprimir.
+   *
+   * No es denormalización por gusto: quien imprime es el agente, que entra con rol `device`, y la
+   * política de `tables` excluye a ese rol a propósito -- un PC de mostrador robado no debe
+   * entregar los tokens de los QR de todas las mesas. Resultado: al imprimir, `tables(label)`
+   * volvía SIEMPRE nulo y toda comanda de mesa salía como "PARA LLEVAR". La cocina no sabía a qué
+   * mesa iba. Se descubrió pagando un pedido de verdad y leyendo lo que salió por el cable.
+   *
+   * De las tres salidas posibles, esta es la única que no empeora nada más: abrir `tables` al
+   * `device` le daría acceso a los tokens (justo lo que la política evita), y una RPC de
+   * SECURITY DEFINER solo para leer una etiqueta añade superficie por un dato que ya se tiene
+   * aquí delante. Copiándola, imprimir necesita MENOS permisos, no más.
+   *
+   * Se resuelve aquí y no en quien llama para que no dependa de acordarse: cualquier canal futuro
+   * que cree un pedido con mesa la lleva escrita sin hacer nada. Y el ticket enseña el nombre que
+   * tenía la mesa CUANDO se pidió, que es lo correcto -- renombrarla mañana no debe reescribir lo
+   * que ya se sirvió.
+   */
+  let tableLabel = input.tableLabel ?? null;
+  if (tableLabel === null && input.tableId) {
+    const { data: tableRow, error: tableError } = await tenantScoped("tables", input.tenantId)
+      .select("label")
+      .eq("id", input.tableId)
+      .maybeSingle();
+    if (tableError) throw tableError;
+    tableLabel = (tableRow?.label as string | undefined) ?? null;
+  }
+
   const { data: order, error: orderError } = await tenantScoped("orders", input.tenantId)
     .insert({
       venue_id: input.venueId,
       table_id: input.tableId ?? null,
-      table_label: input.tableLabel ?? null,
+      table_label: tableLabel,
       order_number: orderNumber,
       channel: input.channel ?? "qr-mesa",
       status: "pending",

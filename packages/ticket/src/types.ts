@@ -14,6 +14,9 @@ export type TicketItem = {
   name: string;
   quantity: number;
   destination: "cocina" | "barra" | null;
+  /** Lo que el comensal escribió para la cocina ("sin gluten", "poco hecho"). Puede ser un dato
+   *  de seguridad, así que la comanda lo imprime destacado -- ver `buildTicketLines`. */
+  notes: string | null;
   extras: string[];
 };
 

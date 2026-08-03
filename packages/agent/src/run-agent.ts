@@ -214,7 +214,18 @@ export async function probeNetworkPrinters(client: SupabaseClient): Promise<Netw
   );
 }
 
-function toTicketOrder(order: PrintableOrder): TicketOrder {
+/**
+ * El pedido como COMANDA de cocina.
+ *
+ * Aquí se perdían dos cosas que el comensal sí había pedido: su nota y sus extras. La nota ni
+ * siquiera viajaba (el tipo no la tenía) y las extras se sustituían por una lista vacía. Se
+ * recogían en la carta, se guardaban en la base, se cobraban -- y la cocina no las veía nunca.
+ *
+ * Las dos importan por el mismo motivo: son lo ÚNICO que distingue este plato del mismo plato de
+ * la mesa de al lado. Una nota puede ser "sin gluten"; una extra es algo que hay que emplatar y
+ * que el cliente ya ha pagado.
+ */
+export function toTicketOrder(order: PrintableOrder): TicketOrder {
   return {
     orderNumber: order.orderNumber,
     tableLabel: order.tableLabel,
@@ -223,7 +234,8 @@ function toTicketOrder(order: PrintableOrder): TicketOrder {
       name: item.name,
       quantity: item.quantity,
       destination: item.destination,
-      extras: [],
+      notes: item.notes,
+      extras: item.extras,
     })),
   };
 }

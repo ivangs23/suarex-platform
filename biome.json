@@ -12,7 +12,8 @@
       "!**/test-results",
       "!**/playwright-report",
       "!**/.import",
-      "!packages/db/src/__compile_fixtures__"
+      "!packages/db/src/__compile_fixtures__",
+      "!supabase/.temp"
     ]
   },
   "formatter": { "enabled": true, "indentStyle": "space", "indentWidth": 2, "lineWidth": 100 },

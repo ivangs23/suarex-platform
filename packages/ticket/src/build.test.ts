@@ -7,8 +7,8 @@ const order: TicketOrder = {
   tableLabel: "5",
   createdAt: "2026-07-22T10:30:00.000Z",
   items: [
-    { name: "Tosta de jamón", quantity: 2, destination: "cocina", extras: [] },
-    { name: "Copa de vino", quantity: 1, destination: "barra", extras: [] },
+    { name: "Tosta de jamón", quantity: 2, destination: "cocina", notes: null, extras: [] },
+    { name: "Copa de vino", quantity: 1, destination: "barra", notes: null, extras: [] },
   ],
 };
 const branding = { header: "Bar Ejemplo" };
@@ -59,5 +59,58 @@ describe("buildTicketLines", () => {
       .filter((l) => l.kind === "text")
       .map((l) => (l.kind === "text" ? l.text : ""));
     expect(texts.some((t) => t.includes("Tosta de jamon"))).toBe(true);
+  });
+});
+
+describe("la nota del comensal llega a la cocina", () => {
+  /* Se guardaba en la base y no se imprimía nunca. Quien escribía "sin gluten" veía que se lo
+     recogían y la cocina no se enteraba. Se descubrió pagando un pedido de verdad con una nota y
+     leyendo los bytes que salieron por el cable. */
+  const conNota: TicketOrder = {
+    orderNumber: 7,
+    tableLabel: "3",
+    createdAt: "2026-08-03T12:00:00.000Z",
+    items: [
+      {
+        name: "Tosta de jamón",
+        quantity: 1,
+        destination: "cocina",
+        notes: "sin gluten, alergia severa",
+        extras: ["Extra tomate"],
+      },
+    ],
+  };
+
+  const textos = (o: TicketOrder, destino: "cocina" | "barra" = "cocina") =>
+    buildTicketLines(o, branding, destino)
+      .filter((l) => l.kind === "text")
+      .map((l) => (l.kind === "text" ? l : null));
+
+  it("se imprime", () => {
+    const t = textos(conNota).map((l) => l?.text ?? "");
+    expect(t.some((x) => x.includes("sin gluten, alergia severa"))).toBe(true);
+  });
+
+  it("va en negrita: en una comanda de veinte líneas el texto plano se pasa por alto", () => {
+    const nota = textos(conNota).find((l) => l?.text.includes("sin gluten"));
+    expect(nota?.bold).toBe(true);
+  });
+
+  it("va pegada a SU plato y antes de las extras, no suelta al final", () => {
+    const t = textos(conNota).map((l) => l?.text ?? "");
+    const plato = t.findIndex((x) => x.includes("Tosta"));
+    const nota = t.findIndex((x) => x.includes("sin gluten"));
+    const extra = t.findIndex((x) => x.includes("Extra tomate"));
+    expect(nota).toBe(plato + 1);
+    expect(extra).toBeGreaterThan(nota);
+  });
+
+  it("sin nota no se cuela una línea vacía", () => {
+    const sinNota: TicketOrder = {
+      ...conNota,
+      items: [{ name: "Tosta", quantity: 1, destination: "cocina", notes: null, extras: [] }],
+    };
+    const t = textos(sinNota).map((x) => x?.text ?? "");
+    expect(t.some((x) => x.trim().startsWith(">>"))).toBe(false);
   });
 });
