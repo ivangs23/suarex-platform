@@ -17,7 +17,7 @@
    garum y manuela. */
 .topbar {
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   gap: 0.75rem;
   padding: 0.7rem 0.85rem;
@@ -326,4 +326,14 @@
   font: inherit;
   font-weight: 700;
   cursor: pointer;
+}
+
+/* El nombre del centro puede ser tan largo como quiera el cliente. Que se recorte antes de
+   empujar la barra: una barra más ancha que la pantalla mete scroll horizontal en TODA la
+   página, y de rebote descoloca las capas fijas (carrito, hoja de pago). */
+.topbarName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
