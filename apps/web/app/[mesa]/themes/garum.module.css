@@ -42,7 +42,7 @@
      de tamaño (al pasar a EN, al aparecer el contador del pedido). Mismo esquema que el resto
      de temas: cambia el aspecto, no dónde encuentra el comensal cada cosa. */
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   gap: 0.75rem;
 }
@@ -357,4 +357,28 @@
   font-weight: 700;
   line-height: 1;
   cursor: pointer;
+}
+
+/* LA BARRA EN UN MÓVIL.
+ *
+ * Las tres zonas no caben: medido en una pantalla de 390 px, la barra pedía 432 y metía scroll
+ * horizontal en TODA la página. Y eso no se quedaba en la barra -- las capas fijas (ficha de
+ * producto, carrito, hoja de pago) se dimensionan contra ese ancho, así que la de pagar salía
+ * cortada por la izquierda y con el botón medio tapado. El síntoma aparecía a tres pantallas de
+ * la causa.
+ *
+ * Cede el logo, que es lo único de la barra que no hace nada: quien acaba de escanear el QR de
+ * una mesa ya sabe en qué sitio está. La mesa y el botón del pedido se quedan porque son los dos
+ * datos que se usan. */
+@media (width < 30rem) {
+  .topbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.5rem;
+    padding-left: 0.65rem;
+    padding-right: 0.65rem;
+  }
+
+  .logo {
+    display: none;
+  }
 }
