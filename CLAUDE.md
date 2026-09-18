@@ -93,6 +93,12 @@ falsa, cold compile de Next), no para tapar bugs.
   producto). Este proyecto está en `.../Documents/proyectos/suarex-platform`. Usa **rutas
   absolutas** o `git -C` para no operar en el repo equivocado. `gh` puede resolver al repo
   equivocado → pasa siempre `--repo ivangs23/suarex-platform`.
+- **Tras `pnpm db:reset`, Kong puede quedarse con la IP vieja de Auth**: `/rest/v1` responde
+  200 pero `/auth/v1/*` da 502 y los tests de integración fallan con `AuthRetryableFetchError`
+  en `createTenantFixture`. No es tu código. El reset recrea el contenedor de auth con otra IP
+  y Kong no la re-resuelve. Se arregla con `docker restart supabase_kong_suarex-platform`
+  (solo este proyecto; hay otros stacks de Supabase en la máquina). Comprobar con
+  `docker logs supabase_kong_suarex-platform | grep "connect() failed"`: dice la IP que busca.
 - **No hay `psql`** en el host: para la BD, `docker exec <container> psql -U postgres -c "..."`,
   o Node con `@supabase/supabase-js` y la service key de `apps/web/.env.local`.
 - **Puertos por defecto ocupados**: suarex-platform mantiene Supabase en 5432x y `next dev` en
