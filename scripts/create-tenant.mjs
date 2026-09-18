@@ -18,6 +18,14 @@ import { randomBytes } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { validarEmail, validarIdioma, validarSlug } from "./lib/tenant-input.mjs";
 
+console.warn(
+  "[obsoleto] El alta de clientes se hace desde la consola de plataforma:\n" +
+    "           https://admin.<tu-dominio>/plataforma\n" +
+    "Este script se mantiene SOLO para la primera instalacion (cuando aun no hay ningun\n" +
+    "superadmin que pueda entrar en la consola) y para recuperacion ante desastres.\n" +
+    "Ver docs/dar-de-alta-un-cliente.md\n",
+);
+
 const url = process.env.SUPABASE_URL;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!url || !serviceKey) {

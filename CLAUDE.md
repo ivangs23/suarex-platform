@@ -51,6 +51,8 @@ Playwright · Biome (lint+format) · Electron (app de escritorio, `electron-vite
 pnpm install
 pnpm db:start           # Supabase local (imprime las claves)
 pnpm db:reset           # reset a migraciones + seed
+pnpm db:env && pnpm seed:staff            # .env.test + cuentas demo
+node scripts/seed-platform-admin.mjs --email x@y.z   # primer superadmin de plataforma
 pnpm dev  (o preview_start name:"web")   # nunca levantar el dev server con bash
 pnpm typecheck          # turbo typecheck + tests tsconfig
 pnpm lint  /  pnpm lint:fix
@@ -67,6 +69,14 @@ falsa, cold compile de Next), no para tapar bugs.
 
 - **Multi-tenancy**: `tenant_id` + RLS. Tenant resuelto por host (`findTenantByHost`). Claims JWT
   vía `custom_access_token_hook`.
+- **Consola de plataforma**: superficie propia en `admin.<raíz>` (`app/plataforma`), para dar
+  de alta clientes y suspenderlos. Dos barreras independientes: el proxy 404ea `/plataforma`
+  bajo cualquier host de cliente Y la carta bajo el host de plataforma; y `requirePlatformAdmin()`
+  comprueba `platform_admins`, tabla APARTE de `memberships` (un superadmin no tiene membership,
+  así que su JWT no lleva `tenant_id` y `resolveStaffSession` lo rechaza por construcción).
+- **Suscripción del restaurante**: `tenants.plan_status` lo escribe SOLO el webhook de
+  facturación. Un impago NUNCA corta en el momento: abre `grace_until` (7 días), el panel avisa
+  y el barrido diario suspende lo vencido. Toda la política está en `decidirEstado`, pura.
 - **Rol `device`**: la app de escritorio inicia sesión con credenciales de dispositivo (nunca la
   service key, que JAMÁS llega al PC del cliente). Solo puede imprimir: RLS lo excluye de escribir
   catálogo; escribe vía RPCs `SECURITY DEFINER` acotadas al JWT (`reserve_printed_self`,
@@ -118,5 +128,6 @@ falsa, cold compile de Next), no para tapar bugs.
 
 ## Más docs
 
-`docs/HANDOFF.md` (estado y pendientes) · `docs/migrar-un-cliente.md` ·
+`docs/HANDOFF.md` (estado y pendientes) · `docs/dar-de-alta-un-cliente.md` ·
+`docs/migrar-un-cliente.md` ·
 `docs/importar-catalogo.md` · `docs/agent-desktop-validacion.md`.

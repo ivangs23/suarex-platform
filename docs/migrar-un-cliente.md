@@ -4,6 +4,10 @@ Proceso completo para traer a un restaurante desde su aplicación anterior: su c
 fotos y su identidad visual. Probado con dos clientes de esquemas totalmente distintos
 (Garum y Manuela).
 
+> Este documento cubre solo **traer los datos** de su sistema anterior. El alta del cliente en
+> la plataforma (su tenant, su owner, sus mesas) va antes y está en
+> [`dar-de-alta-un-cliente.md`](dar-de-alta-un-cliente.md).
+
 **Nunca se escribe en el sistema del cliente.** Todo lo que se lee de su web es público —lo
 mismo que ve cualquiera que abra su carta— y todo lo que se escribe va a *nuestra* base.
 

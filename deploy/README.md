@@ -339,6 +339,32 @@ medio hacer no lo deje abierto. Genera el secreto con `openssl rand -hex 32` y p
 
 ---
 
+## Los otros dos crons del sistema
+
+Mismo patrón que el de expirar pedidos, mismo `CRON_SECRET`, y los dos fallan cerrado si el
+secreto no está configurado.
+
+```bash
+# Retencion de datos del comensal (90 dias las notas, 24 meses el pedido).
+# NO es limpieza opcional: son los plazos que la politica de privacidad publicada promete.
+15 4 * * * CRON_SECRET=xxx APP_URL=https://admin.<tu-dominio> /opt/suarex/deploy/scripts/purge-orders.sh
+
+# Cierra las ventanas de gracia vencidas: suspende a quien lleva 7 dias sin pagar.
+0 5 * * * CRON_SECRET=xxx APP_URL=https://admin.<tu-dominio> /opt/suarex/deploy/scripts/suspend-overdue.sh
+```
+
+**Apúntalos al host de la consola (`admin.<tu-dominio>`), no al de un tenant.** Dos motivos, y
+el segundo es grave:
+
+1. El proxy resuelve tenant por Host en todas las rutas salvo `api/tls-check`. Con el dominio
+   raíz, `findTenantByHost` devuelve null y el cron recibe un 404 sin barrer nada, en silencio.
+2. Si apuntas al host de un tenant y ese tenant acaba suspendido —justo lo que provoca
+   `suspend-overdue`— el proxy devuelve 503 en esas rutas, el `curl -fsS` falla y el cron
+   **muere para todos los demás clientes**. Se autodestruye.
+
+Revisa también el cron de `expire-orders` que ya tengas instalado: si apunta al dominio raíz,
+lleva tiempo sin barrer nada.
+
 ## Limpiar fotos huérfanas del bucket
 
 Reimportar el catálogo de un cliente (`import-catalog --reemplazar`) borra sus filas y resube
@@ -389,28 +415,37 @@ docker stats --no-stream
 
 ---
 
-## Dar de alta un cliente
+## La consola de plataforma
 
-El primer owner de un cliente no puede salir del panel (el panel solo deja crear personal a
-un owner que ya exista). Ese arranque lo hace un script:
+La consola vive en su propio host, `admin.<tu-dominio>`, y el comodín de DNS del paso 2 ya lo
+cubre: **no hay que tocar ni DNS ni Caddy** para ella.
+
+Bajo ese host no se sirve nada del producto (ni carta, ni panel de cliente, ni tablero de
+personal), y `/plataforma` no se sirve NUNCA bajo el host de un cliente. Las dos direcciones
+están comprobadas en `tests/e2e/plataforma-host.spec.ts`.
+
+Crea el primer superadmin, una vez por instalación:
 
 ```bash
-node scripts/create-tenant.mjs --slug bar-paco --nombre "Bar Paco" --email dueno@barpaco.com
+node scripts/seed-platform-admin.mjs --email tu-correo@suarex.app
 ```
 
-Crea su fila de cliente, sus ajustes, su sede por defecto y su **primer owner** (con una
-contraseña que imprime al final para entregársela). Es **idempotente**: reejecutar no
-duplica nada. Opcionales: `--dominio` (dominio propio), `--tema` (por defecto `generic`),
-`--idioma`, `--moneda`, `--password` (si no, se genera).
+Imprime la contraseña generada. Es el **único** camino para crear un superadmin, y exige acceso
+al servidor a propósito: si la consola pudiera crearlos, comprometer una sola cuenta
+comprometería la plataforma entera. Los superadmins viven en `platform_admins`, una tabla
+aparte de `memberships` con RLS sin policies — un superadmin no tiene membership de ningún
+cliente, así que su JWT no lleva `tenant_id`.
 
-Luego:
+## Dar de alta un cliente
 
-1. El comodín de DNS y el certificado ya cubren su subdominio: **no hay que tocar ni DNS ni Caddy**.
-2. El owner entra en `https://<slug>.<tu-dominio>/admin` con las credenciales impresas y
-   configura su marca y su tema en Ajustes.
-3. Su carta se importa con `node scripts/import-catalog.mjs <volcado> <slug> --reemplazar`
-   (ver `docs/migrar-un-cliente.md`).
-4. Si lleva impresora: generar su instalador del agente con `PLATFORM_WEB_ORIGIN=https://<slug>.<tu-dominio>`.
+Desde la consola, en el navegador: `https://admin.<tu-dominio>/plataforma`.
+
+El procedimiento completo —qué datos pedirle al cliente antes de empezar, la importación del
+catálogo, las mesas, la impresora y la comprobación final— está en
+[`docs/dar-de-alta-un-cliente.md`](../docs/dar-de-alta-un-cliente.md).
+
+`scripts/create-tenant.mjs` queda para la primera instalación (cuando aún no hay superadmin) y
+para recuperación ante desastres. Para todo lo demás, la consola.
 
 ---
 

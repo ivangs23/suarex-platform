@@ -5,33 +5,44 @@ Una conversación de Claude no transfiere sola; lee esto + `git log` + `CLAUDE.m
 
 ## Estado
 
-`main` estable. Toda la suite en verde (lint · typecheck · unit · integración · e2e). Sin PRs
-abiertas al cerrar esta sesión.
+Rama `feat/fase1-bloque-a`: **Fase 1 del plan de viabilidad, 16 de 19 tareas**. Suite entera en
+verde (89 e2e · 327 integración · 8 paquetes unit · typecheck · lint).
 
-## Lo hecho recientemente (esta tanda)
+Lo que la Fase 1 cierra es lo que impedía **cobrarle al primer cliente**, no funcionalidad del
+comensal. Origen: auditoría del 2026-09-15, en
+`docs/superpowers/plans/2026-09-15-viabilidad-roadmap.md`.
 
-Flujo del comensal, pulido a partir de pruebas en vivo sobre el tenant **manuela**:
+| Bloque | Estado |
+|---|---|
+| A · Recibo sin ambigüedad fiscal | ✅ 4/4 |
+| B · Marco legal | ✅ 3/3 |
+| C · Correo y credenciales | ⛔ 0/3 — **bloqueado**: faltan credenciales SMTP |
+| D · Suscripción y corte por impago | ✅ 4/4 |
+| E · Consola de plataforma | ✅ 5/5 |
 
-- **Recibo del comensal descargable en PDF** (`app/pedido/[publicToken]`): el botón hacía
-  `window.print()` (en móvil no abría nada) → ahora genera un PDF con jsPDF (import dinámico) y lo
-  descarga. Ticket de 80 mm; lógica de composición pura y testeada. Fix de jsPDF: en `portrait`
-  intercambia lados si el ancho supera al alto → se fuerza `alto >= ancho` para no cortar precios.
-- **Aviso "Escanea el QR de tu mesa para pedir"** cuando `canOrder` es false (cookie ausente o
-  caducada): antes la carta se quedaba muda sin explicar por qué faltaban los botones.
-- **"Volver a la carta"** en la pantalla de pago aceptado: cerraba el bucle pagar → recibo → seguir
-  pidiendo.
-- **Idiomas de manuela**: su catálogo real entró solo en español, así que el selector no aparecía.
-  Traducido a EN/PT (categorías genéricas, descripciones, extras; nombres de plato originales) con
-  `scripts/traducir-manuela.mjs` (re-ejecutable, casa por texto español).
+### Lo que existe ahora y antes no
 
-App de escritorio (Electron), repaso operativo:
+- **El recibo se declara justificante, no factura** (decisión D1 del spec), con emisor y
+  desglose de IVA. En pantalla y en el PDF, para todos los tenants, en es/en/pt.
+- **Tres páginas legales por cliente**, con él como responsable del tratamiento y SuarEx como
+  encargado. Más la retención que las hace verdad: cron que anula notas a los 90 días y borra
+  pedidos a los 24 meses.
+- **Suscripción con corte por impago**: webhook propio, ventana de gracia de 7 días, aviso en
+  el panel del dueño y barrido diario. Un impago nunca corta en el momento.
+- **Consola de plataforma** en `admin.<raíz>`: alta de clientes y suspensión desde el
+  navegador, en vez de SSH con la service key.
 
-- **Visibilidad de impresión + avisos de impresora caída + icono de bandeja real** (antes
-  `createEmpty()`, invisible). `runAgentTick` devuelve detalle (ok/fallos con motivo y destino);
-  la app lo pinta y notifica solo las transiciones (cae/vuelve).
-- **Auto-update** (electron-updater, generic) + **versión de build en el heartbeat**.
-- **Watchdog** (uncaughtException/unhandledRejection no tumban la app; renderer caído se recarga)
-  + **confirmación al des-emparejar**.
+### Lo que falta de la Fase 1
+
+El bloque C entero, y **no es código**: hace falta contratar un proveedor SMTP (Resend,
+Postmark, Brevo) y verificar el dominio con SPF+DKIM. Sin eso no se pueden probar ni la
+recuperación de contraseña ni el alta de personal por invitación. Las tres tareas están
+escritas y validadas en el plan, listas para ejecutar el día que haya credenciales.
+
+Un hueco menor, anotado: el camino feliz del webhook de facturación por HTTP no se ha
+ejercitado (haría falta `STRIPE_BILLING_WEBHOOK_SECRET` en `apps/web/.env.local` y
+`stripe listen`). Sí están cubiertos el mapeo de estados (unit) y `applySubscriptionState`
+(integración), y que el endpoint falla cerrado sin secreto (e2e).
 
 ## Pendiente — código (repaso de la app Electron)
 
