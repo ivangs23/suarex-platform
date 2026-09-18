@@ -9,6 +9,7 @@ import {
   expirePendingOrdersRpc,
   nextOrderNumberRpc,
   ordersTableForPaymentResolution,
+  purgeOrderPersonalDataRpc,
   tenantScoped,
 } from "./client.js";
 import { getTenantSettings } from "./tenants.js";
@@ -447,5 +448,27 @@ export async function getOrderReceipt(
     totalCents: eurosToCents(Number(row.total)),
     currency: row.currency,
     lines,
+  };
+}
+
+/**
+ * Ejecuta los plazos de retención que la política de privacidad promete al comensal: anula las
+ * notas a los 90 días y borra el pedido a los 24 meses. Lo dispara el cron del sistema vía
+ * `/api/internal/purge-orders`, igual que `expirePendingOrders`.
+ *
+ * Los valores por defecto son los MISMOS que declara `apps/web/lib/legal-content.ts`. Si
+ * alguien cambia uno sin el otro, la política publicada pasa a mentir; el test de ese fichero
+ * ata los números por ese motivo.
+ */
+export async function purgeOrderPersonalData(
+  notesDays = 90,
+  ordersMonths = 24,
+): Promise<{ notasBorradas: number; pedidosBorrados: number }> {
+  const { data, error } = await purgeOrderPersonalDataRpc(notesDays, ordersMonths);
+  if (error) throw error;
+  const fila = (data as { notas_borradas: number; pedidos_borrados: number }[] | null)?.[0];
+  return {
+    notasBorradas: fila?.notas_borradas ?? 0,
+    pedidosBorrados: fila?.pedidos_borrados ?? 0,
   };
 }

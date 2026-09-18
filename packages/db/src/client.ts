@@ -365,6 +365,19 @@ export function expirePendingOrdersRpc(timeoutMinutes: number) {
 }
 
 /**
+ * MISMA EXENCIÓN QUE `expirePendingOrdersRpc`. `purge_order_personal_data` es SECURITY
+ * DEFINER, es mantenimiento de RETENCIÓN (no una operación de negocio de ningún tenant: barre
+ * todos por igual, que es justo lo que la retención exige) y se concede solo a `service_role`.
+ * Acotado por firma a `purgeOrderPersonalData` (`src/orders.ts`), que lo llama el cron.
+ */
+export function purgeOrderPersonalDataRpc(notesDays: number, ordersMonths: number) {
+  return serviceClient().rpc("purge_order_personal_data", {
+    p_notes_days: notesDays,
+    p_orders_months: ordersMonths,
+  });
+}
+
+/**
  * DUODÉCIMA EXENCIÓN DELIBERADA, mismo razonamiento que `authAdminForDevicePairing` pero
  * para el reset: `resetDevice` (`src/admin-devices.ts`) borra la cuenta de Auth del
  * dispositivo (`deleteUser`) para revocar sus refresh tokens y su membership al dar de baja

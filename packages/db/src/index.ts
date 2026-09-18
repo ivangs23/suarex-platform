@@ -83,6 +83,7 @@ export {
   getOrderReceipt,
   markOrderPaid,
   OrderCartError,
+  purgeOrderPersonalData,
 } from "./orders.js";
 export { checkPairRateLimit } from "./pair-rate-limit.js";
 export type {
