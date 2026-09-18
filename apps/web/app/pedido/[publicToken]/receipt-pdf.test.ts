@@ -54,8 +54,8 @@ describe("filasRecibo", () => {
 
   it("pone cada línea con su precio y sus extras/notas como detalle", () => {
     const partidas = filas.filter((f) => f.tipo === "partida");
-    // dos platos + la fila del total
-    expect(partidas).toHaveLength(3);
+    // dos platos + base imponible + IVA + total (el fixture lleva taxCents > 0)
+    expect(partidas).toHaveLength(5);
     expect(partidas[0]).toMatchObject({ izq: "1× La Antioxidante Pro", der: "5.50 €" });
 
     const detalles = filas.filter((f) => f.tipo === "detalle");
@@ -68,5 +68,55 @@ describe("filasRecibo", () => {
   it("cierra con el total en negrita", () => {
     const ultimaPartida = [...filas].reverse().find((f) => f.tipo === "partida");
     expect(ultimaPartida).toMatchObject({ izq: "Total", der: "10.00 €", negrita: true });
+  });
+});
+
+describe("bloque fiscal del recibo", () => {
+  const conFiscal = {
+    ...opts,
+    fiscal: {
+      legalName: "Paco SL",
+      cif: "B12345678",
+      address: "Calle Falsa 1",
+      phone: "600111222",
+    },
+  };
+
+  it("pinta el emisor con los datos que el tenant tenga rellenos", () => {
+    const texto = JSON.stringify(filasRecibo(receipt, conFiscal));
+    expect(texto).toContain("Paco SL");
+    expect(texto).toContain("B12345678");
+    expect(texto).toContain("Calle Falsa 1");
+    expect(texto).toContain("600111222");
+  });
+
+  it("no inventa líneas para los campos fiscales que falten", () => {
+    // Un tenant a medio configurar no puede acabar con un recibo lleno de huecos o de
+    // "undefined": se pinta lo que hay y se omite lo que no.
+    const filas = filasRecibo(receipt, { ...opts, fiscal: { legalName: "Paco SL" } });
+    const texto = JSON.stringify(filas);
+    expect(texto).toContain("Paco SL");
+    expect(texto).not.toContain("undefined");
+    expect(texto).not.toContain("CIF");
+  });
+
+  it("desglosa base imponible e IVA", () => {
+    const texto = JSON.stringify(filasRecibo(receipt, conFiscal));
+    expect(texto).toContain("Base imponible");
+    expect(texto).toContain("IVA");
+  });
+
+  it("omite el desglose cuando el tenant no repercute IVA", () => {
+    // Una línea de "IVA 0,00 €" no aporta nada y sí confunde.
+    const sinIva = { ...receipt, subtotalCents: 1000, taxCents: 0, totalCents: 1000 };
+    const texto = JSON.stringify(filasRecibo(sinIva, conFiscal));
+    expect(texto).not.toContain("Base imponible");
+  });
+
+  it("el aviso de que no es factura se pinta SIEMPRE, con o sin datos fiscales", () => {
+    // Doctrina: esto no es opcional por tenant. Un tenant sin CIF configurado no puede
+    // acabar con un documento que parezca una factura. `opts` no trae `fiscal`.
+    expect(JSON.stringify(filasRecibo(receipt, opts))).toContain("No válido como factura");
+    expect(JSON.stringify(filasRecibo(receipt, conFiscal))).toContain("No válido como factura");
   });
 });

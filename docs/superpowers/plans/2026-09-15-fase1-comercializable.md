@@ -373,8 +373,11 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 
 **Interfaces:**
 - Consume: `OrderReceipt.subtotalCents`/`taxCents` (Task 1), las cuatro cadenas (Task 2).
-- Produce: `filasRecibo(receipt, opts)` donde `opts` gana
-  `fiscal: { legalName?: string; cif?: string; address?: string; phone?: string }`.
+- Produce: `filasRecibo(receipt, opts)` donde `opts` gana `fiscal?: ReciboFiscal` —
+  **opcional**, no obligatorio. Dos motivos: el `opts` compartido de `receipt-pdf.test.ts:25-30`
+  se usa en el cuerpo del `describe` y con `fiscal` obligatorio los cuatro tests existentes
+  petarían al recolectar el fichero; y `Receipt.tsx` es el único llamante, así que obligarlo
+  dejaría `typecheck` en rojo entre esta tarea y la 4. Dentro: `const fiscal = opts.fiscal ?? {}`.
   `descargarReciboPdf` acepta el mismo `opts`. La Task 4 se lo pasa.
 
 - [ ] **Paso 1: escribir el test que falla**
@@ -488,7 +491,9 @@ Después del `filas.push({ tipo: "centro", texto: businessName... })` y antes de
   }
 ```
 
-Y después del `filas.push` del total, el desglose y el aviso:
+Y el desglose **ANTES** del `filas.push` del total (un recibo se lee base → IVA → TOTAL, y el
+total tiene que quedar como línea de cierre: ponerlo después rompe el test existente "cierra con
+el total en negrita", y con razón). El aviso, al final de todo:
 
 ```ts
   // Desglose informativo. Solo si hay cuota: un tenant con taxRate 0 no gana nada con una
@@ -513,7 +518,9 @@ pasa tal cual a `filasRecibo`, no hace nada más con él).
 pnpm --filter @suarex/web exec vitest run "app/pedido/[publicToken]/receipt-pdf.test.ts"
 ```
 
-Esperado: PASS los dos tests nuevos y los que ya había.
+Esperado: PASS. **Un test existente necesita ajuste legítimo**: "pone cada línea con su precio"
+cuenta `partida` y esperaba 3 (dos platos + total); con el desglose son 5. No lo aflojes,
+corrige el número y el comentario — el recibo tiene más filas de verdad.
 
 - [ ] **Paso 5: commit**
 
