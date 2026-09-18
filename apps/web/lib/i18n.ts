@@ -126,6 +126,13 @@ export type Strings = {
   statusCancelled: string;
   receiptTitle: string;
   receiptTable: string;
+  receiptSubtotal: string;
+  receiptTax: string;
+  receiptIssuer: string;
+  /** SuarEx NO es emisor de facturas (decisión D1 del spec de la Fase 1): este aviso es lo
+   *  único que separa un justificante de pedido de un documento que lo parece. Se pinta
+   *  SIEMPRE -- en pantalla y en el PDF, para todos los tenants y en todos los idiomas. */
+  receiptNotInvoice: string;
   receiptPrint: string;
   receiptDownload: string;
   backToMenu: string;
@@ -174,6 +181,11 @@ const ES: Strings = {
   statusCancelled: "Cancelado",
   receiptTitle: "Recibo",
   receiptTable: "Mesa",
+  receiptSubtotal: "Base imponible",
+  receiptTax: "IVA",
+  receiptIssuer: "Emitido por",
+  receiptNotInvoice:
+    "Justificante de pedido. No válido como factura. Si necesitas factura, pídela al establecimiento.",
   receiptPrint: "Imprimir",
   receiptDownload: "Descargar recibo",
   backToMenu: "Volver a la carta",
@@ -222,6 +234,11 @@ const EN: Strings = {
   statusCancelled: "Cancelled",
   receiptTitle: "Receipt",
   receiptTable: "Table",
+  receiptSubtotal: "Subtotal",
+  receiptTax: "VAT",
+  receiptIssuer: "Issued by",
+  receiptNotInvoice:
+    "Order receipt. Not valid as an invoice. Ask the venue if you need a tax invoice.",
   receiptPrint: "Print",
   receiptDownload: "Download receipt",
   backToMenu: "Back to the menu",
@@ -270,6 +287,11 @@ const PT: Strings = {
   statusCancelled: "Cancelado",
   receiptTitle: "Recibo",
   receiptTable: "Mesa",
+  receiptSubtotal: "Base tributável",
+  receiptTax: "IVA",
+  receiptIssuer: "Emitido por",
+  receiptNotInvoice:
+    "Comprovativo de pedido. Não válido como fatura. Peça a fatura ao estabelecimento.",
   receiptPrint: "Imprimir",
   receiptDownload: "Baixar recibo",
   backToMenu: "Voltar à carta",
