@@ -171,6 +171,20 @@ export function tenantsTableForCustomDomainWrite() {
 }
 
 /**
+ * DECIMOQUINTA EXENCIÓN DELIBERADA. `platform_admins` no tiene `tenant_id` y no puede tenerlo:
+ * un superadmin no pertenece a ningún cliente, y esa es toda su razón de ser (ver
+ * `20260915000003_platform_admins.sql`). Acotado por firma a esa única tabla y a un único
+ * llamante -- `isPlatformAdmin` (`src/platform.ts`) -- que es una búsqueda por clave primaria:
+ * una fila o ninguna, nunca un barrido.
+ *
+ * La tabla tiene RLS sin policies Y el revoke a anon/authenticated, así que este accessor es
+ * literalmente el único camino que existe hacia ella en todo el sistema.
+ */
+export function platformAdminsTable() {
+  return serviceClient().from("platform_admins");
+}
+
+/**
  * DECIMOCUARTA EXENCIÓN DELIBERADA, hermana de `tenantsTableForCustomDomainWrite` y separada
  * de ella por el mismo motivo por el que aquella se separó de la de lectura: cada escritura a
  * `tenants` declara qué columnas puede tocar y quién la llama.

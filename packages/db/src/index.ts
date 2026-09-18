@@ -86,6 +86,7 @@ export {
   purgeOrderPersonalData,
 } from "./orders.js";
 export { checkPairRateLimit } from "./pair-rate-limit.js";
+export { isPlatformAdmin } from "./platform.js";
 export type {
   EnabledPrinterRow,
   PaidOrderRow,
