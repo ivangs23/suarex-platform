@@ -397,7 +397,7 @@ export async function getOrderReceipt(
 ): Promise<OrderReceipt | null> {
   const { data, error } = await ordersTableForPaymentResolution()
     .select(
-      "order_number, created_at, total, currency, tables(label), " +
+      "order_number, created_at, subtotal, tax_amount, total, currency, tables(label), " +
         "order_items(id, name_snapshot, quantity, line_total, notes, " +
         "order_item_extras(name_snapshot, price))",
     )
@@ -411,6 +411,8 @@ export async function getOrderReceipt(
   const row = data as unknown as {
     order_number: number;
     created_at: string;
+    subtotal: number;
+    tax_amount: number;
     total: number;
     currency: string;
     tables: { label?: string } | null;
@@ -440,6 +442,8 @@ export async function getOrderReceipt(
     orderNumber: row.order_number,
     createdAt: row.created_at,
     tableLabel: row.tables?.label ?? null,
+    subtotalCents: eurosToCents(Number(row.subtotal)),
+    taxCents: eurosToCents(Number(row.tax_amount)),
     totalCents: eurosToCents(Number(row.total)),
     currency: row.currency,
     lines,

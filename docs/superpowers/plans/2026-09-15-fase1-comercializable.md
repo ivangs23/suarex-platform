@@ -135,36 +135,46 @@ Primero amplía los imports del fichero: añade `createPendingOrder` al import d
 (:1, hoy solo trae `getOrderReceipt`) y `seedCatalog` al import de `./helpers/tenants.js`
 (:3-9, hoy trae `admin, createTenantFixture, deleteTenantFixture, nonce, type TenantFixture`).
 
-Luego añade el test al final. REUSA la fixture de módulo `tenant` y su `afterAll` (:19-31) en
-vez de crear una propia: una fixture creada dentro del `it` no se borraría, y con `retry: 2`
-(vitest.config.ts) dejaría hasta tres tenants huérfanos por ejecución fallida.
+Luego añade el test al final, con **fixture propia dentro de un `try/finally`**. No reuses la
+fixture de módulo `tenant`: `seedCatalog` siembra un tenant DESDE CERO —sede por defecto,
+`tenant_settings`, catálogo, mesas, contador— y aplicarlo sobre un tenant que ya tiene sede
+revienta contra `venues_single_default_per_tenant`. El `finally` no es opcional: con
+`retry: 2`, un fallo a medias deja tenants huérfanos y el reintento choca contra las claves
+que dejó el intento anterior (se ve como `duplicate key ... categories_tenant_id_slug_key`,
+que despista del fallo real).
 
 ```ts
 it("devuelve base imponible e IVA, no solo el total", async () => {
-  const seed = await seedCatalog(tenant.tenantId, "recibo-iva");
-  // `createPendingOrder` exige `tableId: string` (no admite null), y `SeedResult` no trae
-  // mesa: se crea una aquí, igual que hace tests/integration/orders.test.ts:68-74.
-  const { data: mesa } = await admin
-    .from("tables")
-    .insert({ tenant_id: tenant.tenantId, venue_id: seed.venueId, label: `iva-${nonce()}` })
-    .select("id")
-    .single();
+  const propio = await createTenantFixture(`recibo-iva-${nonce()}`);
+  try {
+    const seed = await seedCatalog(propio.tenantId, "iva");
+    // `createPendingOrder` exige `tableId: string` y `SeedResult` no expone mesa.
+    const { data: mesa } = await admin
+      .from("tables")
+      .insert({ tenant_id: propio.tenantId, venue_id: seed.venueId, label: "iva-pedido" })
+      .select("id")
+      .single();
 
-  const { publicToken } = await createPendingOrder({
-    tenantId: tenant.tenantId,
-    venueId: seed.venueId,
-    tableId: mesa?.id as string,
-    lines: [{ productId: seed.productId, quantity: 2, extraIds: [], notes: null }],
-    taxRate: 0.1,
-  });
+    const { publicToken } = await createPendingOrder({
+      tenantId: propio.tenantId,
+      venueId: seed.venueId,
+      tableId: mesa?.id as string,
+      lines: [{ productId: seed.productId, quantity: 2, extraIds: [], notes: null }],
+      taxRate: 0.1,
+    });
 
-  const receipt = await getOrderReceipt(publicToken);
+    const receipt = await getOrderReceipt(publicToken);
+    // Lanzar en vez de `!`: estrecha el tipo Y evita cuatro warnings de
+    // `lint/style/noNonNullAssertion`, que en este repo salen a cero.
+    if (!receipt) throw new Error("getOrderReceipt devolvió null para un pedido recién creado");
 
-  expect(receipt).not.toBeNull();
-  // base + IVA tiene que cuadrar con el total al céntimo: si no cuadra, el desglose
-  // que se enseña al comensal estaría mintiendo.
-  expect(receipt!.subtotalCents + receipt!.taxCents).toBe(receipt!.totalCents);
-  expect(receipt!.taxCents).toBeGreaterThan(0);
+    // base + IVA tiene que cuadrar con el total al céntimo: si no cuadra, el desglose
+    // que se enseña al comensal estaría mintiendo.
+    expect(receipt.subtotalCents + receipt.taxCents).toBe(receipt.totalCents);
+    expect(receipt.taxCents).toBeGreaterThan(0);
+  } finally {
+    await deleteTenantFixture(propio);
+  }
 });
 ```
 

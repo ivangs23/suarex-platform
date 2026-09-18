@@ -7,6 +7,8 @@ const receipt: OrderReceipt = {
   orderNumber: 2,
   createdAt: "2026-07-23T23:37:53.147Z",
   tableLabel: "1",
+  subtotalCents: 900,
+  taxCents: 100,
   totalCents: 1000,
   currency: "EUR",
   lines: [

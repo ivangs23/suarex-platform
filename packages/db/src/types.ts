@@ -107,6 +107,13 @@ export type OrderReceipt = {
   orderNumber: number;
   createdAt: string;
   tableLabel: string | null;
+  /** Base imponible en céntimos (`orders.subtotal`). Informativa: este recibo NO es una
+   *  factura (ver el aviso que pinta `filasRecibo`), pero enseñar un total sin desglose en
+   *  hostelería se lee como si lo fuera. */
+  subtotalCents: number;
+  /** Cuota de IVA en céntimos (`orders.tax_amount`). `subtotalCents + taxCents` cuadra
+   *  siempre con `totalCents`: los tres salen de la MISMA fila, congelados en la compra. */
+  taxCents: number;
   totalCents: number;
   currency: string;
   lines: ReceiptLine[];
