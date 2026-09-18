@@ -3,6 +3,7 @@
 import { resolveRootDomains } from "@suarex/config";
 import { createTenantWithOwner, setTenantStatus, setTenantStripeCustomer } from "@suarex/db";
 import { revalidatePath } from "next/cache";
+import { log } from "@/lib/log";
 import { parseNuevoCliente } from "@/lib/platform-action-input";
 import { requirePlatformAdmin } from "@/lib/require-platform-admin";
 import { stripeClient } from "@/lib/stripe";
@@ -43,7 +44,7 @@ export async function altaClienteAction(formData: FormData): Promise<void> {
     });
     await setTenantStripeCustomer(tenantId, customer.id);
   } catch (error) {
-    console.error(`[plataforma] Alta de ${entrada.slug} sin cliente de Stripe:`, error);
+    log.error("plataforma.alta_sin_cliente_stripe", { slug: entrada.slug, tenantId, error });
   }
 
   revalidatePath("/plataforma");

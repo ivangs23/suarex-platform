@@ -2,6 +2,7 @@ import { applySubscriptionState } from "@suarex/db";
 import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { planStatusDeStripe } from "@/lib/billing-events";
+import { log } from "@/lib/log";
 import { stripeClient } from "@/lib/stripe";
 
 // `constructEvent` usa criptografía de Node; el runtime edge no sirve aquí.
@@ -52,7 +53,7 @@ export async function POST(request: Request) {
     if (!planStatus) {
       // Estado que no cambia el servicio (`incomplete`, `paused`, o uno nuevo que Stripe
       // haya añadido). Se registra y se ignora: no tocar nada es el default seguro.
-      console.info(`[billing-webhook] Estado ignorado '${sub.status}' para ${sub.id}`);
+      log.info("billing.estado_ignorado", { estado: sub.status, subscriptionId: sub.id });
       return NextResponse.json({ received: true });
     }
 
@@ -65,7 +66,7 @@ export async function POST(request: Request) {
     // equivocado -- así que se registra de forma distinguible. Mismo criterio que el webhook
     // de pagos del comensal.
     if (outcome === "tenant-no-encontrado") {
-      console.error(`[billing-webhook] Cliente de Stripe sin tenant asociado: ${customerId}`);
+      log.error("billing.cliente_sin_tenant", { customerId });
     }
   }
 

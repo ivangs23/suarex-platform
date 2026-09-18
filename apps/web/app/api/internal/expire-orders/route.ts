@@ -1,5 +1,6 @@
 import { expirePendingOrders } from "@suarex/db";
 import { NextResponse } from "next/server";
+import { log } from "@/lib/log";
 import { timingSafeEqualStr } from "@/lib/timing-safe-equal";
 
 /**
@@ -38,7 +39,7 @@ export async function POST(request: Request) {
     const expirados = await expirePendingOrders();
     return NextResponse.json({ expirados });
   } catch (error) {
-    console.error("[cron:expire-orders] Error barriendo pedidos pendientes:", error);
+    log.error("cron.expire_orders_fallo", { error });
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
 }

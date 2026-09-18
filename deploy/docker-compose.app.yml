@@ -21,6 +21,19 @@ services:
         NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
     image: suarex-web:latest
     restart: unless-stopped
+    # Los logs son JSON por línea (ver apps/web/lib/log.ts) y son la ÚNICA observabilidad de
+    # la plataforma: no hay Sentry ni ningún SaaS, a propósito (decisión D2 del spec de la
+    # Fase 2 -- añadir uno significaría un encargado de tratamiento más en la política de
+    # privacidad de todos los clientes).
+    #
+    # Sin este bloque, Docker deja crecer el fichero de log SIN LÍMITE hasta llenar los 100 GB
+    # del disco, y cuando eso pasa se cae Postgres, no la web. 50 MB x 5 son ~250 MB por
+    # contenedor y varias semanas de historial al volumen actual.
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
     environment:
       SUPABASE_URL: ${SUPABASE_URL}
       SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}

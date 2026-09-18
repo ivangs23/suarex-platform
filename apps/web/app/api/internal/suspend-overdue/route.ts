@@ -1,5 +1,6 @@
 import { suspendExpiredGrace } from "@suarex/db";
 import { NextResponse } from "next/server";
+import { log } from "@/lib/log";
 import { timingSafeEqualStr } from "@/lib/timing-safe-equal";
 
 /**
@@ -35,7 +36,7 @@ export async function POST(request: Request) {
     const suspendidos = await suspendExpiredGrace();
     return NextResponse.json({ suspendidos });
   } catch (error) {
-    console.error("[cron:suspend-overdue] Error barriendo gracias vencidas:", error);
+    log.error("cron.suspend_overdue_fallo", { error });
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
 }

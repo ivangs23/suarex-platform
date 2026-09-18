@@ -1,5 +1,6 @@
 import { purgeOrderPersonalData } from "@suarex/db";
 import { NextResponse } from "next/server";
+import { log } from "@/lib/log";
 import { timingSafeEqualStr } from "@/lib/timing-safe-equal";
 
 /**
@@ -30,7 +31,7 @@ export async function POST(request: Request) {
     const resultado = await purgeOrderPersonalData();
     return NextResponse.json(resultado);
   } catch (error) {
-    console.error("[cron:purge-orders] Error aplicando la retención:", error);
+    log.error("cron.purge_orders_fallo", { error });
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
 }

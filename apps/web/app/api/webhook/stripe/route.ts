@@ -1,6 +1,7 @@
 import { markOrderDisputed, markOrderPaid, markOrderRefunded } from "@suarex/db";
 import { NextResponse } from "next/server";
 import type Stripe from "stripe";
+import { log } from "@/lib/log";
 import { stripeClient } from "@/lib/stripe";
 
 // `constructEvent` usa criptografía de Node; el runtime edge no sirve aquí.
@@ -33,7 +34,7 @@ export async function POST(request: Request) {
     // sistema no tiene registro, o que el webhook apunta al entorno equivocado --
     // así que se registra de forma distinguible.
     if (outcome === "order-not-found") {
-      console.error(`[stripe-webhook] PaymentIntent sin pedido asociado: ${paymentIntent.id}`);
+      log.error("stripe.cobro_sin_pedido", { paymentIntentId: paymentIntent.id });
     }
   }
 
@@ -53,13 +54,11 @@ export async function POST(request: Request) {
         : (charge.payment_intent?.id ?? null);
 
     if (!paymentIntentId) {
-      console.error(`[stripe-webhook] Cargo reembolsado sin PaymentIntent: ${charge.id}`);
+      log.error("stripe.reembolso_sin_payment_intent", { chargeId: charge.id });
     } else {
       const outcome = await markOrderRefunded(paymentIntentId, charge.amount_refunded);
       if (outcome === "order-not-found") {
-        console.error(
-          `[stripe-webhook] Reembolso sin pedido asociado: ${paymentIntentId} (cargo ${charge.id})`,
-        );
+        log.error("stripe.reembolso_sin_pedido", { paymentIntentId, chargeId: charge.id });
       }
     }
   }
@@ -74,10 +73,11 @@ export async function POST(request: Request) {
         ? dispute.payment_intent
         : (dispute.payment_intent?.id ?? null);
 
-    console.error(
-      `[stripe-webhook] DISPUTA abierta: ${dispute.id} sobre ${paymentIntentId ?? "(sin PI)"}, ` +
-        `motivo ${dispute.reason}`,
-    );
+    log.error("stripe.disputa_abierta", {
+      disputeId: dispute.id,
+      paymentIntentId,
+      motivo: dispute.reason,
+    });
     if (paymentIntentId) await markOrderDisputed(paymentIntentId);
   }
 

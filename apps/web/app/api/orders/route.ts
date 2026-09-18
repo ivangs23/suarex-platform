@@ -9,13 +9,14 @@ import {
   OrderCartError,
 } from "@suarex/db";
 import { NextResponse } from "next/server";
+import { log } from "@/lib/log";
 import { readMesaToken } from "@/lib/mesa-cookie";
 import { stripeClient } from "@/lib/stripe";
 
 // Mensaje genérico para cualquier fallo que NO sea un `OrderCartError`: el
 // llamante es un comensal anónimo que escaneó un QR, así que nunca debe recibir
 // detalle interno (mensajes de Postgres, nombres de restricciones, ids). El error
-// real siempre se registra con console.error junto con contexto (mesa/tenant/pedido)
+// real siempre se registra con `log.error` junto con contexto (mesa/tenant/pedido)
 // para poder depurarlo desde el log del servidor.
 const GENERIC_ERROR = "No se pudo procesar el pedido";
 
@@ -37,7 +38,7 @@ export async function POST(request: Request) {
   try {
     table = await findTableByToken(tableToken);
   } catch (error) {
-    console.error("[orders] Error resolviendo mesa por token:", error);
+    log.error("pedido.mesa_no_resuelta", { error });
     return NextResponse.json({ error: GENERIC_ERROR }, { status: 500 });
   }
 
@@ -55,7 +56,7 @@ export async function POST(request: Request) {
   try {
     permitido = await checkOrderRateLimit(table.id);
   } catch (error) {
-    console.error(`[orders] Rate-limit no disponible (mesa ${table.id}):`, error);
+    log.error("pedido.rate_limit_no_disponible", { tableId: table.id, error });
     return NextResponse.json({ error: GENERIC_ERROR }, { status: 500 });
   }
   if (!permitido) {
@@ -69,7 +70,7 @@ export async function POST(request: Request) {
   try {
     settings = await getTenantSettings(table.tenantId);
   } catch (error) {
-    console.error(`[orders] Error leyendo ajustes del tenant ${table.tenantId}:`, error);
+    log.error("pedido.ajustes_no_leidos", { tenantId: table.tenantId, error });
     return NextResponse.json({ error: GENERIC_ERROR }, { status: 500 });
   }
 
@@ -91,10 +92,11 @@ export async function POST(request: Request) {
     if (error instanceof OrderCartError) {
       return NextResponse.json({ error: error.message }, { status: 422 });
     }
-    console.error(
-      `[orders] Error creando pedido pendiente (mesa ${table.id}, tenant ${table.tenantId}):`,
+    log.error("pedido.creacion_fallo", {
+      tableId: table.id,
+      tenantId: table.tenantId,
       error,
-    );
+    });
     return NextResponse.json({ error: GENERIC_ERROR }, { status: 500 });
   }
 
@@ -132,17 +134,22 @@ export async function POST(request: Request) {
       connectedAccount,
     });
   } catch (error) {
-    console.error(
-      `[orders] Error creando el cobro para el pedido ${order.orderId} (tenant ${table.tenantId}); marcando cancelado:`,
+    log.error("pedido.cobro_fallo", {
+      orderId: order.orderId,
+      tenantId: table.tenantId,
       error,
-    );
+    });
     try {
       await cancelOrphanedPendingOrder(table.tenantId, order.orderId);
     } catch (cancelError) {
-      console.error(
-        `[orders] Además, no se pudo marcar cancelado el pedido huérfano ${order.orderId}:`,
-        cancelError,
-      );
+      // Peor que el fallo anterior: queda un pedido `pending` que el comensal no pagó y
+      // nadie canceló. Lo barrerá `expire_pending_orders`, pero mientras tanto ensucia el
+      // tablero -- por eso es un evento propio y no un detalle del anterior.
+      log.error("pedido.cancelacion_huerfano_fallo", {
+        orderId: order.orderId,
+        tenantId: table.tenantId,
+        error: cancelError,
+      });
     }
     return NextResponse.json({ error: GENERIC_ERROR }, { status: 500 });
   }
