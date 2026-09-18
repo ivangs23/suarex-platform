@@ -4,6 +4,7 @@ import {
   normalizeCustomDomain,
   parseTenantHost,
   resolveRootDomains,
+  validarSlugPlataforma,
 } from "./tenant-host.js";
 
 const ROOTS = ["localhost", "suarex.app"];
@@ -188,5 +189,34 @@ describe("isPlatformHost", () => {
     // Las dos cosas tienen que decir lo mismo: si `admin` dejara de estar reservado, un
     // cliente podría registrarse con ese slug y colisionar con la consola.
     expect(parseTenantHost("admin.suarex.app", RAICES)).toBeNull();
+  });
+});
+
+describe("validarSlugPlataforma", () => {
+  it("acepta un slug normal de cliente", () => {
+    expect(validarSlugPlataforma("bar-paco")).toBe(true);
+    expect(validarSlugPlataforma("garum")).toBe(true);
+    expect(validarSlugPlataforma("la-taberna-2")).toBe(true);
+  });
+
+  it("rechaza lo que no puede ser un subdominio", () => {
+    // El slug ACABA SIENDO el subdominio por el que se sirve ese cliente para siempre, y
+    // cambiarlo después obliga a reimprimir todos los QR de las mesas.
+    expect(validarSlugPlataforma("Bar Paco"), "espacios y mayúsculas").toBe(false);
+    expect(validarSlugPlataforma("bar_paco"), "guion bajo").toBe(false);
+    expect(validarSlugPlataforma("-paco"), "empieza por guion").toBe(false);
+    expect(validarSlugPlataforma("paco-"), "acaba en guion").toBe(false);
+    expect(validarSlugPlataforma("ab"), "demasiado corto").toBe(false);
+    expect(validarSlugPlataforma("a".repeat(50)), "demasiado largo").toBe(false);
+    expect(validarSlugPlataforma("bar.paco"), "punto: sería otra etiqueta").toBe(false);
+  });
+
+  it("rechaza los subdominios reservados", () => {
+    // Un cliente con slug `admin` colisionaría con la consola de plataforma. La lista es la
+    // MISMA que usa `parseTenantHost`, no una copia: dos listas que deben decir lo mismo
+    // acaban divergiendo.
+    for (const reservado of ["www", "api", "admin", "app"]) {
+      expect(validarSlugPlataforma(reservado), reservado).toBe(false);
+    }
   });
 });

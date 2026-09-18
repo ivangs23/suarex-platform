@@ -14,4 +14,5 @@ export {
   normalizeCustomDomain,
   parseTenantHost,
   resolveRootDomains,
+  validarSlugPlataforma,
 } from "./tenant-host.js";

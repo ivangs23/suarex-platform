@@ -47,6 +47,22 @@ export function isPlatformHost(host: string, rootDomains: string[]): boolean {
   return rootDomains.some((root) => clean === `${PLATFORM_SUBDOMAIN}.${root.trim().toLowerCase()}`);
 }
 
+/**
+ * ¿Sirve este slug para dar de alta un cliente nuevo?
+ *
+ * Lo que se valida aquí acaba siendo el SUBDOMINIO por el que se sirve ese cliente para
+ * siempre: cambiarlo después obliga a reimprimir todos los QR de sus mesas. Por eso se rechaza
+ * en el borde en vez de intentar arreglarlo.
+ *
+ * Reutiliza `RESERVED_SUBDOMAINS` -- la MISMA lista que `parseTenantHost`, no una copia: dos
+ * listas que tienen que decir lo mismo acaban divergiendo, y la divergencia aquí significaría
+ * un cliente con slug `admin` colisionando con la consola de plataforma.
+ */
+export function validarSlugPlataforma(slug: string): boolean {
+  if (!/^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/.test(slug)) return false;
+  return !RESERVED_SUBDOMAINS.has(slug);
+}
+
 /** Límite del nombre de dominio completo (RFC 1035) y de cada etiqueta entre puntos. */
 const MAX_DOMAIN_LENGTH = 253;
 const LABEL = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
