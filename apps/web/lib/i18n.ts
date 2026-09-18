@@ -135,6 +135,12 @@ export type Strings = {
   receiptNotInvoice: string;
   receiptPrint: string;
   receiptDownload: string;
+  legalPrivacy: string;
+  legalNotice: string;
+  legalTerms: string;
+  /** Consentimiento informado, junto al botón de pagar: es donde el comensal entrega sus
+   *  datos, así que es donde tiene que poder leer qué se hace con ellos. */
+  legalPayNote: string;
   backToMenu: string;
 };
 
@@ -188,6 +194,10 @@ const ES: Strings = {
     "Justificante de pedido. No válido como factura. Si necesitas factura, pídela al establecimiento.",
   receiptPrint: "Imprimir",
   receiptDownload: "Descargar recibo",
+  legalPrivacy: "Privacidad",
+  legalNotice: "Aviso legal",
+  legalTerms: "Condiciones",
+  legalPayNote: "Al pedir aceptas las condiciones y la política de privacidad.",
   backToMenu: "Volver a la carta",
 };
 
@@ -241,6 +251,10 @@ const EN: Strings = {
     "Order receipt. Not valid as an invoice. Ask the venue if you need a tax invoice.",
   receiptPrint: "Print",
   receiptDownload: "Download receipt",
+  legalPrivacy: "Privacy",
+  legalNotice: "Legal notice",
+  legalTerms: "Terms",
+  legalPayNote: "By ordering you accept the terms and the privacy policy.",
   backToMenu: "Back to the menu",
 };
 
@@ -294,6 +308,10 @@ const PT: Strings = {
     "Comprovativo de pedido. Não válido como fatura. Peça a fatura ao estabelecimento.",
   receiptPrint: "Imprimir",
   receiptDownload: "Baixar recibo",
+  legalPrivacy: "Privacidade",
+  legalNotice: "Aviso legal",
+  legalTerms: "Condições",
+  legalPayNote: "Ao pedir aceitas as condições e a política de privacidade.",
   backToMenu: "Voltar à carta",
 };
 
