@@ -4,7 +4,7 @@ import {
   tenantsTableForCustomDomainWrite,
   tenantsTableForHostResolution,
 } from "./client.js";
-import type { Tenant, TenantSettingsRow } from "./types.js";
+import type { PlanStatus, Tenant, TenantSettingsRow } from "./types.js";
 
 export async function findTenantByHost(
   host: string,
@@ -15,7 +15,7 @@ export async function findTenantByHost(
 
   // Exención deliberada: aún no hay tenantId que aplicar, ver el docstring de
   // `tenantsTableForHostResolution` en ./client.ts.
-  const query = tenantsTableForHostResolution().select("id, slug, name, status");
+  const query = tenantsTableForHostResolution().select("id, slug, name, status, plan_status");
   const { data, error } =
     ref.kind === "subdomain"
       ? await query.eq("slug", ref.slug).maybeSingle()
@@ -29,6 +29,7 @@ export async function findTenantByHost(
     slug: data.slug as string,
     name: data.name as string,
     status: data.status as Tenant["status"],
+    planStatus: data.plan_status as PlanStatus,
   };
 }
 

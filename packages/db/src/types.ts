@@ -1,8 +1,14 @@
+/** Estado de la suscripción del restaurante, tal cual lo dicta Stripe. NO confundir con
+ *  `Tenant.status`, que es si el servicio se sirve o no: el primero es la causa, el segundo el
+ *  efecto, y entre ambos hay una ventana de gracia deliberada (ver `decidirEstado`). */
+export type PlanStatus = "trialing" | "active" | "past_due" | "canceled";
+
 export type Tenant = {
   id: string;
   slug: string;
   name: string;
   status: "active" | "suspended";
+  planStatus: PlanStatus;
 };
 
 export type TenantSettingsRow = {

@@ -106,6 +106,7 @@ export type {
   Category,
   OrderReceipt,
   OrderStatus,
+  PlanStatus,
   Product,
   ProductExtra,
   ReceiptLine,
