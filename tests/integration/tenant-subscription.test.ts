@@ -1,3 +1,4 @@
+import { getTenantBillingState } from "@suarex/db";
 import { describe, expect, it } from "vitest";
 import { admin, createTenantFixture, deleteTenantFixture, nonce } from "./helpers/tenants.js";
 
@@ -81,5 +82,28 @@ describe("columnas de suscripción", () => {
       await deleteTenantFixture(a);
       await deleteTenantFixture(b);
     }
+  });
+
+  it("getTenantBillingState devuelve el estado que lee el aviso del panel", async () => {
+    const fixture = await createTenantFixture(`estado-${nonce()}`);
+    const hasta = new Date(Date.now() + 86400_000).toISOString();
+    try {
+      await admin
+        .from("tenants")
+        .update({ plan_status: "past_due", grace_until: hasta })
+        .eq("id", fixture.tenantId);
+
+      const estado = await getTenantBillingState(fixture.tenantId);
+      expect(estado?.planStatus).toBe("past_due");
+      expect(estado?.graceUntil).not.toBeNull();
+    } finally {
+      await deleteTenantFixture(fixture);
+    }
+  });
+
+  it("getTenantBillingState devuelve null para un tenant que no existe", async () => {
+    // El layout del panel lo llama con catch y pinta sin aviso: un tenant inexistente no
+    // puede convertirse en un 500 que deje al gestor fuera de su panel.
+    expect(await getTenantBillingState("00000000-0000-0000-0000-000000000000")).toBeNull();
   });
 });

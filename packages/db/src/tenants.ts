@@ -106,6 +106,27 @@ export async function getTenantStripeAccount(tenantId: string): Promise<string |
   return (data?.stripe_account_id as string | null) ?? null;
 }
 
+/**
+ * Estado de facturación del tenant, para el aviso del panel. Lectura de una fila de `tenants`
+ * por su clave primaria: mismo caso que `getTenantStripeAccount`, cubierto por la exención de
+ * lectura documentada en `client.ts`.
+ */
+export async function getTenantBillingState(
+  tenantId: string,
+): Promise<{ planStatus: PlanStatus; graceUntil: string | null } | null> {
+  const { data, error } = await tenantsTableForHostResolution()
+    .select("plan_status, grace_until")
+    .eq("id", tenantId)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) return null;
+  return {
+    planStatus: data.plan_status as PlanStatus,
+    graceUntil: (data.grace_until as string | null) ?? null,
+  };
+}
+
 export async function getTenantSettings(tenantId: string): Promise<TenantSettingsRow | null> {
   const { data, error } = await tenantScoped("tenant_settings", tenantId)
     .select("tenant_id, branding, fiscal, locale, currency, channels, features, theme")

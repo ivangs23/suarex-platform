@@ -101,6 +101,7 @@ export { findTableByToken } from "./tables.js";
 export type { UpdateTenantSettingsInput } from "./tenants.js";
 export {
   findTenantByHost,
+  getTenantBillingState,
   getTenantCustomDomain,
   getTenantSettings,
   getTenantStripeAccount,
