@@ -171,6 +171,27 @@ export function tenantsTableForCustomDomainWrite() {
 }
 
 /**
+ * DECIMOCUARTA EXENCIÓN DELIBERADA, hermana de `tenantsTableForCustomDomainWrite` y separada
+ * de ella por el mismo motivo por el que aquella se separó de la de lectura: cada escritura a
+ * `tenants` declara qué columnas puede tocar y quién la llama.
+ *
+ * Único uso legítimo: `./billing.js` (`applySubscriptionState`, `suspendExpiredGrace`), que
+ * escribe `plan_status`, `status`, `grace_until` y `stripe_subscription_id` a partir de lo que
+ * comunica el webhook de facturación de Stripe. `tenants` no admite `tenantScoped` porque no
+ * tiene columna `tenant_id` (se identifica por su propia `id`).
+ *
+ * Es la ÚNICA exención de este fichero cuyo filtro no es la `id` del tenant:
+ * `applySubscriptionState` localiza por `stripe_customer_id` (índice único parcial, ver
+ * `20260915000002_tenant_subscription.sql`) porque los webhooks de Stripe no saben nada de
+ * tenants -- ese identificador es todo lo que traen. Sigue siendo una fila por clave única.
+ * La excepción es `suspendExpiredGrace`, que actualiza por predicado de fecha a propósito: es
+ * un barrido de mantenimiento, no una operación de negocio de ningún tenant.
+ */
+export function tenantsTableForBilling() {
+  return serviceClient().from("tenants");
+}
+
+/**
  * SEGUNDA EXENCIÓN DELIBERADA, con el mismo razonamiento que
  * `tenantsTableForHostResolution`: el token del QR es lo que determina a qué tenant
  * pertenece la mesa, así que la búsqueda no puede filtrarse por un tenant que aún no
