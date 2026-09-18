@@ -72,7 +72,7 @@ export type { PairDeviceResult } from "./devices.js";
 export { pairDevice } from "./devices.js";
 export type { TableMenu } from "./menu.js";
 export { loadTableMenu } from "./menu.js";
-export type { MarkPaidOutcome } from "./orders.js";
+export type { MarkPaidOutcome, RefundOutcome } from "./orders.js";
 export {
   attachPaymentIntent,
   cancelOrphanedPendingOrder,
@@ -81,7 +81,9 @@ export {
   getOrderByPublicToken,
   getOrderLocale,
   getOrderReceipt,
+  markOrderDisputed,
   markOrderPaid,
+  markOrderRefunded,
   OrderCartError,
   purgeOrderPersonalData,
 } from "./orders.js";

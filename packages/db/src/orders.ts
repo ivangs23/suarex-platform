@@ -472,3 +472,67 @@ export async function purgeOrderPersonalData(
     pedidosBorrados: fila?.pedidos_borrados ?? 0,
   };
 }
+
+export type RefundOutcome = "marcado" | "ya-reembolsado" | "order-not-found";
+
+/**
+ * Registra un reembolso comunicado por Stripe.
+ *
+ * Se localiza por `stripe_payment_intent_id` (columna única) porque los webhooks de Stripe no
+ * saben nada de tenants. El importe llega EN CÉNTIMOS desde Stripe y se guarda tal cual: puede
+ * ser parcial, así que no se deriva de `orders.total` -- derivarlo daría un número falso en la
+ * conciliación en cuanto alguien devuelva media comanda.
+ *
+ * IDEMPOTENTE: Stripe reintenta los webhooks, y un reintento no puede mover `refunded_at`. El
+ * filtro `is("refunded_at", null)` hace que la segunda pasada no actualice ninguna fila.
+ */
+export async function markOrderRefunded(
+  paymentIntentId: string,
+  refundedCents: number,
+): Promise<RefundOutcome> {
+  const { data, error } = await ordersTableForPaymentResolution()
+    .update({
+      status: "refunded",
+      refunded_cents: refundedCents,
+      refunded_at: new Date().toISOString(),
+    })
+    .eq("stripe_payment_intent_id", paymentIntentId)
+    .is("refunded_at", null)
+    .select("id");
+  if (error) throw error;
+  if ((data as unknown[] | null)?.length) return "marcado";
+
+  // No actualizó nada: o ya estaba reembolsado, o el pedido no existe. Son casos MUY
+  // distintos -- el segundo significa que se devolvió dinero de algo de lo que este sistema no
+  // tiene registro -- así que se distinguen en vez de devolver un "no pasó nada" ambiguo.
+  const { data: existe, error: errorLectura } = await ordersTableForPaymentResolution()
+    .select("id")
+    .eq("stripe_payment_intent_id", paymentIntentId)
+    .maybeSingle();
+  if (errorLectura) throw errorLectura;
+  return existe ? "ya-reembolsado" : "order-not-found";
+}
+
+/**
+ * Registra que el banco ha abierto una disputa sobre el cobro.
+ *
+ * NO cambia `status`: una disputa no es un reembolso. El dinero se retiene mientras el banco
+ * decide y el pedido puede acabar cobrado igualmente. Marcarlo `refunded` aquí haría que la
+ * caja cuadrase mal en la dirección contraria, que es igual de malo.
+ */
+export async function markOrderDisputed(paymentIntentId: string): Promise<RefundOutcome> {
+  const { data, error } = await ordersTableForPaymentResolution()
+    .update({ disputed_at: new Date().toISOString() })
+    .eq("stripe_payment_intent_id", paymentIntentId)
+    .is("disputed_at", null)
+    .select("id");
+  if (error) throw error;
+  if ((data as unknown[] | null)?.length) return "marcado";
+
+  const { data: existe, error: errorLectura } = await ordersTableForPaymentResolution()
+    .select("id")
+    .eq("stripe_payment_intent_id", paymentIntentId)
+    .maybeSingle();
+  if (errorLectura) throw errorLectura;
+  return existe ? "ya-reembolsado" : "order-not-found";
+}
