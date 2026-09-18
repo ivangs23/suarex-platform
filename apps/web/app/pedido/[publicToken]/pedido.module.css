@@ -235,3 +235,23 @@
     display: none;
   }
 }
+
+.receiptTaxBreakdown {
+  display: flex;
+  justify-content: space-between;
+  margin: 0.25rem 0 0;
+  font-size: 0.8rem;
+  /* Mismo recurso que el resto del fichero para texto atenuado. NO `var(--color-muted)`:
+     ese token es de FONDO (globals.css lo define beige, y los tenants sembrados casi
+     blanco), y sobre `.receipt { background: #ffffff }` daría ~1.4:1 -- el texto estaría
+     en el DOM, el test en verde, y el aviso ilegible. */
+  color: color-mix(in srgb, var(--color-fg) 60%, transparent);
+}
+
+.receiptNotInvoice {
+  margin: 0.75rem 0 0;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  text-align: center;
+  color: color-mix(in srgb, var(--color-fg) 65%, transparent);
+}
