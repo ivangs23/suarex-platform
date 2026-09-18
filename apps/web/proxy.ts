@@ -1,4 +1,4 @@
-import { resolveRootDomains } from "@suarex/config";
+import { isPlatformHost, resolveRootDomains } from "@suarex/config";
 import { findTenantByHost } from "@suarex/db";
 import { createServerClient } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
@@ -85,6 +85,42 @@ async function refreshStaffSession(request: NextRequest, response: NextResponse)
 
 export async function proxy(request: NextRequest) {
   const host = request.headers.get("host") ?? "";
+  const pathname = request.nextUrl.pathname;
+
+  // LA CONSOLA DE PLATAFORMA VIVE EN SU PROPIO HOST ("admin.<raiz>"), y las dos direcciones se
+  // comprueban aqui. La segunda es la que importa: sin ella, "garum.suarex.app/plataforma"
+  // llegaria a la pagina con un tenant resuelto y toda la defensa quedaria en manos del guard
+  // de rol -- una sola barrera para la superficie que ve a TODOS los clientes.
+  const esRutaDePlataforma = pathname === "/plataforma" || pathname.startsWith("/plataforma/");
+  // El cron del sistema llega a /api/internal/* sin tenant: ni lo necesita ni lo usa. Se
+  // permite por los dos hosts -- por el de plataforma (lo natural, y lo que evita que un
+  // tenant suspendido tumbe el cron) y por el de un tenant (como esta instalado hoy en el
+  // VPS), para no romper el cron ya desplegado.
+  const esRutaDeCron = pathname.startsWith("/api/internal/");
+
+  if (isPlatformHost(host, ROOT_DOMAINS)) {
+    // Bajo el host de plataforma NO se resuelve ningun tenant, y cualquier otra ruta es 404:
+    // la carta, el panel del cliente y el tablero de personal no existen aqui.
+    if (!esRutaDePlataforma && !esRutaDeCron) {
+      return NextResponse.rewrite(new URL("/not-found", request.url), {
+        status: 404,
+        request: { headers: stripForgedTenantHeaders(request) },
+      });
+    }
+    const response = NextResponse.next({
+      request: { headers: stripForgedTenantHeaders(request) },
+    });
+    if (esRutaDePlataforma) await refreshStaffSession(request, response);
+    return response;
+  }
+
+  // LA OTRA DIRECCION. La consola no se sirve NUNCA bajo el host de un cliente.
+  if (esRutaDePlataforma) {
+    return NextResponse.rewrite(new URL("/not-found", request.url), {
+      status: 404,
+      request: { headers: stripForgedTenantHeaders(request) },
+    });
+  }
 
   let tenant: Awaited<ReturnType<typeof findTenantByHost>>;
   try {
@@ -127,7 +163,7 @@ export async function proxy(request: NextRequest) {
 
   const response = NextResponse.next({ request: { headers } });
 
-  if (request.nextUrl.pathname.startsWith("/staff")) {
+  if (pathname.startsWith("/staff")) {
     await refreshStaffSession(request, response);
   }
 

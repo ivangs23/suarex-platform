@@ -22,6 +22,31 @@ export function parseTenantHost(host: string, rootDomains: string[]): TenantHost
   return { kind: "domain", domain: clean };
 }
 
+/**
+ * Subdominio único de la consola de plataforma. Está en `RESERVED_SUBDOMAINS` (arriba), así
+ * que ningún cliente puede tener este slug: la reserva y esta constante TIENEN que seguir
+ * diciendo lo mismo, y `tenant-host.test.ts` lo comprueba.
+ */
+const PLATFORM_SUBDOMAIN = "admin";
+
+/**
+ * ¿Es este Host el de la consola de plataforma (`admin.<raíz>`)?
+ *
+ * Se compara contra las MISMAS raíces que usa `parseTenantHost`, y de forma EXACTA sobre el
+ * host completo reconstruido -- no con `startsWith` ni `includes`. Esa exactitud es la
+ * frontera: con una comparación laxa, un cliente con dominio propio `admin.loquesea.com`, un
+ * host `admin.suarex.app.evil.com` o una etiqueta anidada `admin.garum.suarex.app` entrarían
+ * en la consola de plataforma. Los cuatro casos están en el test.
+ *
+ * Quien decide qué se sirve bajo este host es `apps/web/proxy.ts`, que además garantiza la
+ * dirección contraria: `/plataforma` NUNCA se sirve bajo el host de un cliente.
+ */
+export function isPlatformHost(host: string, rootDomains: string[]): boolean {
+  const clean = host.trim().toLowerCase().split(":")[0];
+  if (!clean) return false;
+  return rootDomains.some((root) => clean === `${PLATFORM_SUBDOMAIN}.${root.trim().toLowerCase()}`);
+}
+
 /** Límite del nombre de dominio completo (RFC 1035) y de cada etiqueta entre puntos. */
 const MAX_DOMAIN_LENGTH = 253;
 const LABEL = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;

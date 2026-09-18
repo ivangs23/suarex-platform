@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { normalizeCustomDomain, parseTenantHost, resolveRootDomains } from "./tenant-host.js";
+import {
+  isPlatformHost,
+  normalizeCustomDomain,
+  parseTenantHost,
+  resolveRootDomains,
+} from "./tenant-host.js";
 
 const ROOTS = ["localhost", "suarex.app"];
 
@@ -151,5 +156,37 @@ describe("normalizeCustomDomain", () => {
     const largo = `${Array.from({ length: 11 }, () => "a".repeat(24)).join(".")}.com`;
     expect(largo.length).toBeGreaterThan(253);
     expect(normalizeCustomDomain(largo, ROOTS)).toBeNull();
+  });
+});
+
+describe("isPlatformHost", () => {
+  const RAICES = ["suarex.app", "localhost"];
+
+  it("reconoce admin.<raíz>, con puerto y en cualquier caja", () => {
+    expect(isPlatformHost("admin.suarex.app", RAICES)).toBe(true);
+    expect(isPlatformHost("admin.localhost:3000", RAICES)).toBe(true);
+    expect(isPlatformHost("ADMIN.SuarEx.app", RAICES)).toBe(true);
+    expect(isPlatformHost("  admin.suarex.app  ", RAICES)).toBe(true);
+  });
+
+  it("no confunde un host de cliente con el de plataforma", () => {
+    expect(isPlatformHost("garum.suarex.app", RAICES)).toBe(false);
+    expect(isPlatformHost("suarex.app", RAICES)).toBe(false);
+    expect(isPlatformHost("", RAICES)).toBe(false);
+  });
+
+  it("un cliente no puede llegar a la consola por parecerse", () => {
+    // Estas cuatro son las suplantaciones que un `startsWith`/`includes` dejaría pasar. La
+    // comparación es exacta sobre el host completo por este motivo.
+    expect(isPlatformHost("admin.garum.com", RAICES), "dominio propio ajeno").toBe(false);
+    expect(isPlatformHost("admin.suarex.app.evil.com", RAICES), "sufijo falso").toBe(false);
+    expect(isPlatformHost("admin.garum.suarex.app", RAICES), "etiqueta anidada").toBe(false);
+    expect(isPlatformHost("notadmin.suarex.app", RAICES), "prefijo pegado").toBe(false);
+  });
+
+  it("`admin` sigue siendo un slug reservado para los tenants", () => {
+    // Las dos cosas tienen que decir lo mismo: si `admin` dejara de estar reservado, un
+    // cliente podría registrarse con ese slug y colisionar con la consola.
+    expect(parseTenantHost("admin.suarex.app", RAICES)).toBeNull();
   });
 });
