@@ -171,6 +171,40 @@ export function tenantsTableForCustomDomainWrite() {
 }
 
 /**
+ * DECIMOSEXTA EXENCIÓN DELIBERADA, y la ÚNICA de todo el paquete que BARRE de verdad: devuelve
+ * `tenants` sin filtro de ninguna clase, para leer TODAS las filas y para insertar una nueva.
+ *
+ * Es inevitable y es el punto: la consola de plataforma es, por definición, la superficie que
+ * mira por encima de todos los clientes. No hay forma de expresarla sin esto, y fingir lo
+ * contrario -- por ejemplo pidiendo un `tenantId` que luego se ignora -- sería peor: escondería
+ * en una firma tranquilizadora lo que aquí está escrito a la vista.
+ *
+ * Lo que la mantiene acotada NO es la firma, entonces, sino su único llamante:
+ * `src/platform.ts`, consumido exclusivamente desde `app/plataforma/**`, que a su vez está
+ * detrás de DOS barreras independientes -- el 404 del proxy para cualquier host que no sea el
+ * de plataforma (`apps/web/proxy.ts`) y `requirePlatformAdmin()`.
+ *
+ * Cualquier llamante nuevo a esta función es un fallo de revisión: si hace falta tocar
+ * `tenants` desde otro sitio, se declara su propia exención estrecha, como
+ * `tenantsTableForBilling`.
+ */
+export function tenantsTableForPlatformConsole() {
+  return serviceClient().from("tenants");
+}
+
+/**
+ * DECIMOSÉPTIMA EXENCIÓN DELIBERADA, mismo razonamiento que `authAdminForStaffCreation`: el
+ * alta de un cliente crea la cuenta de Auth de su PRIMER owner -- el huevo y la gallina que el
+ * panel no puede resolver, porque para crear personal ya hace falta un owner. No hay tabla que
+ * filtrar (es la Admin API de Auth). Acotado por firma a `createTenantWithOwner`
+ * (`src/platform.ts`); no se reutiliza la de staff para que cada punto que crea cuentas sea
+ * rastreable a un único llamante.
+ */
+export function authAdminForPlatformConsole() {
+  return serviceClient().auth.admin;
+}
+
+/**
  * DECIMOQUINTA EXENCIÓN DELIBERADA. `platform_admins` no tiene `tenant_id` y no puede tenerlo:
  * un superadmin no pertenece a ningún cliente, y esa es toda su razón de ser (ver
  * `20260915000003_platform_admins.sql`). Acotado por firma a esa única tabla y a un único
