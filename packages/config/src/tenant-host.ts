@@ -2,7 +2,10 @@ export type TenantHostRef =
   | { kind: "subdomain"; slug: string }
   | { kind: "domain"; domain: string };
 
-const RESERVED_SUBDOMAINS = new Set(["www", "api", "admin", "app"]);
+// `studio` está aquí porque `deploy/Caddyfile` enruta `studio.<dominio>` al Studio de
+// Supabase: un cliente con ese slug tendría su carta permanentemente tapada por el panel de
+// la base de datos, sin ningún error que lo explicara.
+const RESERVED_SUBDOMAINS = new Set(["www", "api", "admin", "app", "studio"]);
 
 export function parseTenantHost(host: string, rootDomains: string[]): TenantHostRef | null {
   const clean = host.trim().toLowerCase().split(":")[0];

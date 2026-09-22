@@ -11,7 +11,14 @@
 alter table public.devices
   add column offline_alerted_at timestamptz;
 
--- El barrido busca exactamente por aquí: emparejados, sin latir desde hace rato.
+-- Emparejados y sin latir desde hace rato: el predicado del barrido.
+--
+-- Ojo al historial, porque explica por qué este comentario es preciso y no una promesa: la
+-- PRIMERA versión del barrido traía todas las filas y filtraba en JavaScript, así que
+-- `last_seen_at` no aparecía en ningún WHERE y este índice era inusable por construcción.
+-- Desde `20260922000003_device_health_sweep.sql` el filtro vive en SQL y el planificador
+-- puede usarlo (verificado con EXPLAIN forzando enable_seqscan=off: Bitmap Heap Scan sobre
+-- este índice). Con la tabla casi vacía elige Seq Scan, que es lo correcto.
 -- `paired_at is not null` en el índice porque un dispositivo sin emparejar nunca ha estado
 -- vivo: avisar de que "no late" sería avisar de que todavía no se ha instalado.
 create index devices_offline_sweep_idx on public.devices (last_seen_at)

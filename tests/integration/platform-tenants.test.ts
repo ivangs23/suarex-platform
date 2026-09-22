@@ -159,7 +159,8 @@ describe("createTenantWithOwner", () => {
 
 describe("listPlatformTenants", () => {
   it("lista TODOS los tenants, no los de uno", async () => {
-    // Es la única consulta del sistema que barre entre clientes a propósito.
+    // Una de las dos consultas del sistema que barren entre clientes a propósito (la otra es
+    // el barrido de salud de dispositivos).
     const filas = await listPlatformTenants();
     const slugs = filas.map((f) => f.slug);
     expect(slugs).toContain("garum");

@@ -45,13 +45,32 @@ function esProhibida(clave: string): boolean {
   return CLAVES_PROHIBIDAS.some((prohibida) => k.includes(prohibida));
 }
 
-/** Un `Error` se reduce a tipo y mensaje. El stack puede llevar rutas del servidor y, en un
- *  error de Postgres, fragmentos de la consulta con valores dentro. */
-function normalizar(valor: unknown): unknown {
+/**
+ * Un `Error` se reduce a tipo y mensaje. El stack puede llevar rutas del servidor y, en un
+ * error de Postgres, fragmentos de la consulta con valores dentro.
+ *
+ * RECURRE por los objetos anidados. Sin esto, la redacción solo miraba las claves de primer
+ * nivel: `log.error("x", { pedido })` habría escrito las `notes` del comensal enteras. La
+ * promesa del docstring de arriba es "ningún dato personal en el log", y una garantía que
+ * depende de cómo el llamante estructure su objeto no es una garantía.
+ *
+ * `profundidad` corta a 4 niveles: más abajo casi nunca hay información útil y sí riesgo de
+ * ciclos (que el try/catch de `lineaDeLog` ya cubre, pero mejor no llegar).
+ */
+function normalizar(valor: unknown, profundidad = 0): unknown {
   if (valor instanceof Error) return { tipo: valor.name, mensaje: valor.message };
   if (typeof valor === "function") return "[funcion]";
   if (typeof valor === "bigint") return valor.toString();
-  return valor;
+  if (valor === null || typeof valor !== "object") return valor;
+  if (profundidad >= 4) return "[profundo]";
+
+  if (Array.isArray(valor)) return valor.map((v) => normalizar(v, profundidad + 1));
+
+  const limpio: Record<string, unknown> = {};
+  for (const [clave, v] of Object.entries(valor as Record<string, unknown>)) {
+    limpio[clave] = esProhibida(clave) ? REDACTADO : normalizar(v, profundidad + 1);
+  }
+  return limpio;
 }
 
 /**

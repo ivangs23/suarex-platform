@@ -171,26 +171,24 @@ export function tenantsTableForCustomDomainWrite() {
 }
 
 /**
- * DECIMOCTAVA EXENCIÓN DELIBERADA. El barrido de salud de dispositivos recorre `devices` de
- * TODOS los tenants: su trabajo es precisamente encontrar los PCs caídos allá donde estén, y
- * un barrido acotado a un tenant exigiría saber de antemano cuál se ha caído.
- *
+ * DECIMOCTAVA EXENCIÓN DELIBERADA. `sweep_device_health` es SECURITY DEFINER y recorre
+ * `devices` de TODOS los tenants: su trabajo es precisamente encontrar los PCs caídos allá
+ * donde estén, y un barrido acotado a un tenant exigiría saber de antemano cuál se ha caído.
  * Es mantenimiento de la plataforma, no una operación de negocio de ningún cliente -- misma
- * naturaleza que `expirePendingOrdersRpc` o `suspendExpiredGrace`. Acotado por firma a
- * `sweepDeviceHealth` (`src/device-health.ts`), que solo lee `id/name/tenant_id/last_seen_at`
- * y escribe únicamente `offline_alerted_at`: no toca credenciales ni `pairing_code`.
+ * naturaleza que `expirePendingOrdersRpc`.
  *
- * NO se reutiliza `devicesTableForPairing`: aquella es para el canje por `pairing_code`, una
- * fila por clave única. Esta barre. Mezclarlas escondería el barrido detrás de un nombre que
- * promete lo contrario.
+ * El barrido vive DENTRO de la función SQL, no aquí: el UPDATE ... RETURNING es atómico, así
+ * que dos ejecuciones solapadas del cron no pueden avisar las dos del mismo dispositivo.
+ * Acotado por firma a `sweepDeviceHealth` (`src/device-health.ts`).
  */
-export function devicesTableForHealthSweep() {
-  return serviceClient().from("devices");
+export function sweepDeviceHealthRpc(minutos: number) {
+  return serviceClient().rpc("sweep_device_health", { p_minutos: minutos });
 }
 
 /**
- * DECIMOSEXTA EXENCIÓN DELIBERADA, y la ÚNICA de todo el paquete que BARRE de verdad: devuelve
- * `tenants` sin filtro de ninguna clase, para leer TODAS las filas y para insertar una nueva.
+ * DECIMOSEXTA EXENCIÓN DELIBERADA, y una de las DOS de todo el paquete que barren de verdad
+ * (la otra es `devicesTableForHealthSweep`, arriba): devuelve `tenants` sin filtro de ninguna
+ * clase, para leer TODAS las filas y para insertar una nueva.
  *
  * Es inevitable y es el punto: la consola de plataforma es, por definición, la superficie que
  * mira por encima de todos los clientes. No hay forma de expresarla sin esto, y fingir lo

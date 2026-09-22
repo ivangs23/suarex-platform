@@ -220,3 +220,12 @@ describe("validarSlugPlataforma", () => {
     }
   });
 });
+
+describe("studio como subdominio reservado", () => {
+  it("un cliente no puede llamarse `studio`", () => {
+    // `deploy/Caddyfile` enruta `studio.<dominio>` al Studio de Supabase: un tenant con ese
+    // slug tendría su carta permanentemente tapada, sin ningún error que lo explicara.
+    expect(validarSlugPlataforma("studio")).toBe(false);
+    expect(parseTenantHost("studio.suarex.app", ["suarex.app"])).toBeNull();
+  });
+});

@@ -39,8 +39,9 @@ export type PlatformTenantRow = {
   createdAt: string;
 };
 
-/** Todos los clientes, el más nuevo primero. La única consulta del sistema que barre entre
- *  tenants a propósito: ver la decimosexta exención en `client.ts`. */
+/** Todos los clientes, el más nuevo primero. Una de las dos consultas del sistema que barren
+ *  entre tenants a propósito -- la otra es el barrido de salud de dispositivos. Ver la
+ *  decimosexta exención en `client.ts`. */
 export async function listPlatformTenants(): Promise<PlatformTenantRow[]> {
   const { data, error } = await tenantsTableForPlatformConsole()
     .select("id, slug, name, status, plan, plan_status, grace_until, custom_domain, created_at")

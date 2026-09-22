@@ -87,3 +87,47 @@ describe("log", () => {
     inf.mockRestore();
   });
 });
+
+describe("redacción en objetos anidados", () => {
+  it("redacta también dentro de objetos anidados", () => {
+    // El agujero que esto cierra: la redacción solo miraba el primer nivel, así que
+    // `log.error("x", { pedido })` habría escrito las notas del comensal enteras. Una
+    // garantía que depende de cómo el llamante estructure su objeto no es una garantía.
+    const linea = JSON.parse(
+      lineaDeLog("error", "x", {
+        pedido: { id: "ok-visible", notes: "para la alérgica", cliente: { email: "a@b.com" } },
+      }),
+    );
+    expect(linea.pedido.id).toBe("ok-visible");
+    expect(linea.pedido.notes).toBe("[redactado]");
+    expect(linea.pedido.cliente.email).toBe("[redactado]");
+  });
+
+  it("redacta dentro de arrays", () => {
+    const linea = JSON.parse(
+      lineaDeLog("error", "x", { lineas: [{ id: "1", notes: "sin cebolla" }] }),
+    );
+    expect(linea.lineas[0].id).toBe("1");
+    expect(linea.lineas[0].notes).toBe("[redactado]");
+  });
+
+  it("corta los OBJETOS a profundidad 4, pero conserva los primitivos", () => {
+    // Un valor primitivo hondo no cuesta nada y puede ser justo el dato que buscas; lo que
+    // se corta son los objetos, que es donde crece el riesgo de ciclos y de ruido.
+    const conPrimitivo = { a: { b: { c: { d: { e: "muy hondo" } } } } };
+    expect(JSON.stringify(JSON.parse(lineaDeLog("error", "x", conPrimitivo)))).toContain(
+      "muy hondo",
+    );
+
+    const conObjeto = { a: { b: { c: { d: { e: { f: "demasiado" } } } } } };
+    const linea = JSON.parse(lineaDeLog("error", "x", conObjeto));
+    expect(JSON.stringify(linea)).toContain("[profundo]");
+    expect(JSON.stringify(linea)).not.toContain("demasiado");
+  });
+
+  it("sigue sin lanzar con una referencia circular anidada", () => {
+    const o: Record<string, unknown> = { nivel: 1 };
+    o.yo = o;
+    expect(() => lineaDeLog("error", "x", { raiz: o })).not.toThrow();
+  });
+});
