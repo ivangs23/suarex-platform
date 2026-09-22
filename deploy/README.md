@@ -339,6 +339,72 @@ medio hacer no lo deje abierto. Genera el secreto con `openssl rand -hex 32` y p
 
 ---
 
+## Restaurar: el simulacro, y por qué no es obvio
+
+**Un backup que no se ha restaurado nunca no es un backup, es un fichero.** Haz el simulacro
+una vez al trimestre y cuando cambies de versión de Postgres.
+
+### Lo que hay que saber antes
+
+Tres cosas que se descubrieron haciendo un simulacro de verdad, y que cuestan una noche si se
+descubren el día del desastre:
+
+1. **El volcado NO incluye los roles.** `pg_dump` vuelca una base; los roles son del cluster.
+   La imagen de Supabase trae 4 de los 13 que este esquema usa, así que sin ellos la
+   restauración muere en `role "supabase_realtime_admin" does not exist`. Por eso
+   `backup-db.sh` genera **dos** ficheros: `suarex-FECHA.sql.gz` y
+   `suarex-FECHA.roles.sql.gz`. Cópialos los dos fuera del servidor.
+
+2. **El destino NO puede estar vacío.** El volcado lleva `--clean --if-exists` porque el
+   destino real nunca está limpio: la imagen de Supabase precrea `auth` y `storage`, y sin ese
+   flag falla con `schema "auth" already exists`. A cambio, contra una base completamente nueva
+   falla en la primera línea (`DROP POLICY ... ON public.venues`: ese IF EXISTS protege la
+   policy, no la tabla). No "arregles" el flag — ajusta el procedimiento.
+
+3. **Todo se hace como `supabase_admin`, no como `postgres`.** En el stack autoalojado
+   `postgres` no es superusuario y la restauración falla con
+   `must be able to SET ROLE "supabase_admin"`.
+
+### El procedimiento
+
+```bash
+# 1. Levanta el stack de Supabase en el servidor nuevo (crea esquemas y roles base).
+# 2. Aplica las migraciones (crea el esquema public).
+./deploy/scripts/apply-migrations.sh
+
+# 3. Restaura. El script carga los roles solo si encuentra el .roles.sql.gz al lado.
+DB_CONTAINER=supabase-db ./deploy/scripts/restore-db.sh /var/backups/suarex/suarex-FECHA.sql.gz
+```
+
+Termina imprimiendo un recuento de tenants, productos, pedidos, usuarios y dispositivos.
+**Compáralo con lo que esperabas tener.** Una restauración que acaba sin error pero deja las
+tablas vacías es el peor resultado posible, porque parece que funcionó.
+
+### Para ensayar sin tocar producción
+
+Levanta un Postgres desechable con la misma imagen, cárgale los roles, aplícale las
+migraciones y restaura ahí. Los números tienen que cuadrar con los de producción:
+
+```bash
+docker run -d --name drill -e POSTGRES_PASSWORD=x public.ecr.aws/supabase/postgres:17.6.1.106
+# ... roles + migraciones ...
+DB_CONTAINER=drill ./deploy/scripts/restore-db.sh <volcado>
+docker rm -f drill
+```
+
+No lo ensayes restaurando en una base con OTRO NOMBRE dentro del mismo Postgres: `pg_cron`
+solo puede existir en la base llamada `postgres` y la restauración se para ahí.
+
+### RPO y RTO
+
+| | |
+|---|---|
+| **RPO** (datos que se pierden) | Hasta **24 h** — `backup-db.sh` corre a las 3:30. Con más volumen, baja el cron a cada 6 h. |
+| **RTO** (tiempo hasta volver) | **~40 min** en servidor nuevo: instalar el stack (20) + migraciones (2) + restaurar (5) + DNS y certificados (10). |
+
+Si esos números no te valen para un cliente, la respuesta no es hacer más backups: es una
+réplica de Postgres, y eso es otra fase.
+
 ## Los otros dos crons del sistema
 
 Mismo patrón que el de expirar pedidos, mismo `CRON_SECRET`, y los dos fallan cerrado si el
