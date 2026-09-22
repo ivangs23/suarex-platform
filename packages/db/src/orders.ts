@@ -10,6 +10,7 @@ import {
   nextOrderNumberRpc,
   ordersTableForPaymentResolution,
   purgeOrderPersonalDataRpc,
+  recordOrderRefundRpc,
   tenantScoped,
 } from "./client.js";
 import { getTenantSettings } from "./tenants.js";
@@ -490,27 +491,17 @@ export async function markOrderRefunded(
   paymentIntentId: string,
   refundedCents: number,
 ): Promise<RefundOutcome> {
-  const { data, error } = await ordersTableForPaymentResolution()
-    .update({
-      status: "refunded",
-      refunded_cents: refundedCents,
-      refunded_at: new Date().toISOString(),
-    })
-    .eq("stripe_payment_intent_id", paymentIntentId)
-    .is("refunded_at", null)
-    .select("id");
+  // Todo el trabajo va dentro del RPC (ver `20260922000002_record_order_refund.sql`): el
+  // bloqueo de fila, la comparación del acumulado contra lo ya registrado y la decisión de si
+  // el reembolso es total o parcial. Hacerlo aquí en varios pasos dejaría una ventana entre
+  // leer y escribir en la que dos eventos solapados de Stripe se pisarían.
+  const { data, error } = await recordOrderRefundRpc(paymentIntentId, refundedCents);
   if (error) throw error;
-  if ((data as unknown[] | null)?.length) return "marcado";
 
-  // No actualizó nada: o ya estaba reembolsado, o el pedido no existe. Son casos MUY
-  // distintos -- el segundo significa que se devolvió dinero de algo de lo que este sistema no
-  // tiene registro -- así que se distinguen en vez de devolver un "no pasó nada" ambiguo.
-  const { data: existe, error: errorLectura } = await ordersTableForPaymentResolution()
-    .select("id")
-    .eq("stripe_payment_intent_id", paymentIntentId)
-    .maybeSingle();
-  if (errorLectura) throw errorLectura;
-  return existe ? "ya-reembolsado" : "order-not-found";
+  const resultado = data as string;
+  if (resultado === "order-not-found") return "order-not-found";
+  // `ya-registrado` = reintento del mismo evento o acumulado menor: no se tocó nada.
+  return resultado === "registrado" ? "marcado" : "ya-reembolsado";
 }
 
 /**

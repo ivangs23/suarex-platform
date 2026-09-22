@@ -3,6 +3,7 @@ import {
   listPlatformTenants,
   setTenantStatus,
   setTenantStripeCustomer,
+  suspendExpiredGrace,
 } from "@suarex/db";
 import { describe, expect, it } from "vitest";
 import { admin, createTenantFixture, deleteTenantFixture, nonce } from "./helpers/tenants.js";
@@ -220,6 +221,66 @@ describe("setTenantStripeCustomer", () => {
         .eq("id", fixture.tenantId)
         .single();
       expect(data?.stripe_customer_id).toBe(customerId);
+    } finally {
+      await deleteTenantFixture(fixture);
+    }
+  });
+});
+
+describe("setTenantStatus — reactivar", () => {
+  it("reactivar LIMPIA la ventana de gracia", async () => {
+    // Sin esto, un tenant suspendido por gracia vencida que se reactiva desde la consola
+    // conserva `grace_until` en el pasado y `suspendExpiredGrace` lo vuelve a suspender esa
+    // misma noche: el cliente paga por transferencia, lo reactivas, y el restaurante abre al
+    // día siguiente sin carta.
+    const fixture = await createTenantFixture(`reactivar-${nonce()}`);
+    try {
+      await admin
+        .from("tenants")
+        .update({
+          status: "suspended",
+          plan_status: "past_due",
+          grace_until: new Date(Date.now() - 86400_000).toISOString(),
+        })
+        .eq("id", fixture.tenantId);
+
+      await setTenantStatus(fixture.tenantId, "active");
+
+      const { data } = await admin
+        .from("tenants")
+        .select("status, grace_until")
+        .eq("id", fixture.tenantId)
+        .single();
+      expect(data?.status).toBe("active");
+      expect(data?.grace_until, "arrastrarla lo volvería a suspender esta noche").toBeNull();
+
+      // Y el barrido, de hecho, ya no lo toca.
+      await suspendExpiredGrace();
+      const { data: tras } = await admin
+        .from("tenants")
+        .select("status")
+        .eq("id", fixture.tenantId)
+        .single();
+      expect(tras?.status, "el cron ya no puede deshacer la reactivación").toBe("active");
+    } finally {
+      await deleteTenantFixture(fixture);
+    }
+  });
+
+  it("suspender NO toca la ventana de gracia", async () => {
+    // Solo la reactivación la limpia: suspender a mano no debe borrar el rastro de por qué.
+    const fixture = await createTenantFixture(`suspender-${nonce()}`);
+    const hasta = new Date(Date.now() + 86400_000).toISOString();
+    try {
+      await admin.from("tenants").update({ grace_until: hasta }).eq("id", fixture.tenantId);
+      await setTenantStatus(fixture.tenantId, "suspended");
+
+      const { data } = await admin
+        .from("tenants")
+        .select("grace_until")
+        .eq("id", fixture.tenantId)
+        .single();
+      expect(data?.grace_until).not.toBeNull();
     } finally {
       await deleteTenantFixture(fixture);
     }

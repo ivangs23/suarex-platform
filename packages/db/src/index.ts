@@ -93,6 +93,7 @@ export { checkPairRateLimit } from "./pair-rate-limit.js";
 export type { CreateTenantInput, PlatformTenantRow } from "./platform.js";
 export {
   createTenantWithOwner,
+  getTenantStripeCustomer,
   isPlatformAdmin,
   listPlatformTenants,
   setTenantStatus,

@@ -143,3 +143,95 @@ describe("un pedido reembolsado sale del tablero", () => {
     }
   });
 });
+
+describe("reembolsos parciales acumulados", () => {
+  it("un segundo reembolso parcial ACTUALIZA el acumulado", async () => {
+    // El fallo que esto fija: la guarda anterior (`refunded_at is null`) descartaba el
+    // segundo evento, así que devolver 5 € y luego 10 € más dejaba la base diciendo 5 €.
+    // Stripe manda el ACUMULADO en `charge.refunded`, por eso se escucha ese evento.
+    const fixture = await createTenantFixture(`acum-${nonce()}`);
+    const pi = `pi_${nonce()}`;
+    try {
+      const orderId = await pedidoPagado(fixture.tenantId, "acum", pi);
+
+      await markOrderRefunded(pi, 500);
+      await markOrderRefunded(pi, 1500);
+
+      const { data } = await admin
+        .from("orders")
+        .select("refunded_cents, status")
+        .eq("id", orderId)
+        .single();
+      expect(data?.refunded_cents, "debe reflejar el acumulado, no el primero").toBe(1500);
+      // 1500 de 2400: sigue siendo parcial.
+      expect(data?.status).toBe("paid");
+    } finally {
+      await deleteTenantFixture(fixture);
+    }
+  });
+
+  it("un reembolso PARCIAL no marca el pedido como reembolsado ni lo saca del tablero", async () => {
+    // Devolver un plato de cuatro no puede hacer que la cocina deje de preparar los otros
+    // tres, ni pisar `preparing`/`served`, que se perdería sin vuelta atrás.
+    const fixture = await createTenantFixture(`parcial2-${nonce()}`);
+    const pi = `pi_${nonce()}`;
+    try {
+      const orderId = await pedidoPagado(fixture.tenantId, "parcial2", pi);
+      await admin.from("orders").update({ status: "preparing" }).eq("id", orderId);
+
+      await markOrderRefunded(pi, 600);
+
+      const { data } = await admin
+        .from("orders")
+        .select("status, refunded_cents")
+        .eq("id", orderId)
+        .single();
+      expect(data?.status, "un parcial no pisa el estado de servicio").toBe("preparing");
+      expect(data?.refunded_cents).toBe(600);
+
+      const activos = await listActiveOrders(fixture.tenantId);
+      expect(
+        activos.some((o) => o.id === orderId),
+        "sigue en el tablero",
+      ).toBe(true);
+    } finally {
+      await deleteTenantFixture(fixture);
+    }
+  });
+
+  it("el reembolso TOTAL sí marca refunded y saca del tablero", async () => {
+    const fixture = await createTenantFixture(`total-${nonce()}`);
+    const pi = `pi_${nonce()}`;
+    try {
+      const orderId = await pedidoPagado(fixture.tenantId, "total", pi);
+      await markOrderRefunded(pi, 2400);
+
+      const { data } = await admin.from("orders").select("status").eq("id", orderId).single();
+      expect(data?.status).toBe("refunded");
+
+      const activos = await listActiveOrders(fixture.tenantId);
+      expect(activos.some((o) => o.id === orderId)).toBe(false);
+    } finally {
+      await deleteTenantFixture(fixture);
+    }
+  });
+
+  it("la fecha del primer reembolso no se mueve con los siguientes", async () => {
+    const fixture = await createTenantFixture(`fecha-${nonce()}`);
+    const pi = `pi_${nonce()}`;
+    try {
+      const orderId = await pedidoPagado(fixture.tenantId, "fecha", pi);
+      await markOrderRefunded(pi, 500);
+      const primera = (await admin.from("orders").select("refunded_at").eq("id", orderId).single())
+        .data?.refunded_at;
+
+      await markOrderRefunded(pi, 900);
+      const segunda = (await admin.from("orders").select("refunded_at").eq("id", orderId).single())
+        .data?.refunded_at;
+
+      expect(segunda, "marca cuándo EMPEZÓ a devolverse, no el último tramo").toBe(primera);
+    } finally {
+      await deleteTenantFixture(fixture);
+    }
+  });
+});

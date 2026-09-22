@@ -66,7 +66,12 @@ echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Copia terminada (${size})"
 
 if [[ -n "${RCLONE_REMOTE}" ]]; then
 	echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Subiendo a ${RCLONE_REMOTE}"
+	# LOS DOS FICHEROS, no solo el de datos. El de roles es imprescindible para restaurar
+	# (pg_dump no los incluye, ver arriba), y la copia remota es la unica que sirve el dia que
+	# se pierde el VPS -- justo el escenario donde no tienes el otro fichero al lado. Subir
+	# solo uno deja una copia off-site que NO se puede restaurar.
 	rclone copy "${outfile}" "${RCLONE_REMOTE}"
+	rclone copy "${outfile%.sql.gz}.roles.sql.gz" "${RCLONE_REMOTE}"
 else
 	echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] AVISO: RCLONE_REMOTE sin configurar; la copia vive solo en este disco."
 fi

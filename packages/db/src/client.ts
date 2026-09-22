@@ -431,6 +431,21 @@ export function expirePendingOrdersRpc(timeoutMinutes: number) {
 }
 
 /**
+ * MISMA EXENCIÓN. `record_order_refund` es SECURITY DEFINER y localiza el pedido por
+ * `stripe_payment_intent_id` (índice único global) porque el webhook de Stripe no conoce el
+ * tenant -- Stripe no sabe nada de tenants. El bloqueo de fila y la decisión de si el
+ * reembolso es total o parcial viven DENTRO de la función SQL, que es lo que hace la
+ * operación atómica frente a dos eventos solapados de Stripe. Acotado por firma a
+ * `markOrderRefunded` (`src/orders.ts`).
+ */
+export function recordOrderRefundRpc(paymentIntentId: string, refundedCents: number) {
+  return serviceClient().rpc("record_order_refund", {
+    p_payment_intent_id: paymentIntentId,
+    p_refunded_cents: refundedCents,
+  });
+}
+
+/**
  * MISMA EXENCIÓN QUE `expirePendingOrdersRpc`. `purge_order_personal_data` es SECURITY
  * DEFINER, es mantenimiento de RETENCIÓN (no una operación de negocio de ningún tenant: barre
  * todos por igual, que es justo lo que la retención exige) y se concede solo a `service_role`.

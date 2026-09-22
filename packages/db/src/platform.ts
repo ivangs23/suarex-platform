@@ -64,7 +64,17 @@ export async function setTenantStatus(
   tenantId: string,
   status: "active" | "suspended",
 ): Promise<void> {
-  const { error } = await tenantsTableForPlatformConsole().update({ status }).eq("id", tenantId);
+  // REACTIVAR LIMPIA LA VENTANA DE GRACIA. Sin esto, un tenant suspendido por gracia vencida
+  // que se reactiva desde la consola conserva su `grace_until` en el pasado, y
+  // `suspendExpiredGrace` lo vuelve a suspender esa misma noche: el cliente paga por
+  // transferencia, tú lo reactivas, y el restaurante abre al día siguiente sin carta.
+  //
+  // Es la misma invariante que `decidirEstado` ya respeta para el camino de Stripe (ver el
+  // test "volver a estar al corriente reabre el servicio y borra la ventana"). La consola era
+  // el único camino que se la saltaba -- y es justo el que se usa cuando el cliente llama.
+  const cambios = status === "active" ? { status, grace_until: null } : { status };
+
+  const { error } = await tenantsTableForPlatformConsole().update(cambios).eq("id", tenantId);
   if (error) throw error;
 }
 
@@ -80,6 +90,17 @@ export async function setTenantStripeCustomer(
     .update({ stripe_customer_id: stripeCustomerId })
     .eq("id", tenantId);
   if (error) throw error;
+}
+
+/** Cliente de Stripe ya enganchado a este tenant, o null. Lo consulta el alta ANTES de crear
+ *  uno: reintentar el alta no puede dejar dos clientes de Stripe para el mismo restaurante. */
+export async function getTenantStripeCustomer(tenantId: string): Promise<string | null> {
+  const { data, error } = await tenantsTableForPlatformConsole()
+    .select("stripe_customer_id")
+    .eq("id", tenantId)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as { stripe_customer_id: string | null } | null)?.stripe_customer_id ?? null;
 }
 
 export type CreateTenantInput = {

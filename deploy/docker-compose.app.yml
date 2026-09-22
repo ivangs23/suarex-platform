@@ -45,6 +45,18 @@ services:
       TENANT_ROOT_DOMAINS: ${TENANT_ROOT_DOMAINS}
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+      # OJO: esta lista es LO UNICO que llega al proceso. No hay `env_file`, y
+      # `--env-file .env.app` solo alimenta la interpolacion ${...} de este compose: no
+      # exporta nada al contenedor. Una variable que este en .env.app pero NO aqui no existe
+      # para la aplicacion, y el fallo es silencioso y solo en produccion (en desarrollo se
+      # lee de apps/web/.env.local). Si anades una variable nueva, anadela AQUI tambien.
+      #
+      # Sin esta, el webhook de facturacion responde 500 SIEMPRE: Stripe reintenta tres dias,
+      # deshabilita el endpoint, y ningun cliente se corta nunca por impago.
+      STRIPE_BILLING_WEBHOOK_SECRET: ${STRIPE_BILLING_WEBHOOK_SECRET}
+      # Sin esta, los cuatro endpoints de /api/internal/* responden 503 "Cron no configurado":
+      # ni retencion de datos, ni corte por impago, ni avisos de dispositivo caido.
+      CRON_SECRET: ${CRON_SECRET}
     # Sin `ports`: la web NO se publica al exterior. Solo Caddy la alcanza, por la red
     # interna. Publicar el 3000 permitiría saltarse TLS y las cabeceras de seguridad
     # llamando a la IP del VPS directamente.

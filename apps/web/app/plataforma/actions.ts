@@ -1,7 +1,12 @@
 "use server";
 
 import { resolveRootDomains } from "@suarex/config";
-import { createTenantWithOwner, setTenantStatus, setTenantStripeCustomer } from "@suarex/db";
+import {
+  createTenantWithOwner,
+  getTenantStripeCustomer,
+  setTenantStatus,
+  setTenantStripeCustomer,
+} from "@suarex/db";
 import { revalidatePath } from "next/cache";
 import { log } from "@/lib/log";
 import { parseNuevoCliente } from "@/lib/platform-action-input";
@@ -37,12 +42,30 @@ export async function altaClienteAction(formData: FormData): Promise<void> {
   // carta por un problema de facturación, que es justo lo que la ventana de gracia existe para
   // evitar.
   try {
-    const customer = await stripeClient().customers.create({
-      email: entrada.ownerEmail,
-      name: entrada.name,
-      metadata: { tenant_id: tenantId, slug: entrada.slug },
-    });
-    await setTenantStripeCustomer(tenantId, customer.id);
+    // IDEMPOTENTE tambien en su mitad de Stripe. Sin esta comprobacion, reintentar un alta
+    // que fallo a mitad creaba un SEGUNDO cliente de Stripe y reescribia
+    // `stripe_customer_id` con el nuevo. Si la suscripcion (que se crea a mano en Stripe)
+    // vivia en el viejo, `applySubscriptionState` dejaba de encontrar el tenant para
+    // siempre: sus eventos caerian todos en `billing.cliente_sin_tenant` y ese restaurante
+    // no se cortaria NUNCA por impago. Ademas quedaban clientes huerfanos en Stripe sobre los
+    // que es facil facturar dos veces.
+    //
+    // `docs/dar-de-alta-un-cliente.md` promete que el alta es idempotente; esto lo hace
+    // cierto tambien aqui.
+    const yaTiene = await getTenantStripeCustomer(tenantId);
+    if (!yaTiene) {
+      const customer = await stripeClient().customers.create(
+        {
+          email: entrada.ownerEmail,
+          name: entrada.name,
+          metadata: { tenant_id: tenantId, slug: entrada.slug },
+        },
+        // Segunda red, por si dos altas del mismo slug se solapan: Stripe devuelve el mismo
+        // cliente en vez de crear otro.
+        { idempotencyKey: `tenant-${tenantId}` },
+      );
+      await setTenantStripeCustomer(tenantId, customer.id);
+    }
   } catch (error) {
     log.error("plataforma.alta_sin_cliente_stripe", { slug: entrada.slug, tenantId, error });
   }
