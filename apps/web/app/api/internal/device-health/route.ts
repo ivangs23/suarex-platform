@@ -1,7 +1,6 @@
 import { sweepDeviceHealth } from "@suarex/db";
-import { NextResponse } from "next/server";
+import { cronRoute } from "@/lib/cron-route";
 import { log } from "@/lib/log";
-import { timingSafeEqualStr } from "@/lib/timing-safe-equal";
 
 /**
  * BARRIDO DE SALUD DE DISPOSITIVOS.
@@ -20,45 +19,31 @@ import { timingSafeEqualStr } from "@/lib/timing-safe-equal";
  */
 export const runtime = "nodejs";
 
+/** El umbral vive SOLO aquí: `sweepDeviceHealth` lo recibe siempre explícito, así que su
+ *  valor por defecto nunca se usa y no hay dos fuentes para la misma política. */
 const UMBRAL_MINUTOS = 10;
 
-export async function POST(request: Request) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) {
-    return NextResponse.json({ error: "Cron no configurado" }, { status: 503 });
+export const POST = cronRoute("cron.device_health_fallo", async () => {
+  const { caidos, recuperados } = await sweepDeviceHealth(UMBRAL_MINUTOS);
+
+  for (const d of caidos) {
+    log.error("dispositivo.caido", {
+      deviceId: d.deviceId,
+      tenantSlug: d.tenantSlug,
+      nombre: d.nombre,
+      ultimoLatido: d.ultimoLatido,
+      umbralMinutos: UMBRAL_MINUTOS,
+    });
+  }
+  for (const d of recuperados) {
+    log.info("dispositivo.recuperado", {
+      deviceId: d.deviceId,
+      tenantSlug: d.tenantSlug,
+      nombre: d.nombre,
+    });
   }
 
-  const auth = request.headers.get("authorization") ?? "";
-  const enviado = auth.startsWith("Bearer ") ? auth.slice("Bearer ".length) : "";
-  if (!timingSafeEqualStr(enviado, secret)) {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  }
-
-  try {
-    const { caidos, recuperados } = await sweepDeviceHealth(UMBRAL_MINUTOS);
-
-    for (const d of caidos) {
-      log.error("dispositivo.caido", {
-        deviceId: d.deviceId,
-        tenantSlug: d.tenantSlug,
-        nombre: d.nombre,
-        ultimoLatido: d.ultimoLatido,
-        umbralMinutos: UMBRAL_MINUTOS,
-      });
-    }
-    for (const d of recuperados) {
-      log.info("dispositivo.recuperado", {
-        deviceId: d.deviceId,
-        tenantSlug: d.tenantSlug,
-        nombre: d.nombre,
-      });
-    }
-
-    // El cuerpo lleva los detalles para que el script de cron pueda mandarlos por correo sin
-    // tener que leer los logs del contenedor.
-    return NextResponse.json({ caidos, recuperados });
-  } catch (error) {
-    log.error("cron.device_health_fallo", { error });
-    return NextResponse.json({ error: "Error interno" }, { status: 500 });
-  }
-}
+  // El cuerpo lleva los detalles para que el script de cron pueda mandarlos por correo sin
+  // tener que leer los logs del contenedor.
+  return { caidos, recuperados };
+});

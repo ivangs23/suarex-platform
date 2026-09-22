@@ -1,7 +1,5 @@
 import { purgeOrderPersonalData } from "@suarex/db";
-import { NextResponse } from "next/server";
-import { log } from "@/lib/log";
-import { timingSafeEqualStr } from "@/lib/timing-safe-equal";
+import { cronRoute } from "@/lib/cron-route";
 
 /**
  * RETENCIÓN DE DATOS DEL COMENSAL.
@@ -15,23 +13,7 @@ import { timingSafeEqualStr } from "@/lib/timing-safe-equal";
  */
 export const runtime = "nodejs";
 
-export async function POST(request: Request) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) {
-    return NextResponse.json({ error: "Cron no configurado" }, { status: 503 });
-  }
-
-  const auth = request.headers.get("authorization") ?? "";
-  const enviado = auth.startsWith("Bearer ") ? auth.slice("Bearer ".length) : "";
-  if (!timingSafeEqualStr(enviado, secret)) {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  }
-
-  try {
-    const resultado = await purgeOrderPersonalData();
-    return NextResponse.json(resultado);
-  } catch (error) {
-    log.error("cron.purge_orders_fallo", { error });
-    return NextResponse.json({ error: "Error interno" }, { status: 500 });
-  }
-}
+export const POST = cronRoute(
+  "cron.purge_orders_fallo",
+  async () => await purgeOrderPersonalData(),
+);

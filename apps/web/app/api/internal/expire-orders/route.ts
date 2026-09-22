@@ -1,7 +1,5 @@
 import { expirePendingOrders } from "@suarex/db";
-import { NextResponse } from "next/server";
-import { log } from "@/lib/log";
-import { timingSafeEqualStr } from "@/lib/timing-safe-equal";
+import { cronRoute } from "@/lib/cron-route";
 
 /**
  * BARRIDO DE PEDIDOS PENDIENTES CADUCADOS.
@@ -20,26 +18,6 @@ import { timingSafeEqualStr } from "@/lib/timing-safe-equal";
  */
 export const runtime = "nodejs";
 
-export async function POST(request: Request) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) {
-    // Sin secreto no se puede autenticar a quien llama: se rechaza en vez de dejar pasar.
-    return NextResponse.json({ error: "Cron no configurado" }, { status: 503 });
-  }
-
-  const auth = request.headers.get("authorization") ?? "";
-  const enviado = auth.startsWith("Bearer ") ? auth.slice("Bearer ".length) : "";
-  // Comparación en tiempo constante: una comparación normal filtra por su tiempo cuántos
-  // caracteres iniciales acertó un atacante, y este secreto no rota.
-  if (!timingSafeEqualStr(enviado, secret)) {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  }
-
-  try {
-    const expirados = await expirePendingOrders();
-    return NextResponse.json({ expirados });
-  } catch (error) {
-    log.error("cron.expire_orders_fallo", { error });
-    return NextResponse.json({ error: "Error interno" }, { status: 500 });
-  }
-}
+export const POST = cronRoute("cron.expire_orders_fallo", async () => ({
+  expirados: await expirePendingOrders(),
+}));

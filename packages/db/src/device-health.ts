@@ -35,7 +35,7 @@ type FilaTransicion = {
  * estado completo. Un aviso cada 5 minutos durante una caída de dos horas son 24 correos, y
  * después de eso el aviso de la caída siguiente tampoco lo lee nadie.
  */
-export async function sweepDeviceHealth(minutos = 10): Promise<ResultadoSalud> {
+export async function sweepDeviceHealth(minutos: number): Promise<ResultadoSalud> {
   const { data, error } = await sweepDeviceHealthRpc(minutos);
   if (error) throw error;
 

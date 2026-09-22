@@ -1,5 +1,6 @@
 import { isPlatformAdmin } from "@suarex/db";
 import { redirect } from "next/navigation";
+import { guardedAction } from "./guarded-action";
 import { staffServerClient } from "./supabase-server";
 
 export type PlatformSession = { userId: string };
@@ -18,6 +19,16 @@ export type PlatformSession = { userId: string };
  * host que no sea el de plataforma -- no RLS. Son dos barreras para dos amenazas distintas, y
  * ninguna es backstop de la otra.
  */
+/**
+ * Envoltorio OBLIGATORIO para toda Server Action de la consola de plataforma, hermano de
+ * `managerAction` y salido del mismo combinador. Antes cada action empezaba por
+ * `await requirePlatformAdmin()` a mano, con un comentario que justificaba la excepción
+ * diciendo que las dos actions "no comparten forma" -- cuando ambas son
+ * `(formData: FormData) => Promise<void>`, exactamente la forma para la que el envoltorio
+ * existe. La justificación era falsa y la barrera dependía de la memoria.
+ */
+export const platformAction = guardedAction(requirePlatformAdmin);
+
 export async function requirePlatformAdmin(): Promise<PlatformSession> {
   const client = await staffServerClient();
   const { data, error } = await client.auth.getUser();
