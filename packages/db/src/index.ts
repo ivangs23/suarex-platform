@@ -68,6 +68,8 @@ export {
   suspendExpiredGrace,
 } from "./billing.js";
 export { getCategories, getProducts } from "./catalog.js";
+export type { DispositivoCaido, ResultadoSalud } from "./device-health.js";
+export { sweepDeviceHealth } from "./device-health.js";
 export type { PairDeviceResult } from "./devices.js";
 export { pairDevice } from "./devices.js";
 export type { TableMenu } from "./menu.js";

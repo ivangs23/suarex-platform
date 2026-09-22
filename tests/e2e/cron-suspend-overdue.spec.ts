@@ -35,3 +35,10 @@ test("la purga de datos personales tampoco está abierta", async ({ request }) =
   expect([401, 503]).toContain(sinAuth.status());
   expect(sinAuth.status()).not.toBe(200);
 });
+
+test("el barrido de salud de dispositivos tampoco está abierto", async ({ request }) => {
+  // Escribe en `devices` de todos los tenants: no puede responder 200 sin credencial.
+  const sinAuth = await request.post(`${BASE}/api/internal/device-health`);
+  expect([401, 503]).toContain(sinAuth.status());
+  expect(sinAuth.status()).not.toBe(200);
+});
