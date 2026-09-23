@@ -139,6 +139,7 @@ function toTicketOrder(order: PrintableOrder): TicketOrder {
 export async function runAgentTick(
   client: SupabaseClient,
   appVersion: string | null = null,
+  printersDelSistema: string[] | null = null,
 ): Promise<AgentTickResult> {
   const [orders, printers, branding] = await Promise.all([
     unprintedPaidOrdersForDevice(client),
@@ -202,7 +203,13 @@ export async function runAgentTick(
   // PostgrestBuilder que solo implementa `PromiseLike` (tiene `.then`, no `.catch`), así que
   // se envuelve en try/await/catch en vez de encadenar `.catch` directamente.
   try {
-    await client.rpc("device_heartbeat", { p_app_version: appVersion });
+    await client.rpc("device_heartbeat", {
+      p_app_version: appVersion,
+      // null (no un array vacio) cuando el llamante no sabe enumerar: la RPC conserva
+      // entonces la ultima lista buena en vez de vaciarla. Un desplegable vacio devolveria
+      // al dueno a teclear el nombre a mano, que es el problema que esto resuelve.
+      p_printers: printersDelSistema,
+    });
   } catch {
     // informativo: un fallo aquí no debe derribar el tick de impresión.
   }
@@ -223,6 +230,9 @@ export async function runAgent(
      *  están en una build vieja (relevante con el auto-update). La conoce la cáscara Electron
      *  (`app.getVersion()`), no este paquete, así que llega por aquí. */
     appVersion?: string;
+    /** Enumerador de impresoras del sistema. Lo inyecta la cascara Electron (que es quien
+     *  puede preguntarselo a Windows); el bucle del agente no sabe de Electron. */
+    listPrinters?: () => Promise<string[]>;
     /** Se llama tras CADA tick con su resultado -- la cáscara Electron lo usa para dar
      *  visibilidad (cuántos impresos, qué impresora cayó) en vez de ser una caja negra. Un
      *  tick que revienta llega aquí con `error` puesto, nunca se traga en silencio. */
@@ -237,7 +247,13 @@ export async function runAgent(
     if (running) return; // no solapar ticks
     running = true;
     try {
-      const result = await runAgentTick(client, appVersion);
+      // Se enumeran las impresoras en cada tick y no una sola vez al arrancar: el dueno
+      // puede enchufar una impresora nueva sin reiniciar la app, y entonces el desplegable
+      // del panel tiene que verla. Si falla, se manda null y la RPC conserva la anterior.
+      const printersDelSistema = opts?.listPrinters
+        ? await opts.listPrinters().catch(() => null)
+        : null;
+      const result = await runAgentTick(client, appVersion, printersDelSistema);
       opts?.onTick?.(result);
     } catch (error) {
       console.error("[agent] tick falló:", error);

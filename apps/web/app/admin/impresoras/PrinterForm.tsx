@@ -1,6 +1,6 @@
 import { createPrinterAction } from "./actions";
 
-type DeviceOption = { id: string; name: string };
+type DeviceOption = { id: string; name: string; reportedPrinters: string[] };
 
 /**
  * Alta de impresora de red. Formulario de servidor puro, mismo patrón que
@@ -34,7 +34,21 @@ export function PrinterForm({ venueId, devices }: { venueId: string; devices: De
       <input id="printer-port" name="port" type="number" min="1" max="65535" />
 
       <label htmlFor="printer-printername">Nombre de impresora Windows (solo USB)</label>
-      <input id="printer-printername" name="printer_name" type="text" />
+      {/* Desplegable con lo que los PCs de cocina REPORTAN ver, no un campo libre: un typo
+          en el nombre de la impresora significa que no imprime, y no falla de forma visible
+          -- el agente simplemente busca un nombre que no existe.
+
+          Sigue habiendo texto libre como respaldo, y no es un adorno: el desplegable está
+          vacío hasta que el agente late por primera vez (o si su versión es anterior al
+          reporte), y en ese hueco hay que poder configurar la impresora igualmente.
+
+          `list` en vez de `<select>` a propósito: permite las dos cosas en un solo campo. */}
+      <input id="printer-printername" name="printer_name" type="text" list="impresoras-vistas" />
+      <datalist id="impresoras-vistas">
+        {[...new Set(devices.flatMap((d) => d.reportedPrinters))].map((nombre) => (
+          <option key={nombre} value={nombre} />
+        ))}
+      </datalist>
 
       <label htmlFor="printer-destination">Destino</label>
       <select id="printer-destination" name="destination" defaultValue="cocina">

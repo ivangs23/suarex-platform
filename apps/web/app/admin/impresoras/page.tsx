@@ -38,7 +38,12 @@ export default async function AdminImpresorasPage() {
   const usbSinDispositivo = await usbPrintersWithoutDevice(session.tenantId);
 
   const defaultVenueId = venues.find((venue) => venue.isDefault)?.id ?? venues[0]?.id;
-  const deviceOptions = devices.map((device) => ({ id: device.id, name: device.name }));
+  const deviceOptions = devices.map((device) => ({
+    id: device.id,
+    name: device.name,
+    // Lo que ESE PC reporta ver. Alimenta el desplegable del nombre de impresora USB.
+    reportedPrinters: device.reportedPrinters,
+  }));
 
   return (
     <main>

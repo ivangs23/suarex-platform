@@ -78,3 +78,73 @@ describe("device_heartbeat", () => {
     expect(rowB?.last_seen_at).toBeNull();
   });
 });
+
+describe("reporte de impresoras en el heartbeat", () => {
+  // El nombre de la impresora USB se tecleaba a mano en el panel y un typo = no imprime, en
+  // silencio. El panel no puede preguntarle al agente (corre en otra máquina, y la vista
+  // incrustada no tiene preload a propósito), así que el agente reporta y el panel lee.
+  async function venuePropio() {
+    const { data } = await admin
+      .from("venues")
+      .insert({ tenant_id: tenant.tenantId, slug: `p-${nonce()}`, name: "P" })
+      .select("id")
+      .single();
+    return data?.id as string;
+  }
+
+  it("el agente reporta su lista y queda visible para el panel", async () => {
+    const d = await seedDeviceClient(await venuePropio());
+
+    const { error } = await d.client.rpc("device_heartbeat", {
+      p_app_version: "1.2.3",
+      p_printers: ["EPSON TM-T20", "Microsoft Print to PDF"],
+    });
+    expect(error).toBeNull();
+
+    const { data } = await admin
+      .from("devices")
+      .select("reported_printers, app_version")
+      .eq("id", d.deviceId)
+      .single();
+    expect(data?.reported_printers).toEqual(["EPSON TM-T20", "Microsoft Print to PDF"]);
+    expect(data?.app_version).toBe("1.2.3");
+  });
+
+  it("un agente que NO reporta no borra la última lista buena", async () => {
+    // Durante un despliegue escalonado conviven agente viejo (un argumento) y nuevo. Si el
+    // viejo borrara la lista, el desplegable se vaciaría y el dueño volvería a teclear a
+    // mano -- justo el problema que esto resuelve.
+    const d = await seedDeviceClient(await venuePropio());
+
+    await d.client.rpc("device_heartbeat", {
+      p_app_version: "1.2.3",
+      p_printers: ["EPSON TM-T20"],
+    });
+    await d.client.rpc("device_heartbeat", { p_app_version: "1.2.3" });
+
+    const { data } = await admin
+      .from("devices")
+      .select("reported_printers")
+      .eq("id", d.deviceId)
+      .single();
+    expect(data?.reported_printers, "la lista buena se conserva").toEqual(["EPSON TM-T20"]);
+  });
+
+  it("un dispositivo no puede reportar impresoras de otro", async () => {
+    const venueId = await venuePropio();
+    const a = await seedDeviceClient(venueId);
+    const b = await seedDeviceClient(venueId);
+
+    await a.client.rpc("device_heartbeat", {
+      p_app_version: "1.0.0",
+      p_printers: ["SOLO DE A"],
+    });
+
+    const { data } = await admin
+      .from("devices")
+      .select("reported_printers")
+      .eq("id", b.deviceId)
+      .single();
+    expect(data?.reported_printers, "B no puede verse afectado por el heartbeat de A").toBeNull();
+  });
+});

@@ -1,9 +1,16 @@
 import { join } from "node:path";
 import { app, BrowserWindow, Menu, Notification, nativeImage, Tray } from "electron";
 import type { ActivityAlerts, AgentActivity } from "./agent-activity.js";
-import { onAgentActivity, setAppVersion, startAgent, stopAgent } from "./agent-runner.js";
+import {
+  onAgentActivity,
+  setAppVersion,
+  setPrinterLister,
+  startAgent,
+  stopAgent,
+} from "./agent-runner.js";
 import { loadCredentials } from "./config-store.js";
 import { registerIpc } from "./ipc.js";
+import { listLocalPrinters } from "./printers.js";
 import { realConfigBackend } from "./real-config-backend.js";
 import { TRAY_ICON_DATA_URL } from "./tray-icon.js";
 import { startAutoUpdate } from "./updater.js";
@@ -96,6 +103,11 @@ if (!gotLock) {
     onAgentActivity(handleAgentActivity);
     // La versión de la build viaja al heartbeat (para saber qué locales están desactualizados).
     setAppVersion(app.getVersion());
+    // Y también la lista de impresoras que ve este PC, para que el panel ofrezca un
+    // desplegable en vez de un campo de texto donde un typo significa que no imprime, en
+    // silencio. Devuelve [] si la ventana aún no existe: el agente manda null en ese caso y
+    // la RPC conserva la última lista buena.
+    setPrinterLister(async () => (mainWindow ? listLocalPrinters(mainWindow) : []));
     // Auto-update en segundo plano (no hace nada sin feed configurado, p. ej. en dev).
     startAutoUpdate((title, body) => {
       if (Notification.isSupported()) new Notification({ title, body }).show();

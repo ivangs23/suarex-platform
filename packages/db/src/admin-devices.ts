@@ -58,6 +58,9 @@ export type RegeneratePairingCodeResult = {
 };
 
 export type DeviceRow = {
+  /** Impresoras que ESE PC ve, reportadas por su agente en el heartbeat. Vacío si aún no ha
+   *  latido o si su versión es anterior al reporte. Solo para ofrecerlas en el panel. */
+  reportedPrinters: string[];
   id: string;
   tenantId: string;
   venueId: string;
@@ -172,6 +175,7 @@ type DeviceRowDb = {
   pairing_expires_at: string | null;
   paired_at: string | null;
   last_seen_at: string | null;
+  reported_printers: string[] | null;
 };
 
 /**
@@ -185,7 +189,7 @@ type DeviceRowDb = {
 export async function listDevices(tenantId: string): Promise<DeviceRow[]> {
   const { data, error } = await tenantScoped("devices", tenantId)
     .select(
-      "id, tenant_id, venue_id, name, roles, pairing_code, pairing_expires_at, paired_at, last_seen_at",
+      "id, tenant_id, venue_id, name, roles, pairing_code, pairing_expires_at, paired_at, last_seen_at, reported_printers",
     )
     .order("created_at", { ascending: true });
   if (error) throw error;
@@ -200,6 +204,7 @@ export async function listDevices(tenantId: string): Promise<DeviceRow[]> {
     pairingExpiresAt: row.pairing_expires_at,
     pairedAt: row.paired_at,
     lastSeenAt: row.last_seen_at,
+    reportedPrinters: row.reported_printers ?? [],
   }));
 }
 
