@@ -55,6 +55,43 @@ paso falla, captura lo que se indica y pégalo para diagnosticar.
    - ✅ Esperado: tras el login, la app arranca sola (bandeja) y sigue imprimiendo pedidos
      sin abrir la ventana.
 
+## Watchdog del sistema (solo Windows)
+
+Esto NO se puede probar fuera de Windows, así que es obligatorio hacerlo aquí. Lo que se
+verifica es que el agente vuelve solo cuando alguien mata el proceso — no cuando se reinicia
+el PC, que ya lo cubre el auto-arranque en el login.
+
+**1. ¿Existe la tarea?** Tras abrir la app por primera vez, en PowerShell:
+
+```powershell
+schtasks /query /tn "SuarEx Agente Watchdog" /v /fo list
+```
+
+Tiene que aparecer, apuntando al `.exe` instalado y con repetición cada 5 minutos. Si dice
+que no existe, mira el panel de registro de la app: se avisa del fallo al registrarla.
+
+**2. La prueba de verdad.** Con el agente emparejado y funcionando:
+
+1. Manda un pedido de prueba y comprueba que imprime.
+2. Abre el Administrador de tareas y **finaliza el proceso** del agente (no lo cierres desde
+   la bandeja: eso es una salida ordenada, no una caída).
+3. Comprueba que el icono de la bandeja desaparece.
+4. **Espera hasta 5 minutos.** El icono tiene que volver solo.
+5. Manda otro pedido: tiene que imprimir sin que nadie haya tocado el PC.
+
+El paso 4 es el que importa. Si no vuelve, el watchdog no está haciendo su trabajo y la
+cocina se quedaría sin comandas hasta que alguien pasara por el ordenador.
+
+**3. Que no se duplique.** Con el agente ya funcionando, espera a que pase el ciclo de 5
+minutos y comprueba en el Administrador de tareas que **sigue habiendo un solo proceso**. La
+tarea lanza la app cada cinco minutos pase lo que pase; es el bloqueo de instancia única el
+que hace que la segunda salga sola. Si vieras dos procesos, los tickets se imprimirían por
+duplicado.
+
+**4. Al des-emparejar se limpia.** Des-empareja el dispositivo desde la app y repite la
+consulta del paso 1: la tarea ya no debe existir. Si se quedara, el PC seguiría reabriendo
+cada cinco minutos una app que ya no pertenece a ningún restaurante.
+
 ## Qué capturar si algo falla
 - El **panel de registro** completo de la app (cópialo entero).
 - El nombre exacto de la impresora (paso 3).

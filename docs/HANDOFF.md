@@ -67,7 +67,9 @@ Priorizado por valor/coste. Detalle en el hilo; resumen:
 - **Auto-update en producción**: montar el feed estático (p. ej. `updates.suarex.app` sirviendo
   `latest.yml` + instalador), pasar `UPDATE_FEED_URL` al build de `agent-desktop`, y **firmar** el
   instalador NSIS (sin firma → aviso de SmartScreen en Windows).
-
+- **Watchdog de Windows: validar en el PC de un cliente.** No se puede probar fuera de
+  Windows; el procedimiento está en `docs/agent-desktop-validacion.md`. Hasta que se haga, la
+  recuperación ante caída del proceso está implementada pero NO verificada.
 ## Contexto heredado (proyecto anterior de Manuela)
 
 Existe un producto anterior — repo **público** `ivangs23/web-manuela` + `agente-impresora-v2` +

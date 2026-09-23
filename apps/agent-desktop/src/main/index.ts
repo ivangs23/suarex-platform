@@ -14,6 +14,7 @@ import { listLocalPrinters } from "./printers.js";
 import { realConfigBackend } from "./real-config-backend.js";
 import { TRAY_ICON_DATA_URL } from "./tray-icon.js";
 import { startAutoUpdate } from "./updater.js";
+import { ejecutorDelSistema, registrarWatchdog } from "./watchdog.js";
 import { destroyWebPanel, layoutWebPanel } from "./web-panel.js";
 
 let mainWindow: BrowserWindow | null = null;
@@ -94,8 +95,22 @@ if (!gotLock) {
   });
 
   app.whenReady().then(async () => {
-    // Auto-arranque en el login de Windows (desatendido, oculto en bandeja).
+    // Auto-arranque en el login de Windows (desatendido, oculto en bandeja). Cubre el
+    // REINICIO del PC.
     app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true });
+
+    // Y el watchdog cubre lo que aquello no: que el PROCESO muera con la sesión abierta
+    // (cierre forzado, OOM, un antivirus). Se registra en cada arranque a propósito: es
+    // idempotente y así la tarea apunta siempre al ejecutable actual, que cambia de ruta tras
+    // una actualización. Nunca lanza -- perder la recuperación automática es malo, no
+    // imprimir es peor.
+    void registrarWatchdog(process.platform, process.execPath, ejecutorDelSistema()).then(
+      (puesto) => {
+        if (!puesto && process.platform === "win32") {
+          console.error("[main] no se pudo registrar el watchdog del sistema");
+        }
+      },
+    );
 
     createWindow();
     createTray();

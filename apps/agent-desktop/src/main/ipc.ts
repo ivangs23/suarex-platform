@@ -5,6 +5,7 @@ import { loadCredentials, saveCredentials } from "./config-store.js";
 import { type PairError, pairDevice } from "./pairing.js";
 import { listLocalPrinters, printTestTicket } from "./printers.js";
 import { realConfigBackend } from "./real-config-backend.js";
+import { ejecutorDelSistema, quitarWatchdog } from "./watchdog.js";
 import { hideWebPanel, isWebSection, type ShowWebPanelResult, showWebPanel } from "./web-panel.js";
 
 export type PairIpcResult =
@@ -106,6 +107,9 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   ipcMain.handle("unpair", async () => {
     stopAgent();
     realConfigBackend().write(JSON.stringify({})); // deja el store vacío -> loadCredentials null
+    // Sin esto quedaría una tarea programada huérfana reabriendo cada cinco minutos una app
+    // que ya no pertenece a ningún restaurante y no va a imprimir nada.
+    await quitarWatchdog(process.platform, ejecutorDelSistema());
     return { ok: true };
   });
 }
