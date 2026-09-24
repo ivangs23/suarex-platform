@@ -144,6 +144,44 @@ export async function listCategoryParents(
   }));
 }
 
+/**
+ * Fusiona un i18n parcial con el que ya está guardado.
+ *
+ * El panel solo tiene campo de ESPAÑOL. Reescribiendo `name_i18n` entero con `{es: ...}`,
+ * renombrar una categoría borraba su inglés y su portugués -- y como los idiomas ofrecidos se
+ * deducen de las claves que hay (`availableLangs`), el selector de idioma desaparecía solo, sin
+ * error y sin que nadie relacionase las dos cosas. En la carta de Manuela (es/en/pt) eso es
+ * media carta perdida por renombrar un plato.
+ *
+ * La lectura va por `tenantScoped` igual que la escritura: con un id de otro tenant no
+ * devuelve nada y la fusión se queda en el parche, que luego no actualiza ninguna fila.
+ *
+ * Fusionar implica que desde el panel no se puede BORRAR un idioma. Es el lado bueno del
+ * intercambio: el panel tampoco ofrece hacerlo, y las traducciones las pone un import que
+ * escribe el objeto entero por otro camino (`createProduct`/`createCategory`).
+ */
+async function fusionarI18n(
+  tabla: "categories" | "products",
+  tenantId: string,
+  filaId: string,
+  columnas: { columna: string; parche: Record<string, string> | undefined }[],
+  values: Record<string, unknown>,
+): Promise<void> {
+  const pendientes = columnas.filter((c) => c.parche !== undefined);
+  if (pendientes.length === 0) return;
+
+  const { data, error } = await tenantScoped(tabla, tenantId)
+    .select(pendientes.map((c) => c.columna).join(", "))
+    .eq("id", filaId)
+    .maybeSingle();
+  if (error) throw error;
+
+  const actual = (data ?? {}) as Record<string, Record<string, string> | null>;
+  for (const { columna, parche } of pendientes) {
+    values[columna] = { ...(actual[columna] ?? {}), ...parche };
+  }
+}
+
 export async function updateCategory(
   tenantId: string,
   categoryId: string,
@@ -151,7 +189,13 @@ export async function updateCategory(
 ): Promise<void> {
   const values: Record<string, unknown> = {};
   if (patch.slug !== undefined) values.slug = patch.slug;
-  if (patch.nameI18n !== undefined) values.name_i18n = patch.nameI18n;
+  await fusionarI18n(
+    "categories",
+    tenantId,
+    categoryId,
+    [{ columna: "name_i18n", parche: patch.nameI18n }],
+    values,
+  );
   if (patch.destination !== undefined) values.destination = patch.destination;
   if (patch.parentId !== undefined) values.parent_id = patch.parentId;
   if (patch.imageUrl !== undefined) values.image_url = patch.imageUrl;
@@ -200,8 +244,16 @@ export async function updateProduct(
 
   const values: Record<string, unknown> = {};
   if (patch.categoryId !== undefined) values.category_id = patch.categoryId;
-  if (patch.nameI18n !== undefined) values.name_i18n = patch.nameI18n;
-  if (patch.descriptionI18n !== undefined) values.description_i18n = patch.descriptionI18n;
+  await fusionarI18n(
+    "products",
+    tenantId,
+    productId,
+    [
+      { columna: "name_i18n", parche: patch.nameI18n },
+      { columna: "description_i18n", parche: patch.descriptionI18n },
+    ],
+    values,
+  );
   if (patch.price !== undefined) values.price = patch.price;
   if (patch.imagePath !== undefined) values.image_url = patch.imagePath;
   if (patch.allergenIds !== undefined) values.allergen_ids = patch.allergenIds;
