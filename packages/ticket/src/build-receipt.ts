@@ -1,6 +1,6 @@
-import { formatCents } from "@suarex/domain";
+import { AVISO_NO_FACTURA, ETIQUETA_EMISOR, formatCents, idiomaDeRecibo } from "@suarex/domain";
 import { sanitizeForThermal } from "./sanitize.js";
-import type { ReceiptOrder, TicketBranding, TicketLine } from "./types.js";
+import type { ReceiptOrder, TicketBranding, TicketFiscal, TicketLine } from "./types.js";
 
 // `Intl` separa la cifra del símbolo con un espacio duro o estrecho que la térmica no
 // siempre imprime; se pliega cualquier espacio (incluidos esos) a uno normal. El € sí lo
@@ -26,9 +26,16 @@ function formatHHMM(iso: string): string {
  * Los pares etiqueta/precio van como `row`: el driver los alinea al ancho real del papel, así que
  * el mismo recibo cuadra en 58 y en 80 mm sin fijar columnas a mano.
  */
-export function buildReceiptLines(order: ReceiptOrder, branding: TicketBranding): TicketLine[] {
+export function buildReceiptLines(
+  order: ReceiptOrder,
+  branding: TicketBranding,
+  fiscal: TicketFiscal = {},
+): TicketLine[] {
   const money = (cents: number) =>
     formatCents(cents, order.locale, order.currency).replace(HARD_SPACES, " ");
+  // El aviso cae a español ante un locale desconocido: mejor en el idioma que no toca que
+  // ausente, que es justo lo que D1 quería evitar.
+  const idioma = idiomaDeRecibo(order.locale);
 
   const lines: TicketLine[] = [
     {
@@ -74,9 +81,31 @@ export function buildReceiptLines(order: ReceiptOrder, branding: TicketBranding)
       size: 2,
     },
     { kind: "text", text: `Pedido #${order.orderNumber}`, align: "center" },
-    { kind: "newline" },
-    { kind: "cut" },
   );
+
+  // BLOQUE FISCAL, al final y no antes del código de recogida: lo que el comensal necesita de
+  // un vistazo es su código, no el CIF. Y siempre ANTES del corte -- después no se imprimiría.
+  const emisor = [fiscal.legalName, fiscal.cif, fiscal.address, fiscal.phone]
+    .map((x) => x?.trim())
+    .filter((x): x is string => Boolean(x));
+  if (emisor.length > 0) {
+    lines.push({ kind: "divider" });
+    lines.push({
+      kind: "text",
+      text: sanitizeForThermal(`${ETIQUETA_EMISOR[idioma]}: ${emisor.join(" · ")}`),
+      align: "center",
+    });
+  }
+
+  // El aviso NO es opcional y no depende de que el tenant haya configurado nada: es lo único
+  // que separa un justificante de pedido de un documento que lo parece (decisión D1, Fase 1).
+  lines.push({
+    kind: "text",
+    text: sanitizeForThermal(AVISO_NO_FACTURA[idioma]),
+    align: "center",
+  });
+
+  lines.push({ kind: "newline" }, { kind: "cut" });
 
   return lines;
 }

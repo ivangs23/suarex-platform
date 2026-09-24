@@ -27,6 +27,22 @@ export type TicketOrder = {
 export type TicketBranding = { header: string };
 
 /**
+ * Datos del EMISOR para el recibo, tal cual los guarda `tenant_settings.fiscal`. Todos
+ * opcionales: un tenant recién dado de alta aún no los tiene y el recibo tiene que seguir
+ * saliendo. Lo que NO es opcional es el aviso de que esto no es una factura, que va aparte
+ * (`AVISO_NO_FACTURA` en @suarex/domain) precisamente para que nadie pueda omitirlo.
+ *
+ * Va separado de `TicketBranding` a propósito: la COMANDA de cocina no lleva dinero ni emisor,
+ * y meterlo en la marca haría fácil acabar imprimiendo el CIF en los tickets de la plancha.
+ */
+export type TicketFiscal = {
+  legalName?: string;
+  cif?: string;
+  address?: string;
+  phone?: string;
+};
+
+/**
  * Una línea del RECIBO DEL CLIENTE (a diferencia de la comanda, que no lleva dinero): un producto
  * con su total de línea ya en céntimos (unidad × cantidad, extras incluidas).
  */
