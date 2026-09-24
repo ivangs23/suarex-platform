@@ -19,6 +19,7 @@ services:
         # rotas la anon key hay que RECONSTRUIR la imagen, no basta con reiniciar.
         NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
         NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+        NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY}
     image: suarex-web:latest
     restart: unless-stopped
     # Los logs son JSON por línea (ver apps/web/lib/log.ts) y son la ÚNICA observabilidad de
@@ -49,7 +50,12 @@ services:
       # `--env-file .env.app` solo alimenta la interpolacion ${...} de este compose: no
       # exporta nada al contenedor. Una variable que este en .env.app pero NO aqui no existe
       # para la aplicacion, y el fallo es silencioso y solo en produccion (en desarrollo se
-      # lee de apps/web/.env.local). Si anades una variable nueva, anadela AQUI tambien.
+      # lee de apps/web/.env.local).
+      #
+      # Ya no hace falta acordarse: `apps/web/lib/deploy-env.test.ts` lee este fichero y el
+      # Dockerfile, los cruza con los `process.env` del codigo y se pone rojo si falta alguna.
+      # Ese test encontro que NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY no llegaba al build, asi que
+      # en produccion no se podia pagar.
       #
       # Sin esta, el webhook de facturacion responde 500 SIEMPRE: Stripe reintenta tres dias,
       # deshabilita el endpoint, y ningun cliente se corta nunca por impago.
