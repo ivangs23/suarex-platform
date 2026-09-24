@@ -58,6 +58,10 @@ estados, `applySubscriptionState` y que el endpoint falla cerrado sin secreto.
 1. Añadir `STRIPE_BILLING_WEBHOOK_SECRET` y `CRON_SECRET` a `deploy/docker-compose.app.yml`.
    **Sin esto el webhook de facturación devuelve 500 siempre y los cuatro crons 503**, en
    silencio: es exactamente el fallo que la revisión de la Fase 2 encontró en producción.
+   Ya está en el fichero; lo que falta es tener los valores en `.env.app`.
+1b. **RECONSTRUIR la imagen**, no solo reiniciar: `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` no
+   llegaba al build, así que cualquier imagen anterior tiene el formulario de pago muerto
+   (el comensal ve "no se pudo cobrar"). Las `NEXT_PUBLIC_*` se hornean en el bundle.
 2. Registrar en Stripe los eventos de suscripción, reembolso y disputa.
 3. Instalar los tres crons nuevos apuntando al host de plataforma, y comprobar el `APP_URL` del
    `expire-orders` que ya existía.
