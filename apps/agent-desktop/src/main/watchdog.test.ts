@@ -1,97 +1,28 @@
-import { describe, expect, it, vi } from "vitest";
-import {
-  argsBorrarTarea,
-  argsCrearTarea,
-  INTERVALO_MINUTOS,
-  NOMBRE_TAREA,
-  quitarWatchdog,
-  registrarWatchdog,
-} from "./watchdog.js";
+import { describe, expect, it } from "vitest";
+import { schtasksCreateArgs, WATCHDOG_TASK_NAME, watchdogScript } from "./watchdog.js";
 
-/**
- * Lo que se puede verificar sin un Windows delante: la construcción de los comandos y las
- * garantías de no-romper-nada. La prueba real (que Windows relanza el agente tras matarlo) va
- * en `docs/agent-desktop-validacion.md`, para hacerla en el PC de un cliente.
- */
-describe("argsCrearTarea", () => {
-  it("entrecomilla la ruta, que en Windows lleva espacios", () => {
-    const args = argsCrearTarea("C:\\Program Files\\SuarEx\\agente.exe");
-    expect(args).toContain('"C:\\Program Files\\SuarEx\\agente.exe"');
-  });
-
-  it("no pide privilegios elevados", () => {
-    // En el PC de un restaurante el usuario no suele ser administrador: pedir `/rl highest`
-    // haría que la tarea fallara al crearse, en silencio.
-    const args = argsCrearTarea("x.exe");
-    expect(args[args.indexOf("/rl") + 1]).toBe("limited");
-    expect(args).not.toContain("highest");
-  });
-
-  it("reemplaza la tarea en vez de acumular o fallar", () => {
-    // Se registra en cada arranque; sin `/f`, el segundo arranque fallaría o dejaría dos.
-    expect(argsCrearTarea("x.exe")).toContain("/f");
-  });
-
-  it("corre cada pocos minutos y solo con sesión iniciada", () => {
-    const args = argsCrearTarea("x.exe");
-    expect(args[args.indexOf("/mo") + 1]).toBe(String(INTERVALO_MINUTOS));
-    // `/it`: sin sesión interactiva no hay cola de impresión ni bandeja, así que arrancarlo
-    // sin usuario no serviría de nada.
-    expect(args).toContain("/it");
-  });
-
-  it("se recupera antes de que salte el aviso a soporte", () => {
-    // El barrido del servidor avisa a los 10 min. Si el watchdog tardara más, cada caída
-    // breve generaría un aviso que ya no hace falta.
-    expect(INTERVALO_MINUTOS).toBeLessThan(10);
+describe("watchdogScript", () => {
+  it("solo lanza el exe si NO hay ya un proceso del agente", () => {
+    const script = watchdogScript("C:\\Apps\\SuarEx Agente.exe", "SuarEx Agente");
+    expect(script).toContain("Get-Process -Name 'SuarEx Agente'");
+    expect(script).toContain("Start-Process -FilePath 'C:\\Apps\\SuarEx Agente.exe'");
+    // La comprobación va NEGADA: solo arranca si no corre ya.
+    expect(script).toContain("if (-not (Get-Process");
   });
 });
 
-describe("registrarWatchdog", () => {
-  it("no hace nada fuera de Windows", async () => {
-    const ejecutar = vi.fn();
-    expect(await registrarWatchdog("darwin", "x", ejecutar)).toBe(false);
-    expect(ejecutar).not.toHaveBeenCalled();
-  });
+describe("schtasksCreateArgs", () => {
+  it("registra la tarea cada 5 minutos, sobrescribiendo (/F), corriendo el .ps1", () => {
+    const args = schtasksCreateArgs("C:\\Users\\x\\AppData\\Roaming\\SuarEx Agente\\watchdog.ps1");
+    expect(args).toContain("/Create");
+    expect(args).toContain("/F");
+    expect(args).toEqual(expect.arrayContaining(["/TN", WATCHDOG_TASK_NAME]));
+    expect(args).toEqual(expect.arrayContaining(["/SC", "MINUTE", "/MO", "5"]));
 
-  it("registra la tarea en Windows", async () => {
-    const ejecutar = vi.fn().mockResolvedValue({ code: 0 });
-    expect(await registrarWatchdog("win32", "C:\\x.exe", ejecutar)).toBe(true);
-    expect(ejecutar).toHaveBeenCalledWith(
-      "schtasks",
-      expect.arrayContaining(["/create", "/tn", NOMBRE_TAREA]),
-    );
-  });
-
-  it("NUNCA lanza: perder el watchdog es malo, no imprimir es peor", async () => {
-    // Una política de grupo puede prohibir crear tareas. Eso no puede impedir que el agente
-    // arranque y siga imprimiendo.
-    const revienta = vi.fn().mockRejectedValue(new Error("acceso denegado"));
-    await expect(registrarWatchdog("win32", "x", revienta)).resolves.toBe(false);
-
-    const falla = vi.fn().mockResolvedValue({ code: 1 });
-    await expect(registrarWatchdog("win32", "x", falla)).resolves.toBe(false);
-  });
-});
-
-describe("quitarWatchdog", () => {
-  it("borra la tarea al des-emparejar", async () => {
-    const ejecutar = vi.fn().mockResolvedValue({ code: 0 });
-    expect(await quitarWatchdog("win32", ejecutar)).toBe(true);
-    expect(ejecutar).toHaveBeenCalledWith("schtasks", argsBorrarTarea());
-  });
-
-  it("tampoco lanza si no se puede borrar", async () => {
-    // Un PC que ya no es de ningún restaurante no debe quedarse con una tarea huérfana
-    // reabriendo la app cada cinco minutos, pero fallar al limpiarla no puede romper el
-    // des-emparejamiento.
-    const revienta = vi.fn().mockRejectedValue(new Error("no existe"));
-    await expect(quitarWatchdog("win32", revienta)).resolves.toBe(false);
-  });
-
-  it("no toca nada fuera de Windows", async () => {
-    const ejecutar = vi.fn();
-    expect(await quitarWatchdog("darwin", ejecutar)).toBe(false);
-    expect(ejecutar).not.toHaveBeenCalled();
+    const tr = args[args.indexOf("/TR") + 1];
+    expect(tr).toContain("powershell.exe");
+    expect(tr).toContain("-WindowStyle Hidden");
+    // La ruta del script (con espacios) va entre comillas dentro del comando de la tarea.
+    expect(tr).toContain('-File "C:\\Users\\x\\AppData\\Roaming\\SuarEx Agente\\watchdog.ps1"');
   });
 });

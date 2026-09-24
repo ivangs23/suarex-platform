@@ -6,10 +6,12 @@ import {
   type RegeneratePairingCodeResult,
   regeneratePairingCode,
   resetDevice,
+  setDevicePinpad,
+  setDeviceRoles,
 } from "@suarex/db";
 import { revalidatePath } from "next/cache";
 import { parsePairingTtlMinutes } from "@/lib/device-action-input";
-import { requiredString } from "@/lib/form-parse";
+import { optionalString, parseOptionalBoolean, requiredString } from "@/lib/form-parse";
 import { managerAction } from "@/lib/require-manager";
 
 /**
@@ -89,3 +91,25 @@ export const resetDeviceAction = managerAction(
     return result;
   },
 );
+
+/**
+ * Fija los roles del dispositivo desde dos casillas: `agente` (imprime) y `kiosko` (totem: carta +
+ * cobro). El totem se ACTIVA marcando `kiosko`. `setDeviceRoles` valida y deduplica en la base, así
+ * que este formulario no puede escribir un rol arbitrario.
+ */
+export const setDeviceRolesAction = managerAction(async (session, formData: FormData) => {
+  const deviceId = requiredString(formData, "device_id");
+  const roles: string[] = [];
+  if (parseOptionalBoolean(formData, "role_agente")) roles.push("agente");
+  if (parseOptionalBoolean(formData, "role_kiosko")) roles.push("kiosko");
+  await setDeviceRoles(session.tenantId, deviceId, roles);
+  revalidatePath("/admin/dispositivos");
+});
+
+/** Fija (o limpia, si llega en blanco) el pinpad de Paytef de un totem. */
+export const setDevicePinpadAction = managerAction(async (session, formData: FormData) => {
+  const deviceId = requiredString(formData, "device_id");
+  const pinpadId = optionalString(formData, "pinpad_id") ?? null;
+  await setDevicePinpad(session.tenantId, deviceId, pinpadId);
+  revalidatePath("/admin/dispositivos");
+});

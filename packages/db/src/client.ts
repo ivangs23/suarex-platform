@@ -50,6 +50,10 @@ export type TenantScopedTable =
   // `tenant_id` y se LEE como cualquier otra tabla del tenant; lo que no pasa por aquí es la
   // escritura, que va por `registrarEscaneoRpc` para que dos escaneos simultáneos no se pisen.
   | "menu_scans"
+  // Sub-proyecto 4 (modo totem): config de pago del tenant. `tenant_id` es su PK, encaja en la
+  // unión. La lectura del secreto por el device NO pasa por aquí (RPC acotada); esto es solo
+  // para que owner/admin la gestionen desde el panel (misma vía service-role acotada por tenant).
+  | "tenant_payment_config"
   // Task 3 (D2, generación del código de emparejamiento, `src/admin-devices.ts`):
   // `devices` tiene `tenant_id` igual que el resto de esta unión y encaja sin más.
   // NO sustituye a `devicesTableForPairing` (quinta exención más abajo): esa sigue
@@ -327,6 +331,17 @@ export function registrarEscaneoRpc(tableId: string) {
  * conocida, nunca un barrido.
  */
 export function devicesTableForPairing() {
+  return serviceClient().from("devices");
+}
+
+/**
+ * Resolución del token de totem, ANTES de conocer el tenant. Igual que
+ * `tablesTableForTokenResolution` para la mesa: un `SELECT ... WHERE totem_token = $1` de una
+ * sola fila conocida, no un barrido. El token es la autoridad del canal kiosko (la ventana del
+ * totem lo lleva en la URL), así que la búsqueda no puede pasar por `tenantScoped` (no hay tenant
+ * todavía). No es un escape hatch general.
+ */
+export function devicesTableForTotemToken() {
   return serviceClient().from("devices");
 }
 

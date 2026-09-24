@@ -25,15 +25,30 @@ function order(overrides: Partial<PaidOrderRow>): PaidOrderRow {
     venue_id: "v1",
     kitchen_status: "pending",
     bar_status: "na",
+    channel: "qr-mesa",
+    public_token: "tok-o1",
+    subtotal: 20,
+    tax_amount: 2,
+    total: 22,
+    currency: "EUR",
     tables: { label: "Mesa 1" },
+    table_label: null,
     order_items: [
-      { name_snapshot: { es: "Paella" }, quantity: 2, destination: "cocina", notes: null },
+      {
+        name_snapshot: { es: "Paella" },
+        quantity: 2,
+        destination: "cocina",
+        notes: null,
+        line_total: 22,
+        order_item_extras: [],
+      },
     ],
     ...overrides,
   };
 }
 
 const cocinaPrinter: EnabledPrinterRow = { id: "p-cocina", venue_id: "v1", destination: "cocina" };
+const reciboPrinter: EnabledPrinterRow = { id: "p-recibo", venue_id: "v1", destination: "recibo" };
 
 describe("selectUnprintedOrders (pura)", () => {
   it("devuelve un pedido con impresora de destino aún no cubierta", () => {
@@ -66,6 +81,29 @@ describe("selectUnprintedOrders (pura)", () => {
   it("ignora impresoras de otro venue", () => {
     const otherVenue: EnabledPrinterRow = { id: "p-x", venue_id: "v2", destination: "cocina" };
     expect(selectUnprintedOrders([order({})], [otherVenue])).toHaveLength(0);
+  });
+
+  it("un pedido kiosko NO está cubierto hasta que la impresora de recibo lo imprime", () => {
+    // Canal kiosko: la impresora de recibo es de destino igual que cocina. Con la comanda ya
+    // cubierta pero el recibo no, el pedido sigue pendiente (red de seguridad del recibo).
+    const kiosko = order({
+      channel: "kiosko",
+      printed_targets: { "p-cocina": "2026-01-01T00:01:00Z" },
+    });
+    expect(selectUnprintedOrders([kiosko], [cocinaPrinter, reciboPrinter])).toHaveLength(1);
+    // Con las DOS cubiertas, ya no está pendiente.
+    const both = order({
+      channel: "kiosko",
+      printed_targets: { "p-cocina": "t", "p-recibo": "t" },
+    });
+    expect(selectUnprintedOrders([both], [cocinaPrinter, reciboPrinter])).toHaveLength(0);
+  });
+
+  it("una impresora de recibo NO retiene un pedido de QR (solo aplica a kiosko)", () => {
+    // Canal qr-mesa: el recibo no es de destino. Con la comanda cubierta, el pedido está listo
+    // aunque exista una impresora de recibo sin usar.
+    const qr = order({ printed_targets: { "p-cocina": "2026-01-01T00:01:00Z" } });
+    expect(selectUnprintedOrders([qr], [cocinaPrinter, reciboPrinter])).toHaveLength(0);
   });
 });
 

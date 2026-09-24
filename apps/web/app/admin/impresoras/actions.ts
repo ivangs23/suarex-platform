@@ -49,11 +49,12 @@ import { managerAction } from "@/lib/require-manager";
  * "cocina" tras haberla cambiado a otra cosa), aquí un `destination` presente SIEMPRE
  * produce un valor de los tres, nunca `undefined`.
  */
-function parseDestination(formData: FormData): "cocina" | "barra" | "all" | undefined {
+function parseDestination(formData: FormData): "cocina" | "barra" | "all" | "recibo" | undefined {
   const raw = formData.get("destination");
   if (raw === null) return undefined;
   if (raw === "barra") return "barra";
   if (raw === "all") return "all";
+  if (raw === "recibo") return "recibo";
   return "cocina";
 }
 

@@ -23,6 +23,9 @@ importers:
       '@suarex/printing':
         specifier: workspace:*
         version: link:packages/printing
+      '@suarex/realtime':
+        specifier: workspace:*
+        version: link:packages/realtime
       '@suarex/ticket':
         specifier: workspace:*
         version: link:packages/ticket
@@ -56,16 +59,25 @@ importers:
       koffi:
         specifier: ^2.9.0
         version: 2.16.3
+      ws:
+        specifier: ^8.18.0
+        version: 8.21.1
     devDependencies:
       '@suarex/agent':
         specifier: workspace:*
         version: link:../../packages/agent
+      '@suarex/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@suarex/printing':
         specifier: workspace:*
         version: link:../../packages/printing
       '@types/node':
         specifier: ^26.1.1
         version: 26.1.1
+      '@types/ws':
+        specifier: ^8.5.12
+        version: 8.18.1
       electron:
         specifier: ^33.0.0
         version: 33.4.11
@@ -157,9 +169,15 @@ importers:
       '@suarex/db':
         specifier: workspace:*
         version: link:../db
+      '@suarex/domain':
+        specifier: workspace:*
+        version: link:../domain
       '@suarex/printing':
         specifier: workspace:*
         version: link:../printing
+      '@suarex/realtime':
+        specifier: workspace:*
+        version: link:../realtime
       '@suarex/ticket':
         specifier: workspace:*
         version: link:../ticket
@@ -254,6 +272,10 @@ importers:
         version: 5.9.3
 
   packages/ticket:
+    dependencies:
+      '@suarex/domain':
+        specifier: workspace:*
+        version: link:../domain
     devDependencies:
       typescript:
         specifier: ^5.9.3

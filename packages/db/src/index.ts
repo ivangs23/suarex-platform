@@ -33,15 +33,18 @@ export {
 export type {
   CreateDeviceInput,
   CreateDeviceResult,
+  DeviceRoleName,
   DeviceRow,
   RegeneratePairingCodeResult,
 } from "./admin-devices.js";
 export {
   createDevice,
+  DEVICE_ROLES,
   deleteDevice,
   listDevices,
   regeneratePairingCode,
   resetDevice,
+  setDeviceRoles,
 } from "./admin-devices.js";
 export type {
   CreatePrinterInput,
@@ -77,6 +80,8 @@ export { sweepDeviceHealth } from "./device-health.js";
 export type { PairDeviceResult } from "./devices.js";
 export { pairDevice } from "./devices.js";
 export { categoriaVisibleAhora, filtrarPorFranja, minutosEnZona } from "./franjas.js";
+export type { TotemEntry } from "./kiosko-entry.js";
+export { findDeviceByTotemToken } from "./kiosko-entry.js";
 export type { TableMenu } from "./menu.js";
 export { loadTableMenu } from "./menu.js";
 export type { MarkPaidOutcome, RefundOutcome } from "./orders.js";
@@ -95,6 +100,20 @@ export {
   purgeOrderPersonalData,
 } from "./orders.js";
 export { checkPairRateLimit } from "./pair-rate-limit.js";
+export type {
+  KioskoOrderForCharge,
+  PaymentConfigForManager,
+  PaytefConfig,
+} from "./payments.js";
+export {
+  getPaymentConfigForDevice,
+  getPaymentConfigForManager,
+  MissingPaymentSecretError,
+  markKioskoOrderPaid,
+  readKioskoOrderForCharge,
+  setDevicePinpad,
+  setPaymentConfig,
+} from "./payments.js";
 export type { CreateTenantInput, PlatformTenantRow } from "./platform.js";
 export {
   createTenantWithOwner,

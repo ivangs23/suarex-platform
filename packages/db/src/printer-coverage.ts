@@ -140,12 +140,14 @@ export async function usbPrintersNotReported(tenantId: string): Promise<UsbPrint
     tenantScoped("printers", tenantId)
       .select("id, name, device_id, connection")
       .eq("enabled", true),
-    tenantScoped("devices", tenantId).select("id, name, reported_printers"),
+    tenantScoped("devices", tenantId).select("id, name, printers"),
   ]);
   if (printers.error) throw printers.error;
   if (devices.error) throw devices.error;
 
-  type DeviceRow = { id: string; name: string; reported_printers: string[] | null };
+  // `devices.printers` es NOT NULL con default `{}` (ver 20260724000001): "todavía no ha
+  // reportado" es una lista VACÍA, no un null.
+  type DeviceRow = { id: string; name: string; printers: string[] };
   const porDispositivo = new Map(
     (devices.data as unknown as DeviceRow[]).map((d) => [d.id, d] as const),
   );
@@ -155,7 +157,7 @@ export async function usbPrintersNotReported(tenantId: string): Promise<UsbPrint
     if (p.connection?.type !== "usb" || p.device_id === null) continue;
 
     const dispositivo = porDispositivo.get(p.device_id);
-    const reportadas = dispositivo?.reported_printers;
+    const reportadas = dispositivo?.printers;
     if (!dispositivo || !reportadas || reportadas.length === 0) continue;
 
     const configurada = (p.connection.printerName ?? "").toLowerCase();

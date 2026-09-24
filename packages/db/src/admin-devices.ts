@@ -58,19 +58,22 @@ export type RegeneratePairingCodeResult = {
 };
 
 export type DeviceRow = {
-  /** Impresoras que ESE PC ve, reportadas por su agente en el heartbeat. Vacío si aún no ha
-   *  latido o si su versión es anterior al reporte. Solo para ofrecerlas en el panel. */
-  reportedPrinters: string[];
   id: string;
   tenantId: string;
   venueId: string;
   name: string;
   roles: string[];
+  /** Pinpad de Paytef de ESTE totem (identificador del datáfono emparejado), o `null`. Solo lo
+   *  usan los dispositivos con rol `kiosko`; se configura desde el panel de dispositivos. */
+  pinpadId: string | null;
   /** SIEMPRE un booleano, nunca el código en sí -- ver el docstring de `listDevices`. */
   hasPendingPairingCode: boolean;
   pairingExpiresAt: string | null;
   pairedAt: string | null;
   lastSeenAt: string | null;
+  /** Impresoras que el device reportó ver en el SO (nombres Windows exactos), en el último
+   *  heartbeat. Alimenta el desplegable del panel de impresoras. Vacío si aún no reportó. */
+  printers: string[];
 };
 
 /**
@@ -171,11 +174,12 @@ type DeviceRowDb = {
   venue_id: string;
   name: string;
   roles: string[];
+  pinpad_id: string | null;
   pairing_code: string | null;
   pairing_expires_at: string | null;
   paired_at: string | null;
   last_seen_at: string | null;
-  reported_printers: string[] | null;
+  printers: string[];
 };
 
 /**
@@ -189,7 +193,7 @@ type DeviceRowDb = {
 export async function listDevices(tenantId: string): Promise<DeviceRow[]> {
   const { data, error } = await tenantScoped("devices", tenantId)
     .select(
-      "id, tenant_id, venue_id, name, roles, pairing_code, pairing_expires_at, paired_at, last_seen_at, reported_printers",
+      "id, tenant_id, venue_id, name, roles, pinpad_id, pairing_code, pairing_expires_at, paired_at, last_seen_at, printers",
     )
     .order("created_at", { ascending: true });
   if (error) throw error;
@@ -200,11 +204,12 @@ export async function listDevices(tenantId: string): Promise<DeviceRow[]> {
     venueId: row.venue_id,
     name: row.name,
     roles: row.roles,
+    pinpadId: row.pinpad_id ?? null,
     hasPendingPairingCode: row.pairing_code !== null,
     pairingExpiresAt: row.pairing_expires_at,
     pairedAt: row.paired_at,
     lastSeenAt: row.last_seen_at,
-    reportedPrinters: row.reported_printers ?? [],
+    printers: row.printers ?? [],
   }));
 }
 
@@ -213,6 +218,33 @@ export async function listDevices(tenantId: string): Promise<DeviceRow[]> {
  * impresoras en vez de borrarlas también. */
 export async function deleteDevice(tenantId: string, deviceId: string): Promise<void> {
   const { error } = await tenantScoped("devices", tenantId).delete().eq("id", deviceId);
+  if (error) throw error;
+}
+
+/** Roles reconocidos de un dispositivo. `agente` imprime; `kiosko` además atiende el totem (carta
+ *  + cobro por datáfono). La funcionalidad es la misma para todos; el rol solo ACTIVA el totem. */
+export const DEVICE_ROLES = ["agente", "kiosko"] as const;
+export type DeviceRoleName = (typeof DEVICE_ROLES)[number];
+
+/**
+ * Fija los roles de un dispositivo (owner/admin desde el panel; el rol de QUIEN llama se verifica
+ * en la Server Action). Los valores se validan contra `DEVICE_ROLES` -- un rol desconocido se
+ * descarta -- y se deduplican, para que el panel no pueda escribir un `roles` arbitrario. Un
+ * `deviceId` de otro tenant no casa el `tenantScoped` y no toca ninguna fila.
+ */
+export async function setDeviceRoles(
+  tenantId: string,
+  deviceId: string,
+  roles: readonly string[],
+): Promise<void> {
+  const clean = [
+    ...new Set(
+      roles.filter((r): r is DeviceRoleName => DEVICE_ROLES.includes(r as DeviceRoleName)),
+    ),
+  ];
+  const { error } = await tenantScoped("devices", tenantId)
+    .update({ roles: clean })
+    .eq("id", deviceId);
   if (error) throw error;
 }
 

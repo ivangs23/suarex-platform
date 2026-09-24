@@ -1,7 +1,7 @@
 type PrinterBase = {
   id: string;
   label: string;
-  destination: "cocina" | "barra" | "all";
+  destination: "cocina" | "barra" | "all" | "recibo";
 };
 
 export type PrinterConfig =

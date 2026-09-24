@@ -1,4 +1,11 @@
-import { runAgent } from "@suarex/agent";
+import type { SupabaseClient } from "@suarex/agent";
+import {
+  type AgentHandle,
+  type NetworkPrinterProbe,
+  runAgent,
+  type SessionStore,
+  signInAndPersistSession,
+} from "@suarex/agent";
 import { registerUsbRawSink } from "@suarex/printing";
 import {
   type ActivityAlerts,
@@ -7,13 +14,12 @@ import {
   reduceActivity,
 } from "./agent-activity.js";
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./baked-config.js";
-import type { StoredCredentials } from "./config-store.js";
 import { loadWinspoolBinding, makeUsbSink } from "./usb-sink-winspool.js";
 
-let stop: (() => void) | null = null;
+let handle: AgentHandle | null = null;
 let activity: AgentActivity = INITIAL_ACTIVITY;
 let appVersion: string | undefined;
-let listPrinters: (() => Promise<string[]>) | undefined;
+let printersProvider: (() => string[] | Promise<string[]>) | undefined;
 
 /** La cáscara Electron (`index.ts`) fija aquí `app.getVersion()` antes de arrancar el agente,
  *  para que el heartbeat reporte la build en marcha. Fuera de aquí para no meter `electron` en
@@ -22,19 +28,11 @@ export function setAppVersion(version: string): void {
   appVersion = version;
 }
 
-/**
- * La cáscara Electron inyecta aquí el enumerador de impresoras del sistema. Mismo motivo que
- * `setAppVersion`: `listLocalPrinters` necesita una `BrowserWindow`, y meter `electron` en
- * este módulo lo haría intestable headless.
- *
- * Lo que el agente hace con esto es REPORTARLO en el heartbeat, para que el panel pueda
- * ofrecer un desplegable en vez de un campo de texto donde un typo significa que no imprime,
- * en silencio. El panel no puede preguntárselo al agente directamente: corre en el navegador
- * del dueño, y la vista incrustada en la app no tiene preload a propósito (ver
- * `web-panel.ts`).
- */
-export function setPrinterLister(fn: () => Promise<string[]>): void {
-  listPrinters = fn;
+/** La cáscara Electron inyecta aquí cómo enumerar las impresoras del SO (`getPrintersAsync`
+ *  vía la ventana), para reportarlas en el heartbeat. Fuera de aquí por lo mismo que
+ *  `setAppVersion`: `electron` no entra en este módulo, que se testea headless. */
+export function setPrintersProvider(fn: () => string[] | Promise<string[]>): void {
+  printersProvider = fn;
 }
 
 /** Quien quiera enterarse de cada tick (la cáscara Electron: pinta el estado y avisa de una
@@ -51,10 +49,27 @@ export function getActivity(): AgentActivity {
   return activity;
 }
 
-/** Arranca el agente con las credenciales guardadas: registra el sink USB real (solo en
+/**
+ * Login ÚNICO con contraseña que deja la sesión persistida en `store` (con su refresh token) y
+ * descarta la contraseña. Lo llama la cáscara al EMPAREJAR (contraseña que devuelve el pairing) y
+ * al MIGRAR un device viejo (contraseña que aún tenía guardada). Fuera de aquí las URL/anon key
+ * horneadas no salen de este módulo.
+ */
+export async function establishSessionFromPassword(
+  store: SessionStore,
+  email: string,
+  password: string,
+): Promise<void> {
+  await signInAndPersistSession(SUPABASE_URL, SUPABASE_ANON_KEY, store, email, password);
+}
+
+/** Arranca el agente autenticándose con la sesión persistida (refresh token) del `store` --
+ * nunca con la contraseña, que ya no vive en disco (#11). Registra el sink USB real (solo en
  * Windows; en otra plataforma el sink por defecto de `@suarex/printing` ya falla limpio y el
- * agente solo podría imprimir por red) y llama a `runAgent`. Guarda la función de parada. */
-export async function startAgent(creds: StoredCredentials): Promise<void> {
+ * agente solo podría imprimir por red) y llama a `runAgent`. Guarda la función de parada.
+ * Lanza si la sesión no se puede restaurar/renovar (token revocado o caducado) -> la cáscara lo
+ * trata como "hay que re-emparejar". */
+export async function startAgent(store: SessionStore, tenantId: string): Promise<void> {
   // Para un agente ya en marcha antes de arrancar otro (p. ej. re-emparejar sin
   // des-emparejar): sin esto, la función de parada anterior se perdería y quedaría un
   // segundo agente vivo -- subs de Realtime duplicadas y, peor, tickets impresos dos veces.
@@ -63,16 +78,17 @@ export async function startAgent(creds: StoredCredentials): Promise<void> {
   if (process.platform === "win32") {
     registerUsbRawSink(makeUsbSink(await loadWinspoolBinding()));
   }
-  stop = await runAgent(
+  handle = await runAgent(
     {
       supabaseUrl: SUPABASE_URL,
       anonKey: SUPABASE_ANON_KEY,
-      email: creds.email,
-      password: creds.password,
+      sessionStore: store,
+      // Para el canal de Realtime (vía rápida ante un pedido nuevo). El aislamiento lo da RLS.
+      tenantId,
     },
     {
       appVersion,
-      listPrinters,
+      getPrinters: printersProvider,
       onTick: (result) => {
         const next = reduceActivity(activity, result, new Date().toISOString());
         activity = next.activity;
@@ -84,12 +100,25 @@ export async function startAgent(creds: StoredCredentials): Promise<void> {
 
 /** Detiene el agente si está corriendo (lo llama el cierre de la app / el des-emparejar). */
 export function stopAgent(): void {
-  if (stop) {
-    stop();
-    stop = null;
+  if (handle) {
+    handle.stop();
+    handle = null;
   }
 }
 
 export function isAgentRunning(): boolean {
-  return stop !== null;
+  return handle !== null;
+}
+
+/** El cliente del device del agente en marcha (para que el totem cobre con la MISMA sesión, sin un
+ *  segundo bucle de refresh que rotaría el token por debajo del agente). `null` si no arrancó. */
+export function getDeviceClient(): SupabaseClient | null {
+  return handle?.client ?? null;
+}
+
+/** Sondea las impresoras de red bajo demanda, reusando el cliente del agente en marcha (#12).
+ *  `null` si el agente no está corriendo (no emparejado o sesión sin restaurar): la UI lo
+ *  distingue de "no hay impresoras de red". */
+export async function probeNetworkPrinters(): Promise<NetworkPrinterProbe[] | null> {
+  return handle ? handle.probeNetworkPrinters() : null;
 }

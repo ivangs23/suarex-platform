@@ -268,6 +268,14 @@ export async function seedCatalog(tenantId: string, label: string): Promise<Seed
     .insert({ tenant_id: tenantId, branding: { colors: { primary: "#000000" } } });
   if (settingsError) throw settingsError;
 
+  // tenant_payment_config (sub-proyecto 4, modo totem): config de pago del tenant. Se siembra una
+  // fila aquí, como tenant_settings, para que la cobertura de escritura cross-tenant de
+  // WRITE_FIXTURES tenga una fila real de este tenant sobre la que operar.
+  const { error: paymentError } = await admin
+    .from("tenant_payment_config")
+    .insert({ tenant_id: tenantId, access_key: `ak-${label}`, secret_key: `sk-${label}` });
+  if (paymentError) throw paymentError;
+
   // allergens también es tenant-scoped (aparte de las 14 filas globales con tenant_id
   // NULL): cada tenant puede declarar sus propios alérgenos personalizados. Se siembra
   // aquí para que el control positivo de lectura y la cobertura de escritura cross-tenant

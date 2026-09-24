@@ -50,8 +50,7 @@ export default async function AdminImpresorasPage() {
   const deviceOptions = devices.map((device) => ({
     id: device.id,
     name: device.name,
-    // Lo que ESE PC reporta ver. Alimenta el desplegable del nombre de impresora USB.
-    reportedPrinters: device.reportedPrinters,
+    printers: device.printers,
   }));
 
   return (

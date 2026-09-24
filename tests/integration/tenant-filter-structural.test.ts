@@ -22,7 +22,12 @@ import { admin, createTenantFixture, deleteTenantFixture } from "./helpers/tenan
  */
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "../..");
-const TSC_BIN = path.join(REPO_ROOT, "node_modules/.bin/tsc");
+// El entrypoint JS de tsc, invocado con el propio Node (`process.execPath`), en vez del
+// shim `node_modules/.bin/tsc`. En Windows ese shim solo existe como `tsc.CMD`/`tsc.ps1`
+// (no hay un `tsc` ejecutable sin extensión), así que `execFileSync("…/.bin/tsc")` falla
+// con ENOENT y devuelve salida vacía -> el test no veía ningún código de error de tsc.
+// Correr el .js con Node funciona idéntico en Mac, Linux y Windows.
+const TSC_JS = path.join(REPO_ROOT, "node_modules/typescript/bin/tsc");
 const FIXTURE_TSCONFIG = path.join(
   REPO_ROOT,
   "packages/db/src/__compile_fixtures__/tsconfig.fixture.json",
@@ -30,7 +35,7 @@ const FIXTURE_TSCONFIG = path.join(
 
 function compileFixture(): { exitCode: number; output: string } {
   try {
-    const output = execFileSync(TSC_BIN, ["--noEmit", "-p", FIXTURE_TSCONFIG], {
+    const output = execFileSync(process.execPath, [TSC_JS, "--noEmit", "-p", FIXTURE_TSCONFIG], {
       cwd: REPO_ROOT,
       encoding: "utf-8",
       stdio: ["ignore", "pipe", "pipe"],

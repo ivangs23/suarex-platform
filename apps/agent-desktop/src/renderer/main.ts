@@ -1,5 +1,9 @@
 import type { AgentActivity } from "../main/agent-activity.js";
-import type { ExportIpcResult, PairIpcResult } from "../main/ipc.js";
+import type {
+  ExportDiagnosticsResult,
+  PairIpcResult,
+  ProbeNetworkPrintersResult,
+} from "../main/ipc.js";
 import type { ShowWebPanelResult } from "../main/web-panel.js";
 import { setupNavigation } from "./navigation.js";
 
@@ -17,8 +21,9 @@ type AgentApi = {
   testPrint(printerName: string): Promise<{ ok: boolean }>;
   getStatus(): Promise<AgentStatus>;
   confirmUnpair(): Promise<boolean>;
-  exportDiagnostic(): Promise<ExportIpcResult>;
   unpair(): Promise<{ ok: boolean }>;
+  exportDiagnostics(): Promise<ExportDiagnosticsResult>;
+  probeNetworkPrinters(): Promise<ProbeNetworkPrintersResult>;
   showSection(section: string): Promise<ShowWebPanelResult>;
   onActivity(cb: (activity: AgentActivity) => void): () => void;
 };
@@ -198,14 +203,6 @@ if (!agent) {
     await refreshStatus();
   });
 
-  $("diagnostico").addEventListener("click", async () => {
-    const r = await agent.exportDiagnostic();
-    // Se dice la RUTA y no solo "guardado": el diálogo nativo permite cambiar de carpeta, y
-    // sin la ruta el siguiente paso -- adjuntarlo a un correo -- empieza por buscarlo.
-    if (r.ok) log(`Diagnóstico guardado en ${r.ruta}`);
-    else if (r.motivo !== "cancelado") log(`No se pudo guardar el diagnóstico: ${r.motivo}`);
-  });
-
   $("refresh").addEventListener("click", refreshPrinters);
 
   $("test").addEventListener("click", async () => {
@@ -220,6 +217,48 @@ if (!agent) {
       log("Ticket de prueba enviado. ¿Salió por la impresora?");
     } catch (e) {
       log(`Error al imprimir la prueba: ${(e as Error).message}`);
+    }
+  });
+
+  $("probe-network").addEventListener("click", async () => {
+    const box = $("network-status");
+    box.textContent = "Probando la conexión de las impresoras de red…";
+    try {
+      const r = await agent.probeNetworkPrinters();
+      if (!r.ok) {
+        box.textContent =
+          "El agente no está en marcha: empareja el equipo para poder probar las impresoras de red.";
+        return;
+      }
+      if (r.printers.length === 0) {
+        box.textContent = "Este negocio no tiene impresoras de red configuradas.";
+        return;
+      }
+      box.textContent = "";
+      for (const p of r.printers) {
+        const line = document.createElement("p");
+        line.textContent = p.ok
+          ? `✅ ${p.label} (${p.host}:${p.port}) — responde`
+          : `⚠️ ${p.label} (${p.host}:${p.port}) — sin respuesta: ${p.reason ?? "desconocido"}`;
+        box.appendChild(line);
+      }
+    } catch (e) {
+      box.textContent = `Error al probar las impresoras de red: ${(e as Error).message}`;
+    }
+  });
+
+  $("export-diagnostics").addEventListener("click", async () => {
+    try {
+      const r = await agent.exportDiagnostics();
+      if (r.ok) {
+        log(`Diagnóstico guardado en: ${r.path}`);
+      } else if ("canceled" in r) {
+        log("Exportación cancelada.");
+      } else {
+        log(`No se pudo guardar el diagnóstico: ${r.error}`);
+      }
+    } catch (e) {
+      log(`Error al exportar el diagnóstico: ${(e as Error).message}`);
     }
   });
 

@@ -1,35 +1,54 @@
 import { join } from "node:path";
 import { app, BrowserWindow, Menu, Notification, nativeImage, Tray } from "electron";
-import type { ActivityAlerts, AgentActivity } from "./agent-activity.js";
+import { WebSocket as WsWebSocket } from "ws";
+import { type ActivityAlerts, type AgentActivity, INITIAL_ACTIVITY } from "./agent-activity.js";
+
+// Electron 33 corre sobre Node 20, que NO expone `WebSocket` global (estable desde Node 22).
+// Supabase Realtime (`@suarex/realtime` -> subscribeToOrders, la vía rápida del agente ante un
+// pedido nuevo) lo exige y, sin él, `startAgent` lanza en el arranque. Se rellena con `ws` antes
+// de que nada toque Realtime. Cuando el Electron empaquetado suba a un Node >= 22, el guard lo
+// deja pasar sin pisar el nativo.
+if (typeof (globalThis as { WebSocket?: unknown }).WebSocket === "undefined") {
+  (globalThis as { WebSocket?: unknown }).WebSocket = WsWebSocket;
+}
+
 import {
+  establishSessionFromPassword,
+  getDeviceClient,
   onAgentActivity,
   setAppVersion,
-  setPrinterLister,
+  setPrintersProvider,
   startAgent,
   stopAgent,
 } from "./agent-runner.js";
-import { loadCredentials } from "./config-store.js";
+import { PLATFORM_WEB_ORIGIN } from "./baked-config.js";
+import { loadCredentials, saveCredentials } from "./config-store.js";
 import { registerIpc } from "./ipc.js";
-import { instalarLogDeFichero } from "./log-file.js";
+import { createLogger, type Logger } from "./logger.js";
 import { listLocalPrinters } from "./printers.js";
 import { realConfigBackend } from "./real-config-backend.js";
-import { realLogBackend } from "./real-log-backend.js";
+import { realLogSink } from "./real-log-backend.js";
+import { realSessionStore } from "./real-session-store.js";
+import { openKioskWindow, registerTotemIpc } from "./totem-window.js";
 import { TRAY_ICON_DATA_URL } from "./tray-icon.js";
 import { startAutoUpdate } from "./updater.js";
-import { ejecutorDelSistema, registrarWatchdog } from "./watchdog.js";
+import { ensureWatchdogTask } from "./watchdog.js";
 import { destroyWebPanel, layoutWebPanel } from "./web-panel.js";
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let quitting = false;
 
-const TRAY_BASE_TOOLTIP = "SuarEx — Agente de impresión";
+// El logger a fichero se crea en `whenReady` (necesita `app.getPath("userData")`). Hasta
+// entonces, y por si un fallo salta antes, `reportMain` cae en `console.error`. La app corre
+// oculta en bandeja, así que sin este fichero un crash no dejaba ningún rastro.
+let logger: Logger | null = null;
+function reportMain(msg: string, err?: unknown): void {
+  if (logger) logger.error(msg, err);
+  else console.error(msg, err);
+}
 
-// Log a fichero, lo PRIMERO de todo: a partir de aquí cualquier `console` de este proceso
-// -- incluidas las de `packages/agent`, que corre aquí dentro -- queda también en disco. Antes
-// de esta línea solo hay imports, así que no se pierde nada. Un proceso oculto en la bandeja
-// no tiene consola que mirar: sin esto, la única información tras un fallo era "no imprime".
-instalarLogDeFichero(realLogBackend());
+const TRAY_BASE_TOOLTIP = "SuarEx — Agente de impresión";
 
 // Watchdog dentro del proceso. Este agente corre desatendido: un error suelto no capturado no
 // debe llevarse por delante toda la app y dejar la cocina sin imprimir hasta reiniciar el PC.
@@ -37,10 +56,10 @@ instalarLogDeFichero(realLogBackend());
 // que sobrevivir aquí es lo que mantiene la impresión en marcha. (La caída del PROPIO proceso
 // principal no se recupera desde dentro; para eso haría falta un watchdog del sistema.)
 process.on("uncaughtException", (err) => {
-  console.error("[main] excepción no capturada (se sigue):", err);
+  reportMain("[main] excepción no capturada (se sigue):", err);
 });
 process.on("unhandledRejection", (reason) => {
-  console.error("[main] promesa rechazada sin manejar (se sigue):", reason);
+  reportMain("[main] promesa rechazada sin manejar (se sigue):", reason);
 });
 
 /**
@@ -50,8 +69,29 @@ process.on("unhandledRejection", (reason) => {
  * mismo aviso cada 4 s. Sin esto, un fallo de impresión era invisible: la cocina se quedaba
  * sin comandas y nadie se enteraba.
  */
+let prevActivity: AgentActivity = INITIAL_ACTIVITY;
 function handleAgentActivity(activity: AgentActivity, alerts: ActivityAlerts): void {
   mainWindow?.webContents.send("agent-activity", activity);
+
+  // Log a fichero SOLO de lo que cambió en este tick, no del estado en cada uno de los ~4 s: los
+  // tickets recién impresos, las impresoras que acaban de caer o volver, y las transiciones de
+  // conexión. Un tick vacío no escribe nada, así el registro cuenta la historia sin inundarse.
+  const printed = activity.printedTotal - prevActivity.printedTotal;
+  if (printed > 0) logger?.info(`Impresos ${printed} ticket(s) (total ${activity.printedTotal}).`);
+  for (const f of alerts.newlyDown) {
+    logger?.warn(
+      `Impresora de ${f.destination} sin responder (pedido #${f.orderNumber}): ${f.reason}.`,
+    );
+  }
+  if (alerts.recovered.length > 0) {
+    logger?.info(`Impresora(s) recuperada(s): ${alerts.recovered.join(", ")}.`);
+  }
+  if (activity.lastError && activity.lastError !== prevActivity.lastError) {
+    logger?.error(`Sin conexión con la plataforma: ${activity.lastError}`);
+  } else if (!activity.lastError && prevActivity.lastError) {
+    logger?.info("Conexión con la plataforma recuperada.");
+  }
+  prevActivity = activity;
 
   if (tray) {
     const caidas = activity.downPrinters.length;
@@ -98,50 +138,77 @@ if (!gotLock) {
   // Si el proceso del renderer se cae (no el agente, que vive en el main y sigue imprimiendo),
   // se recarga la ventana en vez de dejarla en blanco. Al salir no se recarga: se está cerrando.
   app.on("render-process-gone", (_e, contents, details) => {
-    console.error("[main] el renderer se cayó:", details.reason);
+    reportMain("[main] el renderer se cayó:", details.reason);
     if (!quitting && contents === mainWindow?.webContents) mainWindow.reload();
   });
 
   app.whenReady().then(async () => {
-    // Auto-arranque en el login de Windows (desatendido, oculto en bandeja). Cubre el
-    // REINICIO del PC.
+    // Logger a fichero rotativo en userData. Se crea aquí (ya hay `app`) y a partir de este punto
+    // el watchdog y los eventos importantes quedan en disco, no solo en un stdout invisible.
+    const logSink = realLogSink();
+    logger = createLogger(logSink, () => new Date().toISOString());
+    logger.info(`Arranque. Versión ${app.getVersion()}, plataforma ${process.platform}.`);
+
+    // Auto-arranque en el login de Windows (desatendido, oculto en bandeja).
     app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true });
 
-    // Y el watchdog cubre lo que aquello no: que el PROCESO muera con la sesión abierta
-    // (cierre forzado, OOM, un antivirus). Se registra en cada arranque a propósito: es
-    // idempotente y así la tarea apunta siempre al ejecutable actual, que cambia de ruta tras
-    // una actualización. Nunca lanza -- perder la recuperación automática es malo, no
-    // imprimir es peor.
-    void registrarWatchdog(process.platform, process.execPath, ejecutorDelSistema()).then(
-      (puesto) => {
-        if (!puesto && process.platform === "win32") {
-          console.error("[main] no se pudo registrar el watchdog del sistema");
-        }
-      },
-    );
+    // Watchdog del SISTEMA: una tarea programada resucita el proceso si muere del TODO (crash
+    // duro/kill) -- el watchdog interno solo cubre errores del proceso vivo. Solo en un build
+    // empaquetado de Windows: en dev el exe es electron.exe y registraría una tarea basura.
+    if (process.platform === "win32" && app.isPackaged) {
+      ensureWatchdogTask(app.getPath("userData"), app.getPath("exe"), reportMain);
+    }
 
     createWindow();
     createTray();
-    registerIpc(() => mainWindow);
+    registerIpc(
+      () => mainWindow,
+      () => logSink.read(),
+      // Un totem recién emparejado entra en modo kiosko sin reiniciar.
+      () => maybeStartKiosk(),
+    );
     onAgentActivity(handleAgentActivity);
     // La versión de la build viaja al heartbeat (para saber qué locales están desactualizados).
     setAppVersion(app.getVersion());
-    // Y también la lista de impresoras que ve este PC, para que el panel ofrezca un
-    // desplegable en vez de un campo de texto donde un typo significa que no imprime, en
-    // silencio. Devuelve [] si la ventana aún no existe: el agente manda null en ese caso y
-    // la RPC conserva la última lista buena.
-    setPrinterLister(async () => (mainWindow ? listLocalPrinters(mainWindow) : []));
+    // Las impresoras que ve el SO también viajan al heartbeat, para el desplegable del panel
+    // admin. `getPrintersAsync` es de `webContents`; sin ventana viva, lista vacía.
+    setPrintersProvider(() => (mainWindow ? listLocalPrinters(mainWindow) : Promise.resolve([])));
     // Auto-update en segundo plano (no hace nada sin feed configurado, p. ej. en dev).
-    startAutoUpdate((title, body) => {
-      if (Notification.isSupported()) new Notification({ title, body }).show();
-    });
+    startAutoUpdate(
+      (title, body) => {
+        if (Notification.isSupported()) new Notification({ title, body }).show();
+      },
+      (msg, err) => reportMain(msg, err),
+    );
 
     // Si ya está emparejado, arranca el agente al iniciar (imprime sin abrir la ventana).
     const creds = loadCredentials(realConfigBackend());
     if (creds) {
-      await startAgent(creds).catch((e) =>
-        console.error("[agent-desktop] no se pudo arrancar el agente:", e),
-      );
+      const store = realSessionStore();
+      try {
+        if (creds.legacyPassword) {
+          // Migración #11: este device se emparejó con una versión que guardaba la contraseña.
+          // Un login único deja la sesión (refresh token) en el almacén cifrado, y reescribimos
+          // la metadata SIN la contraseña. Transparente: el owner no re-empareja.
+          logger.info(`Migrando dispositivo ${creds.deviceId} a sesión por refresh token…`);
+          await establishSessionFromPassword(store, creds.email, creds.legacyPassword);
+          saveCredentials(realConfigBackend(), {
+            deviceId: creds.deviceId,
+            email: creds.email,
+            tenantId: creds.tenantId,
+          });
+        }
+        logger.info(`Emparejado (dispositivo ${creds.deviceId}). Arrancando el agente…`);
+        await startAgent(store, creds.tenantId);
+        await maybeStartKiosk();
+      } catch (e) {
+        // La sesión no se pudo restaurar/renovar (token revocado o caducado), o falló la
+        // migración. No se borra la metadata: la ventana muestra "Emparejado, agente parado" y el
+        // owner puede re-emparejar con un código nuevo.
+        reportMain("[agent-desktop] no se pudo arrancar el agente (¿re-emparejar?):", e);
+      }
+    } else {
+      logger.info("Sin emparejar. El agente no arranca hasta introducir un código.");
     }
   });
 
@@ -150,6 +217,36 @@ if (!gotLock) {
     stopAgent();
     destroyWebPanel();
   });
+}
+
+/**
+ * Si este dispositivo es un TOTEM (rol `kiosko`), abre su ventana kiosko con la carta
+ * `/totem/<totem_token>`. El token se lee del PROPIO device con su JWT (`devices_select_own` solo
+ * devuelve su fila). Un device que solo imprime (rol `agente`) no abre nada: sigue oculto en
+ * bandeja imprimiendo. Nunca lanza: un fallo aquí no debe tumbar el arranque del agente.
+ */
+async function maybeStartKiosk(): Promise<void> {
+  try {
+    const client = getDeviceClient();
+    if (!client || !PLATFORM_WEB_ORIGIN) return;
+    const { data } = await client.from("devices").select("roles, totem_token").maybeSingle();
+    const roles = (data?.roles as string[] | null) ?? [];
+    const token = data?.totem_token as string | undefined;
+    if (!token || !roles.includes("kiosko")) return;
+
+    registerTotemIpc(getDeviceClient);
+    const kioskWindow = openKioskWindow(`${PLATFORM_WEB_ORIGIN}/totem/${token}`);
+    kioskWindow.on("close", (e) => {
+      // El totem no se cierra a mano: si alguien lo intenta, se vuelve a mostrar (salvo al salir).
+      if (!quitting) {
+        e.preventDefault();
+        kioskWindow.show();
+      }
+    });
+    logger?.info("Modo totem: ventana kiosko abierta.");
+  } catch (e) {
+    reportMain("[agent-desktop] no se pudo abrir el modo totem:", e);
+  }
 }
 
 function createWindow(): void {

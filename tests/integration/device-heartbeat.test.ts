@@ -1,3 +1,4 @@
+import { listDevices } from "@suarex/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   admin,
@@ -77,12 +78,56 @@ describe("device_heartbeat", () => {
     expect(rowB?.app_version).toBeNull();
     expect(rowB?.last_seen_at).toBeNull();
   });
+
+  it("reporta las impresoras del SO en `printers`, y omitirlas no las borra (#7)", async () => {
+    const { data: venue } = await admin
+      .from("venues")
+      .insert({ tenant_id: tenant.tenantId, slug: `v-${nonce()}`, name: "V", is_default: false })
+      .select("id")
+      .single();
+    const venueId = venue?.id as string;
+
+    const d = await seedDeviceClient(venueId);
+
+    // Primer heartbeat con lista: se guarda tal cual.
+    const nombres = ["EPSON TM-T20", "Star TSP143"];
+    const { error: e1 } = await d.client.rpc("device_heartbeat", {
+      p_app_version: "1.0.0",
+      p_printers: nombres,
+    });
+    expect(e1).toBeNull();
+
+    const { data: row1 } = await admin
+      .from("devices")
+      .select("printers")
+      .eq("id", d.deviceId)
+      .single();
+    expect(row1?.printers).toEqual(nombres);
+
+    // Segundo heartbeat SIN lista (p. ej. fuera de Electron): `coalesce` conserva las anteriores.
+    const { error: e2 } = await d.client.rpc("device_heartbeat", { p_app_version: "1.0.1" });
+    expect(e2).toBeNull();
+
+    const { data: row2 } = await admin
+      .from("devices")
+      .select("printers, app_version")
+      .eq("id", d.deviceId)
+      .single();
+    expect(row2?.printers).toEqual(nombres);
+    expect(row2?.app_version).toBe("1.0.1");
+
+    // `listDevices` (lo que consume el panel admin) las expone.
+    const devices = await listDevices(tenant.tenantId);
+    const reportado = devices.find((dev) => dev.id === d.deviceId);
+    expect(reportado?.printers).toEqual(nombres);
+  });
 });
 
-describe("reporte de impresoras en el heartbeat", () => {
-  // El nombre de la impresora USB se tecleaba a mano en el panel y un typo = no imprime, en
-  // silencio. El panel no puede preguntarle al agente (corre en otra máquina, y la vista
-  // incrustada no tiene preload a propósito), así que el agente reporta y el panel lee.
+describe("reporte de impresoras: aislamiento entre dispositivos", () => {
+  // Que la lista se reporte y que omitirla no la borre ya lo cubre el test de arriba. Lo que
+  // no cubría nadie es que la RPC acote la escritura al dispositivo del JWT: es SECURITY
+  // DEFINER, así que si tomara el device de un parámetro, cualquier agente podría reescribir
+  // la lista de otro local y dejarlo sin imprimir.
   async function venuePropio() {
     const { data } = await admin
       .from("venues")
@@ -91,44 +136,6 @@ describe("reporte de impresoras en el heartbeat", () => {
       .single();
     return data?.id as string;
   }
-
-  it("el agente reporta su lista y queda visible para el panel", async () => {
-    const d = await seedDeviceClient(await venuePropio());
-
-    const { error } = await d.client.rpc("device_heartbeat", {
-      p_app_version: "1.2.3",
-      p_printers: ["EPSON TM-T20", "Microsoft Print to PDF"],
-    });
-    expect(error).toBeNull();
-
-    const { data } = await admin
-      .from("devices")
-      .select("reported_printers, app_version")
-      .eq("id", d.deviceId)
-      .single();
-    expect(data?.reported_printers).toEqual(["EPSON TM-T20", "Microsoft Print to PDF"]);
-    expect(data?.app_version).toBe("1.2.3");
-  });
-
-  it("un agente que NO reporta no borra la última lista buena", async () => {
-    // Durante un despliegue escalonado conviven agente viejo (un argumento) y nuevo. Si el
-    // viejo borrara la lista, el desplegable se vaciaría y el dueño volvería a teclear a
-    // mano -- justo el problema que esto resuelve.
-    const d = await seedDeviceClient(await venuePropio());
-
-    await d.client.rpc("device_heartbeat", {
-      p_app_version: "1.2.3",
-      p_printers: ["EPSON TM-T20"],
-    });
-    await d.client.rpc("device_heartbeat", { p_app_version: "1.2.3" });
-
-    const { data } = await admin
-      .from("devices")
-      .select("reported_printers")
-      .eq("id", d.deviceId)
-      .single();
-    expect(data?.reported_printers, "la lista buena se conserva").toEqual(["EPSON TM-T20"]);
-  });
 
   it("un dispositivo no puede reportar impresoras de otro", async () => {
     const venueId = await venuePropio();
@@ -140,11 +147,8 @@ describe("reporte de impresoras en el heartbeat", () => {
       p_printers: ["SOLO DE A"],
     });
 
-    const { data } = await admin
-      .from("devices")
-      .select("reported_printers")
-      .eq("id", b.deviceId)
-      .single();
-    expect(data?.reported_printers, "B no puede verse afectado por el heartbeat de A").toBeNull();
+    const { data } = await admin.from("devices").select("printers").eq("id", b.deviceId).single();
+    // `printers` es NOT NULL con default `{}`: sin heartbeat propio, B sigue vacío.
+    expect(data?.printers, "B no puede verse afectado por el heartbeat de A").toEqual([]);
   });
 });

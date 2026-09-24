@@ -142,6 +142,37 @@ export type Strings = {
    *  datos, así que es donde tiene que poder leer qué se hace con ellos. */
   legalPayNote: string;
   backToMenu: string;
+  // Modo totem (canal kiosko).
+  totemStart: string;
+  totemTakeaway: string;
+  totemDineIn: string;
+  totemEnterTable: string;
+  totemTableNumber: string;
+  totemNext: string;
+  totemBack: string;
+  totemDelete: string;
+  totemPayAtTerminal: string;
+  totemFollowTerminal: string;
+  totemPaying: string;
+  totemApproved: string;
+  totemDeclined: string;
+  totemRetry: string;
+  totemCollect: string;
+  totemPickupNumber: string;
+  totemNewOrder: string;
+  totemCancel: string;
+  /** Reinicio por inactividad: el totem se queda a medias y hay que dejarlo listo para el
+   *  siguiente cliente, pero sin borrarle el pedido a quien solo se ha parado a pensar. */
+  totemStillThere: string;
+  totemStillThereBody: string;
+  totemImHere: string;
+  totemStartOver: string;
+  totemStartOverConfirm: string;
+  /** Cobro aprobado que no se pudo registrar: el cliente ya pagó, así que jamás se le ofrece
+   *  reintentar. Se le pide que avise al personal con el código de autorización a la vista. */
+  totemInDoubt: string;
+  totemInDoubtBody: string;
+  totemAuthCode: string;
 };
 
 const ES: Strings = {
@@ -199,6 +230,33 @@ const ES: Strings = {
   legalTerms: "Condiciones",
   legalPayNote: "Al pedir aceptas las condiciones y la política de privacidad.",
   backToMenu: "Volver a la carta",
+  totemStart: "Empezar pedido",
+  totemTakeaway: "Para llevar",
+  totemDineIn: "Comer en mesa",
+  totemEnterTable: "¿En qué mesa estás?",
+  totemTableNumber: "Número de mesa",
+  totemNext: "Continuar",
+  totemBack: "Atrás",
+  totemDelete: "Borrar",
+  totemPayAtTerminal: "Pagar con tarjeta",
+  totemFollowTerminal: "Sigue las instrucciones del datáfono",
+  totemPaying: "Procesando el pago…",
+  totemApproved: "Pago aprobado",
+  totemDeclined: "Pago rechazado",
+  totemRetry: "Reintentar",
+  totemCollect: "Recoge tu ticket",
+  totemPickupNumber: "Tu número",
+  totemNewOrder: "Nuevo pedido",
+  totemCancel: "Cancelar",
+  totemStillThere: "¿Sigues ahí?",
+  totemStillThereBody: "Si no, empezamos de nuevo para el siguiente cliente.",
+  totemImHere: "Sigo aquí",
+  totemStartOver: "Empezar de nuevo",
+  totemStartOverConfirm: "¿Seguro que quieres empezar de nuevo? Se borrará tu pedido.",
+  totemInDoubt: "Avisa al personal, por favor",
+  totemInDoubtBody:
+    "Tu pago se ha realizado, pero no hemos podido registrar el pedido. No vuelvas a pagar: enseña este código.",
+  totemAuthCode: "Código de autorización",
 };
 
 const EN: Strings = {
@@ -256,6 +314,33 @@ const EN: Strings = {
   legalTerms: "Terms",
   legalPayNote: "By ordering you accept the terms and the privacy policy.",
   backToMenu: "Back to the menu",
+  totemStart: "Start order",
+  totemTakeaway: "Takeaway",
+  totemDineIn: "Dine in",
+  totemEnterTable: "Which table are you at?",
+  totemTableNumber: "Table number",
+  totemNext: "Continue",
+  totemBack: "Back",
+  totemDelete: "Delete",
+  totemPayAtTerminal: "Pay by card",
+  totemFollowTerminal: "Follow the instructions on the terminal",
+  totemPaying: "Processing payment…",
+  totemApproved: "Payment approved",
+  totemDeclined: "Payment declined",
+  totemRetry: "Try again",
+  totemCollect: "Collect your ticket",
+  totemPickupNumber: "Your number",
+  totemNewOrder: "New order",
+  totemCancel: "Cancel",
+  totemStillThere: "Still there?",
+  totemStillThereBody: "If not, we'll start over for the next customer.",
+  totemImHere: "I'm still here",
+  totemStartOver: "Start over",
+  totemStartOverConfirm: "Start over? Your order will be cleared.",
+  totemInDoubt: "Please call a member of staff",
+  totemInDoubtBody:
+    "Your payment went through, but we could not register the order. Do not pay again: show this code.",
+  totemAuthCode: "Authorisation code",
 };
 
 const PT: Strings = {
@@ -313,6 +398,33 @@ const PT: Strings = {
   legalTerms: "Condições",
   legalPayNote: "Ao pedir aceitas as condições e a política de privacidade.",
   backToMenu: "Voltar à carta",
+  totemStart: "Iniciar pedido",
+  totemTakeaway: "Para levar",
+  totemDineIn: "Comer na mesa",
+  totemEnterTable: "Em que mesa está?",
+  totemTableNumber: "Número da mesa",
+  totemNext: "Continuar",
+  totemBack: "Voltar",
+  totemDelete: "Apagar",
+  totemPayAtTerminal: "Pagar com cartão",
+  totemFollowTerminal: "Siga as instruções do terminal",
+  totemPaying: "A processar o pagamento…",
+  totemApproved: "Pagamento aprovado",
+  totemDeclined: "Pagamento recusado",
+  totemRetry: "Tentar de novo",
+  totemCollect: "Recolha o seu talão",
+  totemPickupNumber: "O seu número",
+  totemNewOrder: "Novo pedido",
+  totemCancel: "Cancelar",
+  totemStillThere: "Ainda aí?",
+  totemStillThereBody: "Se não, recomeçamos para o próximo cliente.",
+  totemImHere: "Continuo aqui",
+  totemStartOver: "Recomeçar",
+  totemStartOverConfirm: "Recomeçar? O seu pedido será apagado.",
+  totemInDoubt: "Chame um funcionário, por favor",
+  totemInDoubtBody:
+    "O seu pagamento foi efetuado, mas não conseguimos registar o pedido. Não pague de novo: mostre este código.",
+  totemAuthCode: "Código de autorização",
 };
 
 const STRINGS: Record<Lang, Strings> = { es: ES, en: EN, pt: PT };

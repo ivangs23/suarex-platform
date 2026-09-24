@@ -344,6 +344,108 @@ async function seedTwoVenueLoop(
   };
 }
 
+/**
+ * Variante para el TOTEM (Fase 5): un venue con impresora de cocina Y de recibo (cada una a su
+ * impresora falsa), y un pedido de canal `kiosko` pagado con mesa tecleada. El recibo del cliente
+ * (precios, total, código de recogida) sale por la de recibo; la comanda, por la de cocina.
+ */
+async function seedKioskoLoop(
+  kitchenPort: number,
+  reciboPort: number,
+): Promise<LoopFixture & { publicToken: string }> {
+  const tenant = await createTenantFixture(`loop-kiosko-${nonce()}`);
+  const { data: venue } = await admin
+    .from("venues")
+    .insert({ tenant_id: tenant.tenantId, slug: `v-${nonce()}`, name: "V", is_default: true })
+    .select("id")
+    .single();
+  const venueId = venue?.id as string;
+  const { data: cat } = await admin
+    .from("categories")
+    .insert({
+      tenant_id: tenant.tenantId,
+      slug: `k-${nonce()}`,
+      name_i18n: { es: "Cocina" },
+      destination: "cocina",
+    })
+    .select("id")
+    .single();
+  const { data: prod } = await admin
+    .from("products")
+    .insert({
+      tenant_id: tenant.tenantId,
+      category_id: cat?.id,
+      name_i18n: { es: "Paella" },
+      price: 12,
+    })
+    .select("id")
+    .single();
+  await admin.from("printers").insert([
+    {
+      tenant_id: tenant.tenantId,
+      venue_id: venueId,
+      name: "Cocina",
+      connection: { type: "network", host: "127.0.0.1", port: kitchenPort },
+      destination: "cocina",
+      enabled: true,
+    },
+    {
+      tenant_id: tenant.tenantId,
+      venue_id: venueId,
+      name: "Recibo",
+      connection: { type: "network", host: "127.0.0.1", port: reciboPort },
+      destination: "recibo",
+      enabled: true,
+    },
+  ]);
+  const { createPendingOrder } = await import("@suarex/db");
+  const order = await createPendingOrder({
+    tenantId: tenant.tenantId,
+    venueId,
+    tableId: null,
+    tableLabel: "7",
+    channel: "kiosko",
+    lines: [{ productId: prod?.id as string, quantity: 1, extraIds: [], notes: null }],
+    taxRate: 0.1,
+  });
+  await admin
+    .from("orders")
+    .update({ status: "paid", paid_at: new Date().toISOString() })
+    .eq("id", order.orderId);
+  const { data: orderRow } = await admin
+    .from("orders")
+    .select("public_token")
+    .eq("id", order.orderId)
+    .single();
+
+  const email = `loop-kiosko-device-${nonce()}@devices.local`;
+  const password = `pw-${nonce()}`;
+  const { data: user } = await admin.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+  });
+  const deviceUserId = user?.user?.id as string;
+  await admin
+    .from("memberships")
+    .insert({ user_id: deviceUserId, tenant_id: tenant.tenantId, role: "device" });
+  await admin.from("devices").insert({
+    tenant_id: tenant.tenantId,
+    venue_id: venueId,
+    name: "Totem",
+    auth_user_id: deviceUserId,
+    paired_at: new Date().toISOString(),
+  });
+  return {
+    tenant,
+    orderId: order.orderId,
+    deviceUserId,
+    deviceEmail: email,
+    devicePassword: password,
+    publicToken: orderRow?.public_token as string,
+  };
+}
+
 describe("runAgentTick", () => {
   it("imprime el pedido pagado en su impresora y lo marca; una segunda pasada no reimprime", async () => {
     const cocina = await startFakePrinter();
@@ -439,6 +541,54 @@ describe("runAgentTick", () => {
     const r2 = await runAgentTick(client);
     expect(r2.printed).toBe(0);
     expect(todos.connectionCount()).toBe(1); // no reconecta
+  });
+
+  it("un pedido kiosko saca el RECIBO por la impresora de recibo y la COMANDA por la de cocina", async () => {
+    const cocina = await startFakePrinter();
+    const recibo = await startFakePrinter();
+    openPrinters.push(cocina, recibo);
+    const f = await seedKioskoLoop(cocina.port, recibo.port);
+    fixtures.push(f);
+
+    const client = await createDeviceClient({
+      supabaseUrl: supabaseUrlForTest(),
+      anonKey: anonKeyForTest(),
+      email: f.deviceEmail,
+      password: f.devicePassword,
+    });
+
+    const r1 = await runAgentTick(client);
+    // Dos impresiones: comanda de cocina + recibo de cliente.
+    expect(r1.printed).toBe(2);
+
+    // Comanda de cocina: el plato y la mesa tecleada (el fix de `table_label` en kiosko).
+    const cocinaBytes = cocina.received().toString("latin1");
+    expect(cocinaBytes).toContain("Paella");
+    expect(cocinaBytes).toContain("MESA 7");
+
+    // Recibo de cliente: cabecera de recibo, total (precio IVA incluido: 12,00, con base e IVA
+    // desglosados) y el código de recogida que vio el comensal en la pantalla.
+    const reciboBytes = recibo.received().toString("latin1");
+    expect(reciboBytes).toContain("RECIBO");
+    expect(reciboBytes).toContain("TOTAL");
+    expect(reciboBytes).toContain("12,00");
+    expect(reciboBytes).toContain("RECOGIDA");
+    // Mismo código que enseña la pantalla del totem (`pickupCodeFromToken`): 6 chars del token
+    // en mayúsculas. Se comprueba con la regla independiente, para atrapar una divergencia.
+    expect(reciboBytes).toContain(f.publicToken.slice(0, 6).toUpperCase());
+
+    // Cubiertas cocina Y recibo -> el pedido queda impreso; una segunda pasada no reimprime.
+    const { data: row } = await admin
+      .from("orders")
+      .select("printed_at")
+      .eq("id", f.orderId)
+      .single();
+    expect(row?.printed_at).not.toBeNull();
+
+    const r2 = await runAgentTick(client);
+    expect(r2.printed).toBe(0);
+    expect(cocina.connectionCount()).toBe(1);
+    expect(recibo.connectionCount()).toBe(1);
   });
 
   it("Finding 1 (revisión final whole-branch): un pedido de V1 imprime SOLO en la impresora de V1, nunca en la de V2", async () => {

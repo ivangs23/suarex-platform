@@ -1,3 +1,4 @@
+import { eurosToCents } from "@suarex/domain";
 import { reservePrintedRpc, tenantScoped } from "./client.js";
 
 export type PrintableItem = {
@@ -5,6 +6,10 @@ export type PrintableItem = {
   quantity: number;
   destination: "cocina" | "barra";
   notes: string | null;
+  /** Nombres de las extras de la línea. La comanda hoy no las pinta; el RECIBO sí. */
+  extras: string[];
+  /** Total de la línea en céntimos (unidad × cantidad, extras incluidas). Solo el recibo lo usa. */
+  lineCents: number;
 };
 
 export type PrintableOrder = {
@@ -12,6 +17,15 @@ export type PrintableOrder = {
   orderNumber: number;
   tableLabel: string | null;
   createdAt: string;
+  /** Canal del pedido. En `kiosko` el recibo del cliente es una impresora de destino más. */
+  channel: "qr-mesa" | "kiosko";
+  /** Token público del pedido: de él sale el código de recogida que el comensal vio en pantalla. */
+  publicToken: string;
+  /** Importes del pedido, en céntimos, para el recibo del cliente. */
+  subtotalCents: number;
+  taxCents: number;
+  totalCents: number;
+  currency: string;
   printedTargets: Record<string, string>;
   /**
    * Local (venue) al que pertenece el pedido. Añadido en la revisión final whole-branch de
@@ -38,19 +52,30 @@ export type PaidOrderRow = {
   venue_id: string;
   kitchen_status: StationStatus;
   bar_status: StationStatus;
+  channel: "qr-mesa" | "kiosko";
+  public_token: string;
+  subtotal: number;
+  tax_amount: number;
+  total: number;
+  currency: string;
   tables: { label: string } | null;
+  /** Mesa del canal KIOSKO (totem): ahí no hay `table_id` que resolver por `tables`, la mesa se
+   *  teclea y se guarda como texto en el propio pedido. `null` para llevar. */
+  table_label: string | null;
   order_items: {
     name_snapshot: Record<string, string>;
     quantity: number;
     destination: "cocina" | "barra";
     notes: string | null;
+    line_total: number;
+    order_item_extras: { name_snapshot: Record<string, string> }[];
   }[];
 };
 
 export type EnabledPrinterRow = {
   id: string;
   venue_id: string;
-  destination: "cocina" | "barra" | "all";
+  destination: "cocina" | "barra" | "all" | "recibo";
 };
 
 /** Mismo criterio de resolución que `staff-orders.ts`: `es` primero, con fallback al
@@ -98,12 +123,16 @@ function resolveItemName(nameSnapshot: Record<string, string>): string {
  * (consumidor de este módulo) no tiene UI propia donde mostrar este aviso.
  */
 function targetPrinterIds(
-  order: Pick<PaidOrderRow, "venue_id" | "kitchen_status" | "bar_status">,
+  order: Pick<PaidOrderRow, "venue_id" | "kitchen_status" | "bar_status" | "channel">,
   printers: EnabledPrinterRow[],
 ): string[] {
-  const needed = new Set<"cocina" | "barra">();
+  const needed = new Set<"cocina" | "barra" | "recibo">();
   if (order.kitchen_status !== "na") needed.add("cocina");
   if (order.bar_status !== "na") needed.add("barra");
+  // El recibo del cliente es obligatorio en kiosko (el totem lo saca), no en QR. Debe casar con
+  // la MISMA regla del SQL `reserve_printed` (20260724000005_recibo_printer.sql), que decide
+  // cuándo se fija `printed_at` -- el test de acuerdo lo comprueba.
+  if (order.channel === "kiosko") needed.add("recibo");
 
   return printers
     .filter((p) => p.venue_id === order.venue_id)
@@ -136,8 +165,16 @@ export function selectUnprintedOrders(
     .map((row) => ({
       id: row.id,
       orderNumber: row.order_number,
-      tableLabel: row.tables?.label ?? null,
+      // QR: la mesa la resuelve `tables(label)` por `table_id`. Kiosko: no hay `table_id`, la
+      // mesa es el texto tecleado en el totem (`table_label`). Uno u otro; nunca los dos.
+      tableLabel: row.tables?.label ?? row.table_label ?? null,
       createdAt: row.created_at,
+      channel: row.channel,
+      publicToken: row.public_token,
+      subtotalCents: eurosToCents(Number(row.subtotal)),
+      taxCents: eurosToCents(Number(row.tax_amount)),
+      totalCents: eurosToCents(Number(row.total)),
+      currency: row.currency,
       printedTargets: row.printed_targets ?? {},
       venueId: row.venue_id,
       items: row.order_items.map((item) => ({
@@ -145,6 +182,8 @@ export function selectUnprintedOrders(
         quantity: item.quantity,
         destination: item.destination,
         notes: item.notes,
+        extras: item.order_item_extras.map((extra) => resolveItemName(extra.name_snapshot)),
+        lineCents: eurosToCents(Number(item.line_total)),
       })),
     }));
 }
@@ -207,7 +246,9 @@ export async function unprintedPaidOrders(tenantId: string): Promise<PrintableOr
   const { data: orderRows, error: ordersError } = await tenantScoped("orders", tenantId)
     .select(
       "id, order_number, created_at, printed_targets, venue_id, kitchen_status, bar_status, " +
-        "tables(label), order_items(name_snapshot, quantity, destination, notes)",
+        "channel, public_token, subtotal, tax_amount, total, currency, table_label, tables(label), " +
+        "order_items(name_snapshot, quantity, destination, notes, line_total, " +
+        "order_item_extras(name_snapshot))",
     )
     .not("paid_at", "is", null)
     .is("printed_at", null)

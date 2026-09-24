@@ -79,19 +79,6 @@
             </p>
           </section>
 
-          <!-- El agente corre oculto en la bandeja: cuando algo falla, la única información
-               que llega a soporte es "no imprime". Esto produce un fichero adjuntable. -->
-          <section class="card">
-            <h2>Ayuda</h2>
-            <div class="row">
-              <button id="diagnostico" type="button">Guardar diagnóstico</button>
-            </div>
-            <p class="hint">
-              Crea un fichero de texto con la versión, el estado y el registro de los últimos
-              días, para adjuntarlo a un correo de soporte. No incluye contraseñas.
-            </p>
-          </section>
-
           <section class="card">
             <h2>Impresión</h2>
             <!-- Banner rojo cuando algo va mal: una impresora caída o sin conexión. Es lo que
@@ -103,6 +90,13 @@
           <section class="card">
             <h2>Registro</h2>
             <div class="log" id="log" role="log" aria-live="polite"></div>
+            <div class="row">
+              <button id="export-diagnostics" type="button">Exportar diagnóstico</button>
+            </div>
+            <p class="hint">
+              Guarda en un fichero el estado y el registro de la aplicación (versión, impresión,
+              errores) para poder enviárnoslo si algo va mal.
+            </p>
           </section>
         </section>
 
@@ -131,6 +125,18 @@
             <p class="hint">
               El nombre que aparezca aquí es el que hay que usar al dar de alta la impresora
               en el panel de administración.
+            </p>
+          </section>
+
+          <section class="card">
+            <h2>Impresoras de red</h2>
+            <div class="row">
+              <button id="probe-network" type="button">Probar impresoras de red</button>
+            </div>
+            <div id="network-status" role="status" aria-live="polite"></div>
+            <p class="hint">
+              Comprueba que las impresoras de red configuradas en el panel responden desde este
+              equipo. Solo prueba la conexión: no imprime nada.
             </p>
           </section>
         </section>

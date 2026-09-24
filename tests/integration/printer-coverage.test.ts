@@ -215,7 +215,7 @@ describe("usbPrintersNotReported", () => {
   async function seedDevice(
     tenant: TenantFixture,
     venueId: string,
-    reportadas: string[] | null,
+    reportadas: string[],
   ): Promise<string> {
     const { data } = await admin
       .from("devices")
@@ -223,7 +223,7 @@ describe("usbPrintersNotReported", () => {
         tenant_id: tenant.tenantId,
         venue_id: venueId,
         name: "PC de cocina",
-        reported_printers: reportadas,
+        printers: reportadas,
       })
       .select("id")
       .single();
@@ -289,7 +289,7 @@ describe("usbPrintersNotReported", () => {
     const tenant = await createTenantFixture(`unr4-${nonce()}`);
     fixtures.push(tenant);
     const venueId = await seedVenue(tenant);
-    const deviceId = await seedDevice(tenant, venueId, null);
+    const deviceId = await seedDevice(tenant, venueId, []);
     await seedUsb(tenant, venueId, deviceId, "La que sea");
 
     expect(await usbPrintersNotReported(tenant.tenantId)).toHaveLength(0);

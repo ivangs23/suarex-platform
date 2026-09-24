@@ -45,68 +45,75 @@ export async function deleteDeviceForTest(deviceId: string): Promise<void> {
   if (error) throw error;
 }
 
+/**
+ * Crea, en el tenant `garum`, un dispositivo con una lista de impresoras ya "reportada" (como
+ * si hubiera mandado un heartbeat), para probar que el panel admin ofrece el desplegable (#7)
+ * sin tener que arrancar un agente real. Devuelve el id para borrarlo en el `afterEach`.
+ */
+export async function createDeviceWithPrintersForTest(
+  name: string,
+  printers: string[],
+): Promise<string> {
+  const { data: tenant, error: te } = await admin
+    .from("tenants")
+    .select("id")
+    .eq("slug", "garum")
+    .single();
+  if (te) throw te;
+  const { data: venue, error: ve } = await admin
+    .from("venues")
+    .select("id")
+    .eq("tenant_id", tenant.id as string)
+    .order("is_default", { ascending: false })
+    .limit(1)
+    .single();
+  if (ve) throw ve;
+  const { data: device, error: de } = await admin
+    .from("devices")
+    .insert({ tenant_id: tenant.id, venue_id: venue.id, name, printers })
+    .select("id")
+    .single();
+  if (de) throw de;
+  return device.id as string;
+}
+
 export async function deletePrinterForTest(printerId: string): Promise<void> {
   const { error } = await admin.from("printers").delete().eq("id", printerId);
   if (error) throw error;
 }
 
 /**
- * Siembra un dispositivo que YA ha reportado su lista de impresoras, más una impresora USB
- * atada a él con un nombre que NO está en esa lista -- el typo que el aviso tiene que cazar.
+ * Impresora USB atada a un dispositivo, con el nombre de Windows que se le pase.
  *
- * Va por service key y no por la UI porque el panel no tiene (ni debe tener) forma de fingir
- * que un agente ha reportado: eso lo escribe la RPC `device_heartbeat` desde el PC del
- * cliente, y montar un agente falso para un aviso de pantalla sería más máquina que prueba.
+ * Se apoya en `createDeviceWithPrintersForTest` para el dispositivo: así el aviso de "su PC no
+ * ve esta impresora" se prueba con la MISMA forma de sembrar que el resto de tests de #7, y no
+ * con una segunda que podría divergir de la real.
  */
-export async function seedPrinterNotReportedForTest(reportadas: string[], configurada: string) {
-  // Acotado a garum por su tenant: hay más de una sede con el slug "principal" en la base
-  // local (garum y manuela), así que filtrar solo por slug devolvería dos filas.
-  const { data: tenant, error: tenantError } = await admin
-    .from("tenants")
-    .select("id")
-    .eq("slug", "garum")
-    .single();
-  if (tenantError) throw tenantError;
-
-  const { data: venue, error: venueError } = await admin
-    .from("venues")
-    .select("id, tenant_id")
-    .eq("tenant_id", tenant.id)
-    .eq("is_default", true)
-    .single();
-  if (venueError) throw venueError;
-
-  const { data: device, error: deviceError } = await admin
+export async function createUsbPrinterForTest(
+  deviceId: string,
+  printerName: string,
+): Promise<{ printerId: string }> {
+  const { data: device, error: de } = await admin
     .from("devices")
-    .insert({
-      tenant_id: venue.tenant_id,
-      venue_id: venue.id,
-      name: `PC E2E ${Date.now()}`,
-      reported_printers: reportadas,
-    })
-    .select("id, name")
+    .select("tenant_id, venue_id")
+    .eq("id", deviceId)
     .single();
-  if (deviceError) throw deviceError;
+  if (de) throw de;
 
-  const { data: printer, error: printerError } = await admin
+  const { data: printer, error: pe } = await admin
     .from("printers")
     .insert({
-      tenant_id: venue.tenant_id,
-      venue_id: venue.id,
-      device_id: device.id,
+      tenant_id: device.tenant_id,
+      venue_id: device.venue_id,
+      device_id: deviceId,
       name: `Impresora E2E ${Date.now()}`,
-      connection: { type: "usb", printerName: configurada },
+      connection: { type: "usb", printerName },
       destination: "cocina",
       enabled: true,
     })
-    .select("id, name")
+    .select("id")
     .single();
-  if (printerError) throw printerError;
+  if (pe) throw pe;
 
-  return {
-    deviceId: device.id as string,
-    deviceName: device.name as string,
-    printerId: printer.id as string,
-    printerName: printer.name as string,
-  };
+  return { printerId: printer.id as string };
 }

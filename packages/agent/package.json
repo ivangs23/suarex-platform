@@ -14,7 +14,9 @@
   "dependencies": {
     "@suarex/config": "workspace:*",
     "@suarex/db": "workspace:*",
+    "@suarex/domain": "workspace:*",
     "@suarex/printing": "workspace:*",
+    "@suarex/realtime": "workspace:*",
     "@suarex/ticket": "workspace:*",
     "@supabase/supabase-js": "^2.95.3"
   },

@@ -1,30 +1,48 @@
 import { writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { DEVICE_SESSION_STORAGE_KEY, type NetworkPrinterProbe } from "@suarex/agent";
 import { app, type BrowserWindow, dialog, ipcMain } from "electron";
-import { getActivity, isAgentRunning, startAgent, stopAgent } from "./agent-runner.js";
+import {
+  establishSessionFromPassword,
+  getActivity,
+  isAgentRunning,
+  probeNetworkPrinters,
+  startAgent,
+  stopAgent,
+} from "./agent-runner.js";
 import { PLATFORM_WEB_ORIGIN } from "./baked-config.js";
 import { loadCredentials, saveCredentials } from "./config-store.js";
-import { componerDiagnostico, nombreDeFicheroDiagnostico } from "./diagnostico.js";
+import { formatDiagnostics } from "./diagnostics.js";
 import { type PairError, pairDevice } from "./pairing.js";
 import { listLocalPrinters, printTestTicket } from "./printers.js";
 import { realConfigBackend } from "./real-config-backend.js";
-import { realLogBackend } from "./real-log-backend.js";
-import { ejecutorDelSistema, quitarWatchdog } from "./watchdog.js";
+import { realSessionStore } from "./real-session-store.js";
 import { hideWebPanel, isWebSection, type ShowWebPanelResult, showWebPanel } from "./web-panel.js";
-
-export type ExportIpcResult = { ok: true; ruta: string } | { ok: false; motivo: string };
 
 export type PairIpcResult =
   | { ok: true; deviceId: string; tenantId: string }
   | { ok: false; kind: PairError["kind"] };
+
+export type ExportDiagnosticsResult =
+  | { ok: true; path: string }
+  | { ok: false; canceled: true }
+  | { ok: false; error: string };
+
+export type ProbeNetworkPrintersResult =
+  | { ok: true; printers: NetworkPrinterProbe[] }
+  | { ok: false; reason: "agent-not-running" };
 
 function isPairError(e: unknown): e is PairError {
   return typeof e === "object" && e !== null && "kind" in e;
 }
 
 /** Registra los canales IPC. El renderer nunca toca Node/Electron directo: todo pasa por
- * estos handlers vía el puente contextBridge del preload. */
-export function registerIpc(getWindow: () => BrowserWindow | null): void {
+ * estos handlers vía el puente contextBridge del preload. `readLog` vuelca el registro en disco
+ * (inyectado desde el sink real) para el diagnóstico exportable. */
+export function registerIpc(
+  getWindow: () => BrowserWindow | null,
+  readLog: () => string,
+  afterPair: () => void | Promise<void> = () => {},
+): void {
   // Navegación de la barra lateral. El renderer manda solo un NOMBRE de sección; la ruta y
   // el origen salen de `WEB_SECTIONS` y del origen horneado en el build, nunca de una
   // cadena que el renderer pueda componer -- de lo contrario, un XSS en la interfaz local
@@ -62,14 +80,39 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
       if (isPairError(e)) return { ok: false, kind: e.kind };
       throw e;
     }
-    saveCredentials(realConfigBackend(), creds);
-    await startAgent(creds);
+    // Login ÚNICO con la contraseña que devolvió el pairing: deja la sesión (refresh token)
+    // persistida en el almacén cifrado y descarta la contraseña -- NUNCA se guarda en disco (#11).
+    const store = realSessionStore();
+    await establishSessionFromPassword(store, creds.email, creds.password);
+    saveCredentials(realConfigBackend(), {
+      deviceId: creds.deviceId,
+      email: creds.email,
+      tenantId: creds.tenantId,
+    });
+    await startAgent(store, creds.tenantId);
+    // Si el device recién emparejado es un totem (rol kiosko), entra en modo kiosko en el acto,
+    // sin reiniciar. Un fallo aquí no debe tumbar el emparejamiento (ya está hecho y guardado).
+    try {
+      await afterPair();
+    } catch {
+      // el propio `afterPair` (maybeStartKiosk) ya registra su error; no rebota al emparejar.
+    }
     return { ok: true, deviceId: creds.deviceId, tenantId: creds.tenantId };
   });
 
   ipcMain.handle("test-print", async (_e, printerName: string) => {
     await printTestTicket(printerName);
     return { ok: true };
+  });
+
+  // Estado de las impresoras de RED (#12): sondea su conexión TCP con el cliente del agente en
+  // marcha. Distinto del "Imprimir prueba" USB (winspool). Si el agente no corre, no hay cliente
+  // ni impresoras que resolver -> se lo decimos a la UI en vez de devolver una lista vacía
+  // ambigua.
+  ipcMain.handle("probe-network-printers", async (): Promise<ProbeNetworkPrintersResult> => {
+    const printers = await probeNetworkPrinters();
+    if (printers === null) return { ok: false, reason: "agent-not-running" };
+    return { ok: true, printers };
   });
 
   ipcMain.handle("get-status", async () => {
@@ -110,63 +153,51 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     return response === 1;
   });
 
-  /**
-   * Deja un `.txt` de diagnóstico donde el usuario elija, con el Escritorio por defecto.
-   *
-   * El dueño del bar no va a buscar un fichero en `%APPDATA%` y soporte no puede entrar en su
-   * PC: un botón que produce algo adjuntable a un correo es la única vía realista. El
-   * contenido lo compone `componerDiagnostico`, que es puro y garantiza por test que no
-   * lleva credenciales -- este fichero SALE de la máquina.
-   */
-  ipcMain.handle("export-diagnostic", async (): Promise<ExportIpcResult> => {
-    const ahora = new Date();
-    const win = getWindow();
-    const porDefecto = join(app.getPath("desktop"), nombreDeFicheroDiagnostico(ahora));
+  ipcMain.handle("unpair", async () => {
+    stopAgent();
+    realConfigBackend().write(JSON.stringify({})); // deja el store vacío -> loadCredentials null
+    // Borra también la sesión persistida (refresh token): sin esto quedaría en disco una sesión
+    // válida de un device supuestamente des-emparejado.
+    realSessionStore().removeItem(DEVICE_SESSION_STORAGE_KEY);
+    return { ok: true };
+  });
 
+  // Exportar diagnóstico: la app corre oculta en bandeja, así que su registro vive en un
+  // fichero al que el owner no llega solo. Esto lo vuelca -- metadatos, estado de impresión y el
+  // log -- a un fichero de texto que elige, para poder enviárnoslo cuando algo va mal.
+  ipcMain.handle("export-diagnostics", async (): Promise<ExportDiagnosticsResult> => {
+    const creds = loadCredentials(realConfigBackend());
+    const contenido = formatDiagnostics(
+      {
+        generatedAt: new Date().toISOString(),
+        appVersion: app.getVersion(),
+        platform: process.platform,
+        paired: creds !== null,
+        deviceId: creds?.deviceId ?? null,
+        running: isAgentRunning(),
+      },
+      getActivity(),
+      readLog(),
+    );
+
+    // Nombre por defecto sin ':' (inválido en rutas de Windows).
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const win = getWindow();
     const opciones = {
-      title: "Guardar diagnóstico",
-      defaultPath: porDefecto,
+      title: "Exportar diagnóstico",
+      defaultPath: `suarex-diagnostico-${stamp}.txt`,
       filters: [{ name: "Texto", extensions: ["txt"] }],
     };
     const { canceled, filePath } = win
       ? await dialog.showSaveDialog(win, opciones)
       : await dialog.showSaveDialog(opciones);
-    if (canceled || !filePath) return { ok: false, motivo: "cancelado" };
-
-    const creds = loadCredentials(realConfigBackend());
-    const activity = getActivity();
-    const texto = componerDiagnostico(
-      {
-        version: app.getVersion(),
-        plataforma: process.platform,
-        emparejado: creds !== null,
-        enMarcha: isAgentRunning(),
-        // `email` y `password` NO viajan: el id basta para localizar el dispositivo en el panel.
-        deviceId: creds?.deviceId ?? null,
-        tenantId: creds?.tenantId ?? null,
-        impresorasCaidas: activity.downPrinters.map((p) => p.destination),
-        ultimoError: activity.lastError,
-        generadoEn: ahora,
-      },
-      realLogBackend().read(),
-    );
+    if (canceled || !filePath) return { ok: false, canceled: true };
 
     try {
-      writeFileSync(filePath, texto, "utf8");
+      writeFileSync(filePath, contenido, "utf8");
+      return { ok: true, path: filePath };
     } catch (e) {
-      // Un USB retirado, una carpeta sin permisos. Se devuelve el motivo para que la interfaz
-      // lo diga, en vez de dejar un botón que aparenta haber funcionado.
-      return { ok: false, motivo: e instanceof Error ? e.message : "no se pudo guardar" };
+      return { ok: false, error: (e as Error).message };
     }
-    return { ok: true, ruta: filePath };
-  });
-
-  ipcMain.handle("unpair", async () => {
-    stopAgent();
-    realConfigBackend().write(JSON.stringify({})); // deja el store vacío -> loadCredentials null
-    // Sin esto quedaría una tarea programada huérfana reabriendo cada cinco minutos una app
-    // que ya no pertenece a ningún restaurante y no va a imprimir nada.
-    await quitarWatchdog(process.platform, ejecutorDelSistema());
-    return { ok: true };
   });
 }
