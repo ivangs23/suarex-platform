@@ -14,6 +14,7 @@ import {
   buildTicketLines,
   type ReceiptOrder,
   type TicketBranding,
+  type TicketFiscal,
   type TicketOrder,
 } from "@suarex/ticket";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -61,15 +62,29 @@ type ResolvedPrinter = {
 
 /** Cabecera del ticket a partir de la marca del tenant (nombre comercial), leída con el
  * JWT del device (la RLS le permite leer `tenant_settings`). Nunca lanza: si no hay marca,
- * la cabecera queda vacía. */
+ * la cabecera queda vacía.
+ *
+ * Trae además los datos FISCALES, que solo usa el recibo del totem: es un papel con desglose
+ * de IVA que el comensal se lleva, y sin emisor se parece demasiado a una factura (decisión D1
+ * de la Fase 1). Van en la misma lectura porque ya estábamos leyendo esa fila. Si el tenant no
+ * los tiene configurados, el recibo sale igual -- lo que no falta nunca es el aviso de que no
+ * es una factura, que no depende de estos datos. */
 async function ticketBranding(
   client: SupabaseClient,
-): Promise<{ branding: TicketBranding; locale: string }> {
-  const { data } = await client.from("tenant_settings").select("branding, locale").maybeSingle();
+): Promise<{ branding: TicketBranding; fiscal: TicketFiscal; locale: string }> {
+  const { data } = await client
+    .from("tenant_settings")
+    .select("branding, locale, fiscal")
+    .maybeSingle();
   const name = parseBranding(data?.branding).name;
+  const fiscal = (data?.fiscal ?? {}) as TicketFiscal;
   // `locale` solo lo usa el recibo, para formatear los importes ("18,00 €"). El texto de la
   // comanda no lleva dinero. Sin ajuste, `es` (Intl lo acepta igual que la carta).
-  return { branding: { header: name ?? "" }, locale: (data?.locale as string | undefined) ?? "es" };
+  return {
+    branding: { header: name ?? "" },
+    fiscal,
+    locale: (data?.locale as string | undefined) ?? "es",
+  };
 }
 
 /** Impresora id del PROPIO dispositivo del agente, leída con su JWT (`devices_select_own`
@@ -235,7 +250,7 @@ export async function runAgentTick(
   // Una sola lectura de `printers` por tick, compartida entre "qué falta imprimir"
   // (`selectUnprintedOrders`) y "a qué impresora" (`resolvePrintersFromRows`) -- antes se
   // consultaba dos veces (#13). Las cuatro lecturas van en paralelo (1 RTT).
-  const [printerRows, orderRows, { branding, locale }, deviceId] = await Promise.all([
+  const [printerRows, orderRows, { branding, fiscal, locale }, deviceId] = await Promise.all([
     enabledPrinterRows(client),
     paidUnprintedOrderRows(client),
     ticketBranding(client),
@@ -269,7 +284,7 @@ export async function runAgentTick(
 
       const lines =
         dest === "recibo"
-          ? buildReceiptLines(toReceiptOrder(order, locale), branding)
+          ? buildReceiptLines(toReceiptOrder(order, locale), branding, fiscal)
           : buildTicketLines(ticketOrder, branding, dest);
       const result = await enqueueByDevice(deviceKey(printer.config), () =>
         printToPrinter(lines, printer.config),

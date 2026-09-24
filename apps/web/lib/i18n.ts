@@ -1,3 +1,5 @@
+import { AVISO_NO_FACTURA, ETIQUETA_EMISOR } from "@suarex/domain";
+
 /**
  * IDIOMA DE LA CARTA.
  *
@@ -220,9 +222,8 @@ const ES: Strings = {
   receiptTable: "Mesa",
   receiptSubtotal: "Base imponible",
   receiptTax: "IVA",
-  receiptIssuer: "Emitido por",
-  receiptNotInvoice:
-    "Justificante de pedido. No válido como factura. Si necesitas factura, pídela al establecimiento.",
+  receiptIssuer: ETIQUETA_EMISOR.es,
+  receiptNotInvoice: AVISO_NO_FACTURA.es,
   receiptPrint: "Imprimir",
   receiptDownload: "Descargar recibo",
   legalPrivacy: "Privacidad",
@@ -304,9 +305,8 @@ const EN: Strings = {
   receiptTable: "Table",
   receiptSubtotal: "Subtotal",
   receiptTax: "VAT",
-  receiptIssuer: "Issued by",
-  receiptNotInvoice:
-    "Order receipt. Not valid as an invoice. Ask the venue if you need a tax invoice.",
+  receiptIssuer: ETIQUETA_EMISOR.en,
+  receiptNotInvoice: AVISO_NO_FACTURA.en,
   receiptPrint: "Print",
   receiptDownload: "Download receipt",
   legalPrivacy: "Privacy",
@@ -388,9 +388,8 @@ const PT: Strings = {
   receiptTable: "Mesa",
   receiptSubtotal: "Base tributável",
   receiptTax: "IVA",
-  receiptIssuer: "Emitido por",
-  receiptNotInvoice:
-    "Comprovativo de pedido. Não válido como fatura. Peça a fatura ao estabelecimento.",
+  receiptIssuer: ETIQUETA_EMISOR.pt,
+  receiptNotInvoice: AVISO_NO_FACTURA.pt,
   receiptPrint: "Imprimir",
   receiptDownload: "Baixar recibo",
   legalPrivacy: "Privacidade",

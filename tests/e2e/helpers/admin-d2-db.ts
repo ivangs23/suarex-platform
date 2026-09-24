@@ -53,6 +53,9 @@ export async function deleteDeviceForTest(deviceId: string): Promise<void> {
 export async function createDeviceWithPrintersForTest(
   name: string,
   printers: string[],
+  // Por defecto un agente de impresión normal. `["kiosko"]` da de alta un TOTEM, que es lo que
+  // dispara el aviso de "este local no tiene impresora de recibo".
+  roles: string[] = ["agente"],
 ): Promise<string> {
   const { data: tenant, error: te } = await admin
     .from("tenants")
@@ -70,7 +73,7 @@ export async function createDeviceWithPrintersForTest(
   if (ve) throw ve;
   const { data: device, error: de } = await admin
     .from("devices")
-    .insert({ tenant_id: tenant.id, venue_id: venue.id, name, printers })
+    .insert({ tenant_id: tenant.id, venue_id: venue.id, name, printers, roles })
     .select("id")
     .single();
   if (de) throw de;

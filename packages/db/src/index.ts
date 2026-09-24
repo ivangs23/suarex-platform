@@ -134,6 +134,7 @@ export {
   destinationsMissingPrinter,
   usbPrintersNotReported,
   usbPrintersWithoutDevice,
+  venuesWithTotemWithoutReceiptPrinter,
 } from "./printer-coverage.js";
 export { checkOrderRateLimit, checkRateLimit } from "./rate-limit.js";
 export type {

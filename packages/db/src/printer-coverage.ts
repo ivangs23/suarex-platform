@@ -172,3 +172,53 @@ export async function usbPrintersNotReported(tenantId: string): Promise<UsbPrint
   }
   return avisos;
 }
+
+export type VenueSinRecibo = { venueId: string; venueName: string };
+
+/**
+ * Locales con un TOTEM y sin impresora de recibo habilitada.
+ *
+ * Un pedido de canal `kiosko` necesita destino `recibo` (`targetPrinterIds` y
+ * `20260724000005_recibo_printer.sql`). Si no hay ninguna, el pedido se marca impreso igual
+ * -- "estación sin impresora == trivialmente cubierta" -- así que no hay error ni reintentos.
+ *
+ * Y el comensal del totem no tiene recibo digital: tras pagar solo ve el código de recogida en
+ * pantalla, sin QR ni enlace. Así que sin esta impresora PAGA CON TARJETA Y SE VA SIN NADA, en
+ * silencio. Por eso es un aviso propio y no un destino más de `destinationsMissingPrinter`: allí
+ * la consecuencia es un ticket de cocina que no sale, aquí es un justificante que no existe.
+ *
+ * Solo mira los locales que TIENEN totem. El canal QR no necesita recibo impreso -- ese comensal
+ * tiene el suyo digital -- y avisar a todo el mundo haría que el aviso se ignorase.
+ */
+export async function venuesWithTotemWithoutReceiptPrinter(
+  tenantId: string,
+): Promise<VenueSinRecibo[]> {
+  const [venues, devices, printers] = await Promise.all([
+    listVenues(tenantId),
+    tenantScoped("devices", tenantId).select("venue_id, roles"),
+    tenantScoped("printers", tenantId).select("venue_id, destination").eq("enabled", true),
+  ]);
+  if (devices.error) throw devices.error;
+  if (printers.error) throw printers.error;
+
+  type DeviceRolRow = { venue_id: string; roles: string[] | null };
+  const conTotem = new Set(
+    (devices.data as unknown as DeviceRolRow[])
+      .filter((d) => (d.roles ?? []).includes("kiosko"))
+      .map((d) => d.venue_id),
+  );
+  if (conTotem.size === 0) return [];
+
+  type PrinterDestRow = { venue_id: string; destination: string };
+  // `all` cubre el recibo, misma regla que `targetPrinterIds`. Si aquí no contara, el aviso
+  // saldría en locales que sí lo sacan.
+  const conRecibo = new Set(
+    (printers.data as unknown as PrinterDestRow[])
+      .filter((p) => p.destination === "recibo" || p.destination === "all")
+      .map((p) => p.venue_id),
+  );
+
+  return venues
+    .filter((v) => conTotem.has(v.id) && !conRecibo.has(v.id))
+    .map((v) => ({ venueId: v.id, venueName: v.name }));
+}
