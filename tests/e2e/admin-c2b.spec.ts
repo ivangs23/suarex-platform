@@ -1,6 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 import {
   createDeviceWithPrintersForTest,
+  createUsbPrinterForTest,
   deleteDeviceForTest,
   deletePrinterForTest,
 } from "./helpers/admin-d2-db.js";
@@ -90,4 +91,35 @@ test("#7: elegir la impresora USB de un desplegable poblado por el dispositivo",
   await expect(row).toContainText(reported);
   createdPrinterId = (await row.getAttribute("data-printer-id")) ?? undefined;
   expect(createdPrinterId).toBeTruthy();
+});
+
+test("una USB con un nombre que su PC no ve sale avisada en el panel", async ({ page }) => {
+  // El desplegable evita el typo cuando hay de dónde elegir, pero cae a texto libre mientras
+  // el dispositivo no haya reportado -- y ahí un nombre mal escrito no falla de forma visible:
+  // el agente pide a Windows una impresora que no existe y el ticket se pierde. Esto comprueba
+  // que al menos queda dicho en pantalla.
+  const deviceName = `PC E2E ${Date.now()}`;
+  createdDeviceId = await createDeviceWithPrintersForTest(deviceName, ["EPSON TM-T20"]);
+  createdPrinterId = (await createUsbPrinterForTest(createdDeviceId, "EPSON TM-T2O")).printerId;
+
+  await login(page, "owner@garum.local", OWNER_PASSWORD as string);
+  await page.goto("http://garum.localhost:3000/admin/impresoras");
+
+  const aviso = page.getByTestId("usb-not-reported-warning");
+  await expect(aviso).toBeVisible({ timeout: 15_000 });
+  await expect(aviso, "hay que decir QUÉ PC no la ve").toContainText(deviceName);
+  await expect(aviso, "y el nombre exacto que hay configurado").toContainText("EPSON TM-T2O");
+});
+
+test("una USB cuyo nombre SÍ reporta su PC no avisa de nada", async ({ page }) => {
+  // Control negativo. Sin él, el test de arriba pasaría igual si el aviso saliera siempre --
+  // y un aviso permanente se aprende a ignorar, incluido el día que dice la verdad.
+  createdDeviceId = await createDeviceWithPrintersForTest(`PC OK ${Date.now()}`, ["EPSON TM-T20"]);
+  createdPrinterId = (await createUsbPrinterForTest(createdDeviceId, "EPSON TM-T20")).printerId;
+
+  await login(page, "owner@garum.local", OWNER_PASSWORD as string);
+  await page.goto("http://garum.localhost:3000/admin/impresoras");
+
+  await expect(page.locator("h1")).toHaveText("Gestión de impresoras");
+  await expect(page.getByTestId("usb-not-reported-warning")).toHaveCount(0);
 });

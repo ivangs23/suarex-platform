@@ -24,6 +24,8 @@ export {
   listAdminCatalog,
   listAssignableAllergens,
   listCategoryParents,
+  marcarAgotadoHoy,
+  reponerProducto,
   setProductAvailability,
   updateCategory,
   updateProduct,
@@ -63,14 +65,26 @@ export type { CreateStaffInput, CreateStaffResult, StaffMember } from "./admin-s
 export { createStaff, listStaff } from "./admin-staff.js";
 export type { CreateTableInput, UpdateTableInput } from "./admin-tables.js";
 export { createTable, deleteTable, listTables, updateTable } from "./admin-tables.js";
+export type { AnaliticaDeCarta, ProductoSinVender } from "./analytics.js";
+export { analiticaDeCarta, registrarEscaneo } from "./analytics.js";
+export type { ApplyOutcome, DecisionServicio } from "./billing.js";
+export {
+  applySubscriptionState,
+  DIAS_DE_GRACIA,
+  decidirEstado,
+  suspendExpiredGrace,
+} from "./billing.js";
 export { getCategories, getProducts } from "./catalog.js";
+export type { DispositivoCaido, ResultadoSalud } from "./device-health.js";
+export { sweepDeviceHealth } from "./device-health.js";
 export type { PairDeviceResult } from "./devices.js";
 export { pairDevice } from "./devices.js";
+export { categoriaVisibleAhora, filtrarPorFranja, minutosEnZona } from "./franjas.js";
 export type { TotemEntry } from "./kiosko-entry.js";
 export { findDeviceByTotemToken } from "./kiosko-entry.js";
 export type { TableMenu } from "./menu.js";
 export { loadTableMenu } from "./menu.js";
-export type { MarkPaidOutcome } from "./orders.js";
+export type { MarkPaidOutcome, RefundOutcome } from "./orders.js";
 export {
   attachPaymentIntent,
   cancelOrphanedPendingOrder,
@@ -79,8 +93,11 @@ export {
   getOrderByPublicToken,
   getOrderLocale,
   getOrderReceipt,
+  markOrderDisputed,
   markOrderPaid,
+  markOrderRefunded,
   OrderCartError,
+  purgeOrderPersonalData,
 } from "./orders.js";
 export { checkPairRateLimit } from "./pair-rate-limit.js";
 export type {
@@ -97,6 +114,15 @@ export {
   setDevicePinpad,
   setPaymentConfig,
 } from "./payments.js";
+export type { CreateTenantInput, PlatformTenantRow } from "./platform.js";
+export {
+  createTenantWithOwner,
+  getTenantStripeCustomer,
+  isPlatformAdmin,
+  listPlatformTenants,
+  setTenantStatus,
+  setTenantStripeCustomer,
+} from "./platform.js";
 export type {
   EnabledPrinterRow,
   PaidOrderRow,
@@ -104,8 +130,19 @@ export type {
   PrintableOrder,
 } from "./print-jobs.js";
 export { reservePrinted, selectUnprintedOrders, unprintedPaidOrders } from "./print-jobs.js";
-export { destinationsMissingPrinter, usbPrintersWithoutDevice } from "./printer-coverage.js";
+export {
+  destinationsMissingPrinter,
+  usbPrintersNotReported,
+  usbPrintersWithoutDevice,
+} from "./printer-coverage.js";
 export { checkOrderRateLimit, checkRateLimit } from "./rate-limit.js";
+export type {
+  LineaHistorial,
+  PedidoHistorial,
+  ProductoVendido,
+  VentasDelDia,
+} from "./reports.js";
+export { listOrderHistory, ventasACsv, ventasDelDia } from "./reports.js";
 export type { StaffOrder, StaffOrderItem, StationStatus } from "./staff-orders.js";
 export { listActiveOrders, markStationDone } from "./staff-orders.js";
 export { removeProductImage, uploadBrandingImage, uploadProductImage } from "./storage.js";
@@ -113,6 +150,7 @@ export { findTableByToken } from "./tables.js";
 export type { UpdateTenantSettingsInput } from "./tenants.js";
 export {
   findTenantByHost,
+  getTenantBillingState,
   getTenantCustomDomain,
   getTenantSettings,
   getTenantStripeAccount,
@@ -125,6 +163,7 @@ export type {
   Category,
   OrderReceipt,
   OrderStatus,
+  PlanStatus,
   Product,
   ProductExtra,
   ReceiptLine,
@@ -133,4 +172,4 @@ export type {
   TenantSettingsRow,
 } from "./types.js";
 export type { VenueRow } from "./venues.js";
-export { listVenues } from "./venues.js";
+export { listVenues, zonaHorariaDelTenant } from "./venues.js";

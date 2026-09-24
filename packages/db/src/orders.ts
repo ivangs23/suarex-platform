@@ -5,10 +5,13 @@ import {
   lineTotal,
   type PricedLine,
 } from "@suarex/domain";
+import { getCategories } from "./catalog.js";
 import {
   expirePendingOrdersRpc,
   nextOrderNumberRpc,
   ordersTableForPaymentResolution,
+  purgeOrderPersonalDataRpc,
+  recordOrderRefundRpc,
   tenantScoped,
 } from "./client.js";
 import { getTenantSettings } from "./tenants.js";
@@ -16,9 +19,11 @@ import type { CartLineInput, OrderReceipt, OrderStatus, ReceiptLine } from "./ty
 
 type ProductRow = {
   id: string;
+  category_id: string;
   name_i18n: Record<string, string>;
   price: string | number;
   is_available: boolean;
+  unavailable_until: string | null;
   categories: { destination: string } | null;
 };
 
@@ -88,10 +93,20 @@ export async function createPendingOrder(input: {
 
   // El filtro por tenant lo aplica tenantScoped: un producto de otro tenant
   // sencillamente no aparece, y la comprobación de abajo lo convierte en error.
-  const { data: products, error } = await tenantScoped("products", input.tenantId)
-    .select("id, name_i18n, price, is_available, categories(destination)")
-    .in("id", productIds);
+  // Las categorías VISIBLES AHORA salen de `getCategories`, la misma función que pinta la
+  // carta, y no de una consulta propia: si las dos decidieran por separado, acabarían
+  // discrepando -- platos a la vista que no se pueden pedir, o al revés.
+  const [{ data: products, error }, categoriasVisibles] = await Promise.all([
+    tenantScoped("products", input.tenantId)
+      .select(
+        "id, category_id, name_i18n, price, is_available, unavailable_until, categories(destination)",
+      )
+      .in("id", productIds),
+    getCategories(input.tenantId),
+  ]);
   if (error) throw error;
+
+  const categoriasEnHorario = new Set(categoriasVisibles.map((c) => c.id));
 
   const byId = new Map((products as unknown as ProductRow[]).map((p) => [p.id, p]));
 
@@ -133,7 +148,14 @@ export async function createPendingOrder(input: {
 
   for (const line of input.lines) {
     const product = byId.get(line.productId);
-    if (!product?.is_available) {
+    // Agotado HOY además de fuera de carta: sin esto, un carrito abierto antes de que se
+    // agotara el plato seguiría pudiendo enviar la comanda a cocina.
+    const agotadoHoy =
+      product?.unavailable_until != null && new Date(product.unavailable_until) > new Date();
+    // Y fuera de la franja horaria de su categoría: un carrito abierto a las 15:50 no debe
+    // poder mandar la comanda de mediodía a las 16:05, cuando cocina ya no la hace.
+    const fueraDeHorario = product != null && !categoriasEnHorario.has(product.category_id);
+    if (!product?.is_available || agotadoHoy || fueraDeHorario) {
       throw new OrderCartError(`Producto no disponible: ${line.productId}`);
     }
 
@@ -404,7 +426,7 @@ export async function getOrderReceipt(
 ): Promise<OrderReceipt | null> {
   const { data, error } = await ordersTableForPaymentResolution()
     .select(
-      "order_number, created_at, total, currency, tables(label), " +
+      "order_number, created_at, subtotal, tax_amount, total, currency, tables(label), " +
         "order_items(id, name_snapshot, quantity, line_total, notes, " +
         "order_item_extras(name_snapshot, price))",
     )
@@ -418,6 +440,8 @@ export async function getOrderReceipt(
   const row = data as unknown as {
     order_number: number;
     created_at: string;
+    subtotal: number;
+    tax_amount: number;
     total: number;
     currency: string;
     tables: { label?: string } | null;
@@ -447,8 +471,86 @@ export async function getOrderReceipt(
     orderNumber: row.order_number,
     createdAt: row.created_at,
     tableLabel: row.tables?.label ?? null,
+    subtotalCents: eurosToCents(Number(row.subtotal)),
+    taxCents: eurosToCents(Number(row.tax_amount)),
     totalCents: eurosToCents(Number(row.total)),
     currency: row.currency,
     lines,
   };
+}
+
+/**
+ * Ejecuta los plazos de retención que la política de privacidad promete al comensal: anula las
+ * notas a los 90 días y borra el pedido a los 24 meses. Lo dispara el cron del sistema vía
+ * `/api/internal/purge-orders`, igual que `expirePendingOrders`.
+ *
+ * Los valores por defecto son los MISMOS que declara `apps/web/lib/legal-content.ts`. Si
+ * alguien cambia uno sin el otro, la política publicada pasa a mentir; el test de ese fichero
+ * ata los números por ese motivo.
+ */
+export async function purgeOrderPersonalData(
+  notesDays = 90,
+  ordersMonths = 24,
+): Promise<{ notasBorradas: number; pedidosBorrados: number }> {
+  const { data, error } = await purgeOrderPersonalDataRpc(notesDays, ordersMonths);
+  if (error) throw error;
+  const fila = (data as { notas_borradas: number; pedidos_borrados: number }[] | null)?.[0];
+  return {
+    notasBorradas: fila?.notas_borradas ?? 0,
+    pedidosBorrados: fila?.pedidos_borrados ?? 0,
+  };
+}
+
+export type RefundOutcome = "marcado" | "ya-reembolsado" | "order-not-found";
+
+/**
+ * Registra un reembolso comunicado por Stripe.
+ *
+ * Se localiza por `stripe_payment_intent_id` (columna única) porque los webhooks de Stripe no
+ * saben nada de tenants. El importe llega EN CÉNTIMOS desde Stripe y se guarda tal cual: puede
+ * ser parcial, así que no se deriva de `orders.total` -- derivarlo daría un número falso en la
+ * conciliación en cuanto alguien devuelva media comanda.
+ *
+ * IDEMPOTENTE: Stripe reintenta los webhooks, y un reintento no puede mover `refunded_at`. El
+ * filtro `is("refunded_at", null)` hace que la segunda pasada no actualice ninguna fila.
+ */
+export async function markOrderRefunded(
+  paymentIntentId: string,
+  refundedCents: number,
+): Promise<RefundOutcome> {
+  // Todo el trabajo va dentro del RPC (ver `20260922000002_record_order_refund.sql`): el
+  // bloqueo de fila, la comparación del acumulado contra lo ya registrado y la decisión de si
+  // el reembolso es total o parcial. Hacerlo aquí en varios pasos dejaría una ventana entre
+  // leer y escribir en la que dos eventos solapados de Stripe se pisarían.
+  const { data, error } = await recordOrderRefundRpc(paymentIntentId, refundedCents);
+  if (error) throw error;
+
+  const resultado = data as string;
+  if (resultado === "order-not-found") return "order-not-found";
+  // `ya-registrado` = reintento del mismo evento o acumulado menor: no se tocó nada.
+  return resultado === "registrado" ? "marcado" : "ya-reembolsado";
+}
+
+/**
+ * Registra que el banco ha abierto una disputa sobre el cobro.
+ *
+ * NO cambia `status`: una disputa no es un reembolso. El dinero se retiene mientras el banco
+ * decide y el pedido puede acabar cobrado igualmente. Marcarlo `refunded` aquí haría que la
+ * caja cuadrase mal en la dirección contraria, que es igual de malo.
+ */
+export async function markOrderDisputed(paymentIntentId: string): Promise<RefundOutcome> {
+  const { data, error } = await ordersTableForPaymentResolution()
+    .update({ disputed_at: new Date().toISOString() })
+    .eq("stripe_payment_intent_id", paymentIntentId)
+    .is("disputed_at", null)
+    .select("id");
+  if (error) throw error;
+  if ((data as unknown[] | null)?.length) return "marcado";
+
+  const { data: existe, error: errorLectura } = await ordersTableForPaymentResolution()
+    .select("id")
+    .eq("stripe_payment_intent_id", paymentIntentId)
+    .maybeSingle();
+  if (errorLectura) throw errorLectura;
+  return existe ? "ya-reembolsado" : "order-not-found";
 }

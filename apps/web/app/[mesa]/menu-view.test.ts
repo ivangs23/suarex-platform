@@ -16,6 +16,9 @@ function cat(
     icon,
     imagePath: null,
     sortOrder: 0,
+    // La franja la aplica `getCategories` antes de llegar aquí; esta vista solo arma el árbol.
+    visibleDesde: null,
+    visibleHasta: null,
   };
 }
 

@@ -46,6 +46,10 @@ export type TenantScopedTable =
   | "order_items"
   | "order_item_extras"
   | "printers"
+  // Contador agregado de escaneos del QR (`20260924000003_analitica_carta.sql`). Lleva
+  // `tenant_id` y se LEE como cualquier otra tabla del tenant; lo que no pasa por aquí es la
+  // escritura, que va por `registrarEscaneoRpc` para que dos escaneos simultáneos no se pisen.
+  | "menu_scans"
   // Sub-proyecto 4 (modo totem): config de pago del tenant. `tenant_id` es su PK, encaja en la
   // unión. La lectura del secreto por el device NO pasa por aquí (RPC acotada); esto es solo
   // para que owner/admin la gestionen desde el panel (misma vía service-role acotada por tenant).
@@ -175,6 +179,91 @@ export function tenantsTableForCustomDomainWrite() {
 }
 
 /**
+ * DECIMOCTAVA EXENCIÓN DELIBERADA. `sweep_device_health` es SECURITY DEFINER y recorre
+ * `devices` de TODOS los tenants: su trabajo es precisamente encontrar los PCs caídos allá
+ * donde estén, y un barrido acotado a un tenant exigiría saber de antemano cuál se ha caído.
+ * Es mantenimiento de la plataforma, no una operación de negocio de ningún cliente -- misma
+ * naturaleza que `expirePendingOrdersRpc`.
+ *
+ * El barrido vive DENTRO de la función SQL, no aquí: el UPDATE ... RETURNING es atómico, así
+ * que dos ejecuciones solapadas del cron no pueden avisar las dos del mismo dispositivo.
+ * Acotado por firma a `sweepDeviceHealth` (`src/device-health.ts`).
+ */
+export function sweepDeviceHealthRpc(minutos: number) {
+  return serviceClient().rpc("sweep_device_health", { p_minutos: minutos });
+}
+
+/**
+ * DECIMOSEXTA EXENCIÓN DELIBERADA, y una de las DOS de todo el paquete que barren de verdad
+ * (la otra es `devicesTableForHealthSweep`, arriba): devuelve `tenants` sin filtro de ninguna
+ * clase, para leer TODAS las filas y para insertar una nueva.
+ *
+ * Es inevitable y es el punto: la consola de plataforma es, por definición, la superficie que
+ * mira por encima de todos los clientes. No hay forma de expresarla sin esto, y fingir lo
+ * contrario -- por ejemplo pidiendo un `tenantId` que luego se ignora -- sería peor: escondería
+ * en una firma tranquilizadora lo que aquí está escrito a la vista.
+ *
+ * Lo que la mantiene acotada NO es la firma, entonces, sino su único llamante:
+ * `src/platform.ts`, consumido exclusivamente desde `app/plataforma/**`, que a su vez está
+ * detrás de DOS barreras independientes -- el 404 del proxy para cualquier host que no sea el
+ * de plataforma (`apps/web/proxy.ts`) y `requirePlatformAdmin()`.
+ *
+ * Cualquier llamante nuevo a esta función es un fallo de revisión: si hace falta tocar
+ * `tenants` desde otro sitio, se declara su propia exención estrecha, como
+ * `tenantsTableForBilling`.
+ */
+export function tenantsTableForPlatformConsole() {
+  return serviceClient().from("tenants");
+}
+
+/**
+ * DECIMOSÉPTIMA EXENCIÓN DELIBERADA, mismo razonamiento que `authAdminForStaffCreation`: el
+ * alta de un cliente crea la cuenta de Auth de su PRIMER owner -- el huevo y la gallina que el
+ * panel no puede resolver, porque para crear personal ya hace falta un owner. No hay tabla que
+ * filtrar (es la Admin API de Auth). Acotado por firma a `createTenantWithOwner`
+ * (`src/platform.ts`); no se reutiliza la de staff para que cada punto que crea cuentas sea
+ * rastreable a un único llamante.
+ */
+export function authAdminForPlatformConsole() {
+  return serviceClient().auth.admin;
+}
+
+/**
+ * DECIMOQUINTA EXENCIÓN DELIBERADA. `platform_admins` no tiene `tenant_id` y no puede tenerlo:
+ * un superadmin no pertenece a ningún cliente, y esa es toda su razón de ser (ver
+ * `20260915000003_platform_admins.sql`). Acotado por firma a esa única tabla y a un único
+ * llamante -- `isPlatformAdmin` (`src/platform.ts`) -- que es una búsqueda por clave primaria:
+ * una fila o ninguna, nunca un barrido.
+ *
+ * La tabla tiene RLS sin policies Y el revoke a anon/authenticated, así que este accessor es
+ * literalmente el único camino que existe hacia ella en todo el sistema.
+ */
+export function platformAdminsTable() {
+  return serviceClient().from("platform_admins");
+}
+
+/**
+ * DECIMOCUARTA EXENCIÓN DELIBERADA, hermana de `tenantsTableForCustomDomainWrite` y separada
+ * de ella por el mismo motivo por el que aquella se separó de la de lectura: cada escritura a
+ * `tenants` declara qué columnas puede tocar y quién la llama.
+ *
+ * Único uso legítimo: `./billing.js` (`applySubscriptionState`, `suspendExpiredGrace`), que
+ * escribe `plan_status`, `status`, `grace_until` y `stripe_subscription_id` a partir de lo que
+ * comunica el webhook de facturación de Stripe. `tenants` no admite `tenantScoped` porque no
+ * tiene columna `tenant_id` (se identifica por su propia `id`).
+ *
+ * Es la ÚNICA exención de este fichero cuyo filtro no es la `id` del tenant:
+ * `applySubscriptionState` localiza por `stripe_customer_id` (índice único parcial, ver
+ * `20260915000002_tenant_subscription.sql`) porque los webhooks de Stripe no saben nada de
+ * tenants -- ese identificador es todo lo que traen. Sigue siendo una fila por clave única.
+ * La excepción es `suspendExpiredGrace`, que actualiza por predicado de fecha a propósito: es
+ * un barrido de mantenimiento, no una operación de negocio de ningún tenant.
+ */
+export function tenantsTableForBilling() {
+  return serviceClient().from("tenants");
+}
+
+/**
  * SEGUNDA EXENCIÓN DELIBERADA, con el mismo razonamiento que
  * `tenantsTableForHostResolution`: el token del QR es lo que determina a qué tenant
  * pertenece la mesa, así que la búsqueda no puede filtrarse por un tenant que aún no
@@ -210,6 +299,21 @@ export function nextOrderNumberRpc(tenantId: string, venueId: string) {
     p_tenant_id: tenantId,
     p_venue_id: venueId,
   });
+}
+
+/**
+ * DECIMONOVENA EXENCIÓN DELIBERADA, mismo razonamiento que `nextOrderNumberRpc`:
+ * `registrar_escaneo` es SECURITY DEFINER y deduce el tenant y la sede de la propia mesa, que
+ * es lo único que el llamante conoce en ese punto -- la ruta del QR resuelve el token ANTES de
+ * saber de quién es la mesa.
+ *
+ * Es una RPC y no un upsert porque el incremento tiene que ser atómico: dos comensales
+ * escaneando en el mismo segundo se pisarían y el contador se quedaría corto.
+ *
+ * Acotado por firma a esa única RPC.
+ */
+export function registrarEscaneoRpc(tableId: string) {
+  return serviceClient().rpc("registrar_escaneo", { p_table_id: tableId });
 }
 
 /**
@@ -356,6 +460,47 @@ export function rateLimitRpc(bucket: string, key: string, windowSeconds: number,
  */
 export function expirePendingOrdersRpc(timeoutMinutes: number) {
   return serviceClient().rpc("expire_pending_orders", { p_timeout_minutes: timeoutMinutes });
+}
+
+/**
+ * MISMA EXENCIÓN. `marcar_agotado_hoy` es SECURITY DEFINER y recibe el tenant como parámetro,
+ * así que el filtro va dentro de la función SQL -- que además calcula la hora de vuelta en la
+ * ZONA DEL LOCAL, algo que en JavaScript exigiría aritmética de husos horarios propensa a
+ * fallar. Acotado por firma a `marcarAgotadoHoy` (`src/admin-catalog.ts`).
+ */
+export function marcarAgotadoHoyRpc(tenantId: string, productId: string) {
+  return serviceClient().rpc("marcar_agotado_hoy", {
+    p_tenant_id: tenantId,
+    p_product_id: productId,
+  });
+}
+
+/**
+ * MISMA EXENCIÓN. `record_order_refund` es SECURITY DEFINER y localiza el pedido por
+ * `stripe_payment_intent_id` (índice único global) porque el webhook de Stripe no conoce el
+ * tenant -- Stripe no sabe nada de tenants. El bloqueo de fila y la decisión de si el
+ * reembolso es total o parcial viven DENTRO de la función SQL, que es lo que hace la
+ * operación atómica frente a dos eventos solapados de Stripe. Acotado por firma a
+ * `markOrderRefunded` (`src/orders.ts`).
+ */
+export function recordOrderRefundRpc(paymentIntentId: string, refundedCents: number) {
+  return serviceClient().rpc("record_order_refund", {
+    p_payment_intent_id: paymentIntentId,
+    p_refunded_cents: refundedCents,
+  });
+}
+
+/**
+ * MISMA EXENCIÓN QUE `expirePendingOrdersRpc`. `purge_order_personal_data` es SECURITY
+ * DEFINER, es mantenimiento de RETENCIÓN (no una operación de negocio de ningún tenant: barre
+ * todos por igual, que es justo lo que la retención exige) y se concede solo a `service_role`.
+ * Acotado por firma a `purgeOrderPersonalData` (`src/orders.ts`), que lo llama el cron.
+ */
+export function purgeOrderPersonalDataRpc(notesDays: number, ordersMonths: number) {
+  return serviceClient().rpc("purge_order_personal_data", {
+    p_notes_days: notesDays,
+    p_orders_months: ordersMonths,
+  });
 }
 
 /**

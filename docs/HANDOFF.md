@@ -1,16 +1,67 @@
 # Handoff — estado del proyecto
 
-_Última actualización: 2026-07-24. Este documento es el punto de continuidad entre sesiones/máquinas.
+_Última actualización: 2026-09-24. Este documento es el punto de continuidad entre sesiones/máquinas.
 Una conversación de Claude no transfiere sola; lee esto + `git log` + `CLAUDE.md` para retomar._
 
 ## Estado
 
-`main` estable, suite completa en verde (lint · typecheck · unit · integración 303 · e2e 72). El
-**backlog de código del repaso Electron está COMPLETO** (items 7, 8, 9, 11, 12, 13 + watchdog del
-sistema; ver "Pendiente — código" abajo, todos ✅). Lo único sin ejercitar: el registro real de la
-tarea programada del watchdog, que solo ocurre en un build EMPAQUETADO (`app.isPackaged`), no en
-dev — queda validarlo en un instalador real. `electron-vite build` sí pasa; el `package` completo
-necesita `UPDATE_FEED_URL` (tarea de infra, ver abajo). Sin PRs abiertas.
+`main` con las **fases 1-3 del plan de viabilidad ya integradas**. Suite completa en verde tras un
+`db:reset` desde cero: lint · typecheck 9/9 · unit (7 paquetes) · **integración 411** (66 ficheros)
+· **e2e 112**.
+
+### Aviso a quien retome esto: rebasa antes de empezar
+
+Las fases 1-3 se desarrollaron en una rama cortada de `4b3060b` (24 jul) que **nunca se rebasó**.
+Mientras tanto `main` acumuló 44 commits — el modo totem entero y todo el backlog del repaso
+Electron. Resultado: **tres piezas se construyeron dos veces** (logs a fichero + diagnóstico,
+watchdog del sistema, desplegable de impresoras), y las dos ramas añadieron a `devices` la misma
+columna con nombre distinto.
+
+La auditoría del 15 de septiembre corrió contra esa rama obsoleta, así que parte de lo que reportó
+como "falta" ya existía aquí. Antes de auditar o planificar nada: `git fetch && git log HEAD..origin/main`.
+
+En la integración se conservó la versión de `main` en todo lo duplicado, y la columna se quedó en
+`devices.printers` (NOT NULL, default `{}` — "todavía no ha reportado" es lista VACÍA, no null).
+
+### Lo que aportan las fases 1-3
+
+| Fase | Qué cierra |
+|---|---|
+| 1 | Poder cobrarle al primer cliente: recibo declarado justificante con desglose de IVA, tres páginas legales por tenant con su retención de datos, suscripción con corte por impago y ventana de gracia de 7 días, consola de plataforma en `admin.<raíz>` |
+| 2 | Sobrevivir a un día malo: log estructurado con redacción por nombre de clave, avisos de dispositivo caído y recuperado, reembolsos y disputas de Stripe registrados |
+| 3 | Producto para el hostelero: informe de ventas del día con CSV, histórico de pedidos, "se acabó hoy" que se repone solo, franjas horarias de carta, analítica de conversión del QR |
+
+Tres decisiones que conviene conocer antes de tocar esas zonas:
+
+- **Las franjas horarias van en la CATEGORÍA**, no en el plato, y se heredan hacia abajo. Cruzan
+  medianoche y se calculan en la zona de la sede. Ver D4 del spec de Fase 3.
+- **La analítica usa contadores agregados, nunca un registro de eventos.** Medir qué fichas se
+  abren exigiría una baliza y una fila por visita: un tratamiento de datos nuevo que obligaría a
+  reescribir la política de privacidad. Ver D5.
+- **`packages/db` no exporta `serviceClient`.** Toda consulta pasa por `tenantScoped(tabla, id)`;
+  las excepciones son 19, numeradas y justificadas una a una en `client.ts`. Un test estructural
+  descubre las tablas con `tenant_id` por su cuenta y exige policy canónica y `revoke` de `anon`
+  para cada una nueva.
+
+### Lo único que falta de la Fase 1
+
+El **bloque C** entero (recuperación de contraseña y alta de personal por invitación), y **no es
+código**: hace falta contratar un proveedor SMTP y verificar el dominio con SPF+DKIM. Las tres
+tareas están escritas y validadas en el plan, listas para ejecutar el día que haya credenciales.
+
+Un hueco menor, anotado: el camino feliz del webhook de facturación por HTTP no se ha ejercitado
+(haría falta `STRIPE_BILLING_WEBHOOK_SECRET` y `stripe listen`). Sí están cubiertos el mapeo de
+estados, `applySubscriptionState` y que el endpoint falla cerrado sin secreto.
+
+### Al desplegar las fases 1-3
+
+1. Añadir `STRIPE_BILLING_WEBHOOK_SECRET` y `CRON_SECRET` a `deploy/docker-compose.app.yml`.
+   **Sin esto el webhook de facturación devuelve 500 siempre y los cuatro crons 503**, en
+   silencio: es exactamente el fallo que la revisión de la Fase 2 encontró en producción.
+2. Registrar en Stripe los eventos de suscripción, reembolso y disputa.
+3. Instalar los tres crons nuevos apuntando al host de plataforma, y comprobar el `APP_URL` del
+   `expire-orders` que ya existía.
+4. Sembrar el primer superadmin: `node scripts/seed-platform-admin.mjs --email ...`.
 
 ### Portado a Windows (Mac -> Windows)
 

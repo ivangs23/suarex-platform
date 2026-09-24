@@ -122,3 +122,33 @@ describe("device_heartbeat", () => {
     expect(reportado?.printers).toEqual(nombres);
   });
 });
+
+describe("reporte de impresoras: aislamiento entre dispositivos", () => {
+  // Que la lista se reporte y que omitirla no la borre ya lo cubre el test de arriba. Lo que
+  // no cubría nadie es que la RPC acote la escritura al dispositivo del JWT: es SECURITY
+  // DEFINER, así que si tomara el device de un parámetro, cualquier agente podría reescribir
+  // la lista de otro local y dejarlo sin imprimir.
+  async function venuePropio() {
+    const { data } = await admin
+      .from("venues")
+      .insert({ tenant_id: tenant.tenantId, slug: `p-${nonce()}`, name: "P" })
+      .select("id")
+      .single();
+    return data?.id as string;
+  }
+
+  it("un dispositivo no puede reportar impresoras de otro", async () => {
+    const venueId = await venuePropio();
+    const a = await seedDeviceClient(venueId);
+    const b = await seedDeviceClient(venueId);
+
+    await a.client.rpc("device_heartbeat", {
+      p_app_version: "1.0.0",
+      p_printers: ["SOLO DE A"],
+    });
+
+    const { data } = await admin.from("devices").select("printers").eq("id", b.deviceId).single();
+    // `printers` es NOT NULL con default `{}`: sin heartbeat propio, B sigue vacío.
+    expect(data?.printers, "B no puede verse afectado por el heartbeat de A").toEqual([]);
+  });
+});

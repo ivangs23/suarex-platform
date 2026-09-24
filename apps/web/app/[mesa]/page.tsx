@@ -13,6 +13,7 @@ import { requireTenant } from "@/lib/tenant-context";
 import { CartPanelHost } from "./cart/CartPanelHost";
 import { CartProvider } from "./cart/CartProvider";
 import { ScanToOrderHint } from "./cart/ScanToOrderHint";
+import { LegalFooter } from "./LegalFooter";
 import { buildMenuView } from "./menu-view";
 import { resolveTheme } from "./themes";
 
@@ -173,6 +174,11 @@ export default async function MenuPage({
       />
       <CartPanelHost />
       <ScanToOrderHint />
+      {/* Lo monta la PÁGINA, no el tema: igual que CartPanelHost. Un tema decide cómo se ve
+          la carta; nunca si el comensal puede llegar a la política de privacidad de su
+          restaurante. Por eso no está en contract.test.tsx -- ese helper solo renderiza el
+          tema, así que no podría verlo. Lo cubre tests/e2e/legal.spec.ts. */}
+      <LegalFooter strings={strings(lang)} />
     </CartProvider>
   );
 }

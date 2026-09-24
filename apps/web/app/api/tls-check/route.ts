@@ -1,6 +1,7 @@
 import { normalizeCustomDomain, resolveRootDomains } from "@suarex/config";
 import { isActiveCustomDomain } from "@suarex/db";
 import { NextResponse } from "next/server";
+import { log } from "@/lib/log";
 
 // La respuesta depende de qué dominios hay dados de alta en ese instante: cachearla haría
 // que un cliente recién configurado siguiera sin poder obtener certificado, o que uno
@@ -43,7 +44,7 @@ export async function GET(request: Request) {
     // Falla CERRADO. Si la base no responde, negar el certificado solo retrasa una emisión
     // (Caddy reintenta); autorizarla a ciegas abriría exactamente el agujero que este
     // endpoint existe para tapar, y justo cuando menos se está mirando.
-    console.error("[tls-check] fallo al resolver el dominio propio:", error);
+    log.error("tls_check.fallo", { error });
     return new NextResponse(null, { status: 403 });
   }
 }

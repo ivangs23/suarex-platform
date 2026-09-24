@@ -1,4 +1,8 @@
-import { destinationsMissingPrinter, usbPrintersWithoutDevice } from "@suarex/db";
+import {
+  destinationsMissingPrinter,
+  usbPrintersNotReported,
+  usbPrintersWithoutDevice,
+} from "@suarex/db";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   admin,
@@ -196,5 +200,146 @@ describe("usbPrintersWithoutDevice", () => {
       enabled: true,
     });
     expect(await usbPrintersWithoutDevice(tenant.tenantId)).toEqual([]);
+  });
+});
+
+/**
+ * IMPRESORA USB CON UN NOMBRE QUE NINGÚN PC VE.
+ *
+ * El panel ya ofrece un desplegable con lo que los agentes reportan, pero SIGUE habiendo texto
+ * libre -- y tiene que haberlo: el desplegable está vacío hasta que el agente late por primera
+ * vez. En ese hueco se teclea a mano, y un typo no falla de forma visible: el agente busca un
+ * nombre que no existe y el ticket se pierde. Esto lo detecta después.
+ */
+describe("usbPrintersNotReported", () => {
+  async function seedDevice(
+    tenant: TenantFixture,
+    venueId: string,
+    reportadas: string[],
+  ): Promise<string> {
+    const { data } = await admin
+      .from("devices")
+      .insert({
+        tenant_id: tenant.tenantId,
+        venue_id: venueId,
+        name: "PC de cocina",
+        printers: reportadas,
+      })
+      .select("id")
+      .single();
+    return data?.id as string;
+  }
+
+  async function seedUsb(
+    tenant: TenantFixture,
+    venueId: string,
+    deviceId: string | null,
+    printerName: string,
+  ): Promise<void> {
+    await admin.from("printers").insert({
+      tenant_id: tenant.tenantId,
+      venue_id: venueId,
+      name: `Impresora ${printerName}`,
+      connection: { type: "usb", printerName },
+      destination: "cocina",
+      enabled: true,
+      device_id: deviceId,
+    });
+  }
+
+  it("señala la que su PC no ve", async () => {
+    const tenant = await createTenantFixture(`unr-${nonce()}`);
+    fixtures.push(tenant);
+    const venueId = await seedVenue(tenant);
+    const deviceId = await seedDevice(tenant, venueId, ["EPSON TM-T20"]);
+    await seedUsb(tenant, venueId, deviceId, "EPSON TM-T2O"); // cero en vez de O
+
+    const avisos = await usbPrintersNotReported(tenant.tenantId);
+    expect(avisos).toHaveLength(1);
+    expect(avisos[0]?.printerName).toBe("EPSON TM-T2O");
+    expect(avisos[0]?.deviceName, "hay que decir QUÉ PC no la ve").toBe("PC de cocina");
+  });
+
+  it("no señala la que sí está en la lista", async () => {
+    const tenant = await createTenantFixture(`unr2-${nonce()}`);
+    fixtures.push(tenant);
+    const venueId = await seedVenue(tenant);
+    const deviceId = await seedDevice(tenant, venueId, ["EPSON TM-T20", "Microsoft Print to PDF"]);
+    await seedUsb(tenant, venueId, deviceId, "EPSON TM-T20");
+
+    expect(await usbPrintersNotReported(tenant.tenantId)).toHaveLength(0);
+  });
+
+  it("una diferencia solo de mayúsculas no es un fallo", async () => {
+    // Los nombres de impresora de Windows no distinguen mayúsculas al abrirlas. Avisar de algo
+    // que funciona enseña a ignorar los avisos, y entonces también se ignora el que importa.
+    const tenant = await createTenantFixture(`unr3-${nonce()}`);
+    fixtures.push(tenant);
+    const venueId = await seedVenue(tenant);
+    const deviceId = await seedDevice(tenant, venueId, ["EPSON TM-T20"]);
+    await seedUsb(tenant, venueId, deviceId, "epson tm-t20");
+
+    expect(await usbPrintersNotReported(tenant.tenantId)).toHaveLength(0);
+  });
+
+  it("un PC que todavía no ha reportado no acusa a nadie", async () => {
+    // Agente recién instalado, o una versión anterior al reporte. Una lista vacía significa "no
+    // sé", no "no existe": tratarla como acusación llenaría el panel de avisos falsos justo el
+    // día del alta, que es cuando peor sienta.
+    const tenant = await createTenantFixture(`unr4-${nonce()}`);
+    fixtures.push(tenant);
+    const venueId = await seedVenue(tenant);
+    const deviceId = await seedDevice(tenant, venueId, []);
+    await seedUsb(tenant, venueId, deviceId, "La que sea");
+
+    expect(await usbPrintersNotReported(tenant.tenantId)).toHaveLength(0);
+  });
+
+  it("una USB sin dispositivo no se cuenta aquí: ya la cubre el otro aviso", async () => {
+    // Dos avisos sobre la misma impresora dirían dos cosas distintas y ninguna accionable.
+    const tenant = await createTenantFixture(`unr5-${nonce()}`);
+    fixtures.push(tenant);
+    const venueId = await seedVenue(tenant);
+    await seedDevice(tenant, venueId, ["EPSON TM-T20"]);
+    await seedUsb(tenant, venueId, null, "Inventada");
+
+    expect(await usbPrintersNotReported(tenant.tenantId)).toHaveLength(0);
+    expect(await usbPrintersWithoutDevice(tenant.tenantId)).toHaveLength(1);
+  });
+
+  it("una impresora deshabilitada no avisa", async () => {
+    const tenant = await createTenantFixture(`unr6-${nonce()}`);
+    fixtures.push(tenant);
+    const venueId = await seedVenue(tenant);
+    const deviceId = await seedDevice(tenant, venueId, ["EPSON TM-T20"]);
+    await admin.from("printers").insert({
+      tenant_id: tenant.tenantId,
+      venue_id: venueId,
+      name: "Apagada",
+      connection: { type: "usb", printerName: "Inventada" },
+      destination: "cocina",
+      enabled: false,
+      device_id: deviceId,
+    });
+
+    expect(await usbPrintersNotReported(tenant.tenantId)).toHaveLength(0);
+  });
+
+  it("una impresora de RED no se compara con nada", async () => {
+    const tenant = await createTenantFixture(`unr7-${nonce()}`);
+    fixtures.push(tenant);
+    const venueId = await seedVenue(tenant);
+    const deviceId = await seedDevice(tenant, venueId, ["EPSON TM-T20"]);
+    await admin.from("printers").insert({
+      tenant_id: tenant.tenantId,
+      venue_id: venueId,
+      name: "De red",
+      connection: { type: "network", host: "10.0.0.5", port: 9100 },
+      destination: "cocina",
+      enabled: true,
+      device_id: deviceId,
+    });
+
+    expect(await usbPrintersNotReported(tenant.tenantId)).toHaveLength(0);
   });
 });

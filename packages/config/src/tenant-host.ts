@@ -2,7 +2,10 @@ export type TenantHostRef =
   | { kind: "subdomain"; slug: string }
   | { kind: "domain"; domain: string };
 
-const RESERVED_SUBDOMAINS = new Set(["www", "api", "admin", "app"]);
+// `studio` está aquí porque `deploy/Caddyfile` enruta `studio.<dominio>` al Studio de
+// Supabase: un cliente con ese slug tendría su carta permanentemente tapada por el panel de
+// la base de datos, sin ningún error que lo explicara.
+const RESERVED_SUBDOMAINS = new Set(["www", "api", "admin", "app", "studio"]);
 
 export function parseTenantHost(host: string, rootDomains: string[]): TenantHostRef | null {
   const clean = host.trim().toLowerCase().split(":")[0];
@@ -20,6 +23,47 @@ export function parseTenantHost(host: string, rootDomains: string[]): TenantHost
   }
 
   return { kind: "domain", domain: clean };
+}
+
+/**
+ * Subdominio único de la consola de plataforma. Está en `RESERVED_SUBDOMAINS` (arriba), así
+ * que ningún cliente puede tener este slug: la reserva y esta constante TIENEN que seguir
+ * diciendo lo mismo, y `tenant-host.test.ts` lo comprueba.
+ */
+const PLATFORM_SUBDOMAIN = "admin";
+
+/**
+ * ¿Es este Host el de la consola de plataforma (`admin.<raíz>`)?
+ *
+ * Se compara contra las MISMAS raíces que usa `parseTenantHost`, y de forma EXACTA sobre el
+ * host completo reconstruido -- no con `startsWith` ni `includes`. Esa exactitud es la
+ * frontera: con una comparación laxa, un cliente con dominio propio `admin.loquesea.com`, un
+ * host `admin.suarex.app.evil.com` o una etiqueta anidada `admin.garum.suarex.app` entrarían
+ * en la consola de plataforma. Los cuatro casos están en el test.
+ *
+ * Quien decide qué se sirve bajo este host es `apps/web/proxy.ts`, que además garantiza la
+ * dirección contraria: `/plataforma` NUNCA se sirve bajo el host de un cliente.
+ */
+export function isPlatformHost(host: string, rootDomains: string[]): boolean {
+  const clean = host.trim().toLowerCase().split(":")[0];
+  if (!clean) return false;
+  return rootDomains.some((root) => clean === `${PLATFORM_SUBDOMAIN}.${root.trim().toLowerCase()}`);
+}
+
+/**
+ * ¿Sirve este slug para dar de alta un cliente nuevo?
+ *
+ * Lo que se valida aquí acaba siendo el SUBDOMINIO por el que se sirve ese cliente para
+ * siempre: cambiarlo después obliga a reimprimir todos los QR de sus mesas. Por eso se rechaza
+ * en el borde en vez de intentar arreglarlo.
+ *
+ * Reutiliza `RESERVED_SUBDOMAINS` -- la MISMA lista que `parseTenantHost`, no una copia: dos
+ * listas que tienen que decir lo mismo acaban divergiendo, y la divergencia aquí significaría
+ * un cliente con slug `admin` colisionando con la consola de plataforma.
+ */
+export function validarSlugPlataforma(slug: string): boolean {
+  if (!/^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/.test(slug)) return false;
+  return !RESERVED_SUBDOMAINS.has(slug);
 }
 
 /** Límite del nombre de dominio completo (RFC 1035) y de cada etiqueta entre puntos. */

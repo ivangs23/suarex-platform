@@ -1,8 +1,14 @@
+/** Estado de la suscripción del restaurante, tal cual lo dicta Stripe. NO confundir con
+ *  `Tenant.status`, que es si el servicio se sirve o no: el primero es la causa, el segundo el
+ *  efecto, y entre ambos hay una ventana de gracia deliberada (ver `decidirEstado`). */
+export type PlanStatus = "trialing" | "active" | "past_due" | "canceled";
+
 export type Tenant = {
   id: string;
   slug: string;
   name: string;
   status: "active" | "suspended";
+  planStatus: PlanStatus;
 };
 
 export type TenantSettingsRow = {
@@ -33,6 +39,11 @@ export type Category = {
   /** Ruta de la foto de la categoría dentro del bucket `catalog`, o `null`. */
   imagePath: string | null;
   sortOrder: number;
+  /** Franja horaria en la que esta categoría se ofrece, como `"HH:MM:SS"` locales de la sede.
+   * `null` en ambas = siempre visible. Si `visibleHasta` es menor que `visibleDesde`, la franja
+   * cruza medianoche (cena de 20:00 a 02:00). Ver `franjas.ts`. */
+  visibleDesde: string | null;
+  visibleHasta: string | null;
 };
 
 export type ProductExtra = {
@@ -107,6 +118,13 @@ export type OrderReceipt = {
   orderNumber: number;
   createdAt: string;
   tableLabel: string | null;
+  /** Base imponible en céntimos (`orders.subtotal`). Informativa: este recibo NO es una
+   *  factura (ver el aviso que pinta `filasRecibo`), pero enseñar un total sin desglose en
+   *  hostelería se lee como si lo fuera. */
+  subtotalCents: number;
+  /** Cuota de IVA en céntimos (`orders.tax_amount`). `subtotalCents + taxCents` cuadra
+   *  siempre con `totalCents`: los tres salen de la MISMA fila, congelados en la compra. */
+  taxCents: number;
   totalCents: number;
   currency: string;
   lines: ReceiptLine[];

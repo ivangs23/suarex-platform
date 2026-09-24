@@ -1,0 +1,83 @@
+.lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.pedido {
+  border: 1px solid color-mix(in srgb, var(--color-fg, #1c1917) 12%, transparent);
+  border-radius: 6px;
+  background: #fff;
+}
+
+.cabecera {
+  display: grid;
+  grid-template-columns: 4rem 1fr auto auto auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.numero {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.mesa,
+.fecha {
+  opacity: 0.7;
+}
+
+.estado {
+  font-size: 0.75rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-fg, #1c1917) 8%, transparent);
+}
+
+.estado[data-estado="refunded"],
+.estado[data-estado="cancelled"] {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.total {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.devuelto {
+  margin-left: 0.4rem;
+  font-weight: 400;
+  color: #991b1b;
+}
+
+.lineas {
+  list-style: none;
+  margin: 0;
+  padding: 0 0.75rem 0.6rem 4.75rem;
+  font-size: 0.85rem;
+}
+
+.linea {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.15rem 0;
+  opacity: 0.85;
+}
+
+@media (max-width: 640px) {
+  .cabecera {
+    grid-template-columns: 3.5rem 1fr auto;
+    row-gap: 0.25rem;
+  }
+
+  .lineas {
+    padding-left: 0.75rem;
+  }
+}

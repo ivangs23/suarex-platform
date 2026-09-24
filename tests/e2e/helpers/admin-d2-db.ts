@@ -81,3 +81,39 @@ export async function deletePrinterForTest(printerId: string): Promise<void> {
   const { error } = await admin.from("printers").delete().eq("id", printerId);
   if (error) throw error;
 }
+
+/**
+ * Impresora USB atada a un dispositivo, con el nombre de Windows que se le pase.
+ *
+ * Se apoya en `createDeviceWithPrintersForTest` para el dispositivo: así el aviso de "su PC no
+ * ve esta impresora" se prueba con la MISMA forma de sembrar que el resto de tests de #7, y no
+ * con una segunda que podría divergir de la real.
+ */
+export async function createUsbPrinterForTest(
+  deviceId: string,
+  printerName: string,
+): Promise<{ printerId: string }> {
+  const { data: device, error: de } = await admin
+    .from("devices")
+    .select("tenant_id, venue_id")
+    .eq("id", deviceId)
+    .single();
+  if (de) throw de;
+
+  const { data: printer, error: pe } = await admin
+    .from("printers")
+    .insert({
+      tenant_id: device.tenant_id,
+      venue_id: device.venue_id,
+      device_id: deviceId,
+      name: `Impresora E2E ${Date.now()}`,
+      connection: { type: "usb", printerName },
+      destination: "cocina",
+      enabled: true,
+    })
+    .select("id")
+    .single();
+  if (pe) throw pe;
+
+  return { printerId: printer.id as string };
+}

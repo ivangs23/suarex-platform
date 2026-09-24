@@ -51,6 +51,8 @@ Playwright · Biome (lint+format) · Electron (app de escritorio, `electron-vite
 pnpm install
 pnpm db:start           # Supabase local (imprime las claves)
 pnpm db:reset           # reset a migraciones + seed
+pnpm db:env && pnpm seed:staff            # .env.test + cuentas demo
+node scripts/seed-platform-admin.mjs --email x@y.z   # primer superadmin de plataforma
 pnpm dev  (o preview_start name:"web")   # nunca levantar el dev server con bash
 pnpm typecheck          # turbo typecheck + tests tsconfig
 pnpm lint  /  pnpm lint:fix
@@ -85,6 +87,14 @@ viejo trae CRLF: `git config core.autocrlf false` y renormalizar.
 
 - **Multi-tenancy**: `tenant_id` + RLS. Tenant resuelto por host (`findTenantByHost`). Claims JWT
   vía `custom_access_token_hook`.
+- **Consola de plataforma**: superficie propia en `admin.<raíz>` (`app/plataforma`), para dar
+  de alta clientes y suspenderlos. Dos barreras independientes: el proxy 404ea `/plataforma`
+  bajo cualquier host de cliente Y la carta bajo el host de plataforma; y `requirePlatformAdmin()`
+  comprueba `platform_admins`, tabla APARTE de `memberships` (un superadmin no tiene membership,
+  así que su JWT no lleva `tenant_id` y `resolveStaffSession` lo rechaza por construcción).
+- **Suscripción del restaurante**: `tenants.plan_status` lo escribe SOLO el webhook de
+  facturación. Un impago NUNCA corta en el momento: abre `grace_until` (7 días), el panel avisa
+  y el barrido diario suspende lo vencido. Toda la política está en `decidirEstado`, pura.
 - **Rol `device`**: la app de escritorio inicia sesión con credenciales de dispositivo (nunca la
   service key, que JAMÁS llega al PC del cliente). Solo puede imprimir: RLS lo excluye de escribir
   catálogo; escribe vía RPCs `SECURITY DEFINER` acotadas al JWT (`reserve_printed_self`,
@@ -111,6 +121,12 @@ viejo trae CRLF: `git config core.autocrlf false` y renormalizar.
   producto). Este proyecto está en `.../Documents/proyectos/suarex-platform`. Usa **rutas
   absolutas** o `git -C` para no operar en el repo equivocado. `gh` puede resolver al repo
   equivocado → pasa siempre `--repo ivangs23/suarex-platform`.
+- **Tras `pnpm db:reset`, Kong puede quedarse con la IP vieja de Auth**: `/rest/v1` responde
+  200 pero `/auth/v1/*` da 502 y los tests de integración fallan con `AuthRetryableFetchError`
+  en `createTenantFixture`. No es tu código. El reset recrea el contenedor de auth con otra IP
+  y Kong no la re-resuelve. Se arregla con `docker restart supabase_kong_suarex-platform`
+  (solo este proyecto; hay otros stacks de Supabase en la máquina). Comprobar con
+  `docker logs supabase_kong_suarex-platform | grep "connect() failed"`: dice la IP que busca.
 - **No hay `psql`** en el host: para la BD, `docker exec <container> psql -U postgres -c "..."`,
   o Node con `@supabase/supabase-js` y la service key de `apps/web/.env.local`.
 - **Puertos por defecto ocupados**: suarex-platform mantiene Supabase en 5432x y `next dev` en
@@ -130,5 +146,6 @@ viejo trae CRLF: `git config core.autocrlf false` y renormalizar.
 
 ## Más docs
 
-`docs/HANDOFF.md` (estado y pendientes) · `docs/migrar-un-cliente.md` ·
+`docs/HANDOFF.md` (estado y pendientes) · `docs/dar-de-alta-un-cliente.md` ·
+`docs/migrar-un-cliente.md` ·
 `docs/importar-catalogo.md` · `docs/agent-desktop-validacion.md`.

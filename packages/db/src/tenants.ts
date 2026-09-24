@@ -4,7 +4,7 @@ import {
   tenantsTableForCustomDomainWrite,
   tenantsTableForHostResolution,
 } from "./client.js";
-import type { Tenant, TenantSettingsRow } from "./types.js";
+import type { PlanStatus, Tenant, TenantSettingsRow } from "./types.js";
 
 export async function findTenantByHost(
   host: string,
@@ -15,7 +15,7 @@ export async function findTenantByHost(
 
   // Exención deliberada: aún no hay tenantId que aplicar, ver el docstring de
   // `tenantsTableForHostResolution` en ./client.ts.
-  const query = tenantsTableForHostResolution().select("id, slug, name, status");
+  const query = tenantsTableForHostResolution().select("id, slug, name, status, plan_status");
   const { data, error } =
     ref.kind === "subdomain"
       ? await query.eq("slug", ref.slug).maybeSingle()
@@ -29,6 +29,7 @@ export async function findTenantByHost(
     slug: data.slug as string,
     name: data.name as string,
     status: data.status as Tenant["status"],
+    planStatus: data.plan_status as PlanStatus,
   };
 }
 
@@ -103,6 +104,27 @@ export async function getTenantStripeAccount(tenantId: string): Promise<string |
 
   if (error) throw error;
   return (data?.stripe_account_id as string | null) ?? null;
+}
+
+/**
+ * Estado de facturación del tenant, para el aviso del panel. Lectura de una fila de `tenants`
+ * por su clave primaria: mismo caso que `getTenantStripeAccount`, cubierto por la exención de
+ * lectura documentada en `client.ts`.
+ */
+export async function getTenantBillingState(
+  tenantId: string,
+): Promise<{ planStatus: PlanStatus; graceUntil: string | null } | null> {
+  const { data, error } = await tenantsTableForHostResolution()
+    .select("plan_status, grace_until")
+    .eq("id", tenantId)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) return null;
+  return {
+    planStatus: data.plan_status as PlanStatus,
+    graceUntil: (data.grace_until as string | null) ?? null,
+  };
 }
 
 export async function getTenantSettings(tenantId: string): Promise<TenantSettingsRow | null> {

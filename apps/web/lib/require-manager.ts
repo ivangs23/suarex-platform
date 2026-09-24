@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { guardedAction } from "./guarded-action";
 import { resolveStaffSession } from "./staff-session";
 import { staffServerClient } from "./supabase-server";
 import { requireTenant } from "./tenant-context";
@@ -74,12 +75,4 @@ export async function requireManager(): Promise<ManagerSession> {
  * Next -- ninguna de las actions de producción pasa un segundo argumento, todas usan
  * el default real.
  */
-export function managerAction<Args extends unknown[], R = void>(
-  fn: (session: ManagerSession, ...args: Args) => Promise<R>,
-  checkManager: () => Promise<ManagerSession> = requireManager,
-): (...args: Args) => Promise<R> {
-  return async (...args: Args) => {
-    const session = await checkManager();
-    return fn(session, ...args);
-  };
-}
+export const managerAction = guardedAction(requireManager);

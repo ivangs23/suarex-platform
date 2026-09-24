@@ -126,8 +126,21 @@ export type Strings = {
   statusCancelled: string;
   receiptTitle: string;
   receiptTable: string;
+  receiptSubtotal: string;
+  receiptTax: string;
+  receiptIssuer: string;
+  /** SuarEx NO es emisor de facturas (decisión D1 del spec de la Fase 1): este aviso es lo
+   *  único que separa un justificante de pedido de un documento que lo parece. Se pinta
+   *  SIEMPRE -- en pantalla y en el PDF, para todos los tenants y en todos los idiomas. */
+  receiptNotInvoice: string;
   receiptPrint: string;
   receiptDownload: string;
+  legalPrivacy: string;
+  legalNotice: string;
+  legalTerms: string;
+  /** Consentimiento informado, junto al botón de pagar: es donde el comensal entrega sus
+   *  datos, así que es donde tiene que poder leer qué se hace con ellos. */
+  legalPayNote: string;
   backToMenu: string;
   // Modo totem (canal kiosko).
   totemStart: string;
@@ -205,8 +218,17 @@ const ES: Strings = {
   statusCancelled: "Cancelado",
   receiptTitle: "Recibo",
   receiptTable: "Mesa",
+  receiptSubtotal: "Base imponible",
+  receiptTax: "IVA",
+  receiptIssuer: "Emitido por",
+  receiptNotInvoice:
+    "Justificante de pedido. No válido como factura. Si necesitas factura, pídela al establecimiento.",
   receiptPrint: "Imprimir",
   receiptDownload: "Descargar recibo",
+  legalPrivacy: "Privacidad",
+  legalNotice: "Aviso legal",
+  legalTerms: "Condiciones",
+  legalPayNote: "Al pedir aceptas las condiciones y la política de privacidad.",
   backToMenu: "Volver a la carta",
   totemStart: "Empezar pedido",
   totemTakeaway: "Para llevar",
@@ -280,8 +302,17 @@ const EN: Strings = {
   statusCancelled: "Cancelled",
   receiptTitle: "Receipt",
   receiptTable: "Table",
+  receiptSubtotal: "Subtotal",
+  receiptTax: "VAT",
+  receiptIssuer: "Issued by",
+  receiptNotInvoice:
+    "Order receipt. Not valid as an invoice. Ask the venue if you need a tax invoice.",
   receiptPrint: "Print",
   receiptDownload: "Download receipt",
+  legalPrivacy: "Privacy",
+  legalNotice: "Legal notice",
+  legalTerms: "Terms",
+  legalPayNote: "By ordering you accept the terms and the privacy policy.",
   backToMenu: "Back to the menu",
   totemStart: "Start order",
   totemTakeaway: "Takeaway",
@@ -355,8 +386,17 @@ const PT: Strings = {
   statusCancelled: "Cancelado",
   receiptTitle: "Recibo",
   receiptTable: "Mesa",
+  receiptSubtotal: "Base tributável",
+  receiptTax: "IVA",
+  receiptIssuer: "Emitido por",
+  receiptNotInvoice:
+    "Comprovativo de pedido. Não válido como fatura. Peça a fatura ao estabelecimento.",
   receiptPrint: "Imprimir",
   receiptDownload: "Baixar recibo",
+  legalPrivacy: "Privacidade",
+  legalNotice: "Aviso legal",
+  legalTerms: "Condições",
+  legalPayNote: "Ao pedir aceitas as condições e a política de privacidade.",
   backToMenu: "Voltar à carta",
   totemStart: "Iniciar pedido",
   totemTakeaway: "Para levar",

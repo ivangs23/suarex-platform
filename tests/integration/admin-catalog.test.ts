@@ -332,3 +332,91 @@ describe("update/delete de categorías y productos", () => {
     expect(catalog.allergens.some((a) => a.id === id)).toBe(false);
   });
 });
+
+/**
+ * TRADUCCIONES QUE SOBREVIVEN A UNA EDICIÓN.
+ *
+ * El panel solo tiene campo de español. Si `name_i18n` se reescribiera entero con `{es: ...}`,
+ * renombrar una categoría borraría su inglés y su portugués -- y como los idiomas OFRECIDOS se
+ * deducen de las claves que hay (`availableLangs`), el selector de idioma desaparecería solo,
+ * sin error y sin que nadie relacionase una cosa con la otra. Es lo que pasaba: el e2e de
+ * idiomas empezó a fallar en cuanto un test editó una categoría que tenía traducción.
+ */
+describe("editar no borra las traducciones", () => {
+  it("updateCategory conserva los idiomas que el formulario no trae", async () => {
+    const f = await createTenantFixture(`i18nc-${nonce()}`);
+    try {
+      const { id } = await createCategory(f.tenantId, {
+        slug: `vinos-${nonce()}`,
+        nameI18n: { es: "Vinos", en: "Wines", pt: "Vinhos" },
+      });
+
+      await updateCategory(f.tenantId, id, { nameI18n: { es: "Nuestros vinos" } });
+
+      const { data } = await adminClient
+        .from("categories")
+        .select("name_i18n")
+        .eq("id", id)
+        .single();
+      expect(data?.name_i18n).toEqual({ es: "Nuestros vinos", en: "Wines", pt: "Vinhos" });
+    } finally {
+      await deleteTenantFixture(f);
+    }
+  });
+
+  it("updateProduct conserva nombre y descripción en los otros idiomas", async () => {
+    const f = await createTenantFixture(`i18np-${nonce()}`);
+    try {
+      const { id: categoryId } = await createCategory(f.tenantId, {
+        slug: `cat-${nonce()}`,
+        nameI18n: { es: "Cat" },
+      });
+      const { id } = await createProduct(f.tenantId, {
+        categoryId,
+        nameI18n: { es: "Pulpo", en: "Octopus" },
+        descriptionI18n: { es: "A la gallega", en: "Galician style" },
+        price: 18,
+      });
+
+      await updateProduct(f.tenantId, id, {
+        nameI18n: { es: "Pulpo a feira" },
+        descriptionI18n: { es: "Con cachelos" },
+      });
+
+      const { data } = await adminClient
+        .from("products")
+        .select("name_i18n, description_i18n")
+        .eq("id", id)
+        .single();
+      expect(data?.name_i18n).toEqual({ es: "Pulpo a feira", en: "Octopus" });
+      expect(data?.description_i18n).toEqual({ es: "Con cachelos", en: "Galician style" });
+    } finally {
+      await deleteTenantFixture(f);
+    }
+  });
+
+  it("una edición de otro tenant no crea la fila ni fusiona nada", async () => {
+    // La fusión lee antes de escribir. Esa lectura va por `tenantScoped` igual que la
+    // escritura: si no, un id ajeno devolvería su i18n real y lo reescribiría fusionado.
+    const a = await createTenantFixture(`i18na-${nonce()}`);
+    const b = await createTenantFixture(`i18nb-${nonce()}`);
+    try {
+      const { id } = await createCategory(b.tenantId, {
+        slug: `dea-${nonce()}`,
+        nameI18n: { es: "De B", en: "From B" },
+      });
+
+      await updateCategory(a.tenantId, id, { nameI18n: { es: "Secuestrada" } });
+
+      const { data } = await adminClient
+        .from("categories")
+        .select("name_i18n")
+        .eq("id", id)
+        .single();
+      expect(data?.name_i18n).toEqual({ es: "De B", en: "From B" });
+    } finally {
+      await deleteTenantFixture(a);
+      await deleteTenantFixture(b);
+    }
+  });
+});

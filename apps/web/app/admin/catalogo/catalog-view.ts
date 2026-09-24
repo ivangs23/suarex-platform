@@ -235,3 +235,18 @@ export function buildCatalogView(params: {
     hiddenCount: matchCount - mostrados.length,
   };
 }
+
+/**
+ * Frase que describe la franja horaria de una categoría, para el panel.
+ *
+ * Existe porque la franja es la única propiedad del catálogo que hace desaparecer productos sin
+ * que nadie los haya tocado: quien gestiona la carta tiene que poder leer de un vistazo por qué
+ * una rama entera no está, en vez de deducirlo de dos campos de hora.
+ */
+export function describirFranja(desde: string | null, hasta: string | null): string {
+  if (!desde || !hasta) return "Se ofrece siempre.";
+
+  const hhmm = (hora: string) => hora.slice(0, 5);
+  const cruza = hhmm(hasta) < hhmm(desde);
+  return `Se ofrece de ${hhmm(desde)} a ${hhmm(hasta)}${cruza ? " del día siguiente" : ""}.`;
+}

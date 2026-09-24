@@ -339,6 +339,98 @@ medio hacer no lo deje abierto. Genera el secreto con `openssl rand -hex 32` y p
 
 ---
 
+## Restaurar: el simulacro, y por qué no es obvio
+
+**Un backup que no se ha restaurado nunca no es un backup, es un fichero.** Haz el simulacro
+una vez al trimestre y cuando cambies de versión de Postgres.
+
+### Lo que hay que saber antes
+
+Tres cosas que se descubrieron haciendo un simulacro de verdad, y que cuestan una noche si se
+descubren el día del desastre:
+
+1. **El volcado NO incluye los roles.** `pg_dump` vuelca una base; los roles son del cluster.
+   La imagen de Supabase trae 4 de los 13 que este esquema usa, así que sin ellos la
+   restauración muere en `role "supabase_realtime_admin" does not exist`. Por eso
+   `backup-db.sh` genera **dos** ficheros: `suarex-FECHA.sql.gz` y
+   `suarex-FECHA.roles.sql.gz`. Cópialos los dos fuera del servidor.
+
+2. **El destino NO puede estar vacío.** El volcado lleva `--clean --if-exists` porque el
+   destino real nunca está limpio: la imagen de Supabase precrea `auth` y `storage`, y sin ese
+   flag falla con `schema "auth" already exists`. A cambio, contra una base completamente nueva
+   falla en la primera línea (`DROP POLICY ... ON public.venues`: ese IF EXISTS protege la
+   policy, no la tabla). No "arregles" el flag — ajusta el procedimiento.
+
+3. **Todo se hace como `supabase_admin`, no como `postgres`.** En el stack autoalojado
+   `postgres` no es superusuario y la restauración falla con
+   `must be able to SET ROLE "supabase_admin"`.
+
+### El procedimiento
+
+```bash
+# 1. Levanta el stack de Supabase en el servidor nuevo (crea esquemas y roles base).
+# 2. Aplica las migraciones (crea el esquema public).
+./deploy/scripts/apply-migrations.sh
+
+# 3. Restaura. El script carga los roles solo si encuentra el .roles.sql.gz al lado.
+DB_CONTAINER=supabase-db ./deploy/scripts/restore-db.sh /var/backups/suarex/suarex-FECHA.sql.gz
+```
+
+Termina imprimiendo un recuento de tenants, productos, pedidos, usuarios y dispositivos.
+**Compáralo con lo que esperabas tener.** Una restauración que acaba sin error pero deja las
+tablas vacías es el peor resultado posible, porque parece que funcionó.
+
+### Para ensayar sin tocar producción
+
+Levanta un Postgres desechable con la misma imagen, cárgale los roles, aplícale las
+migraciones y restaura ahí. Los números tienen que cuadrar con los de producción:
+
+```bash
+docker run -d --name drill -e POSTGRES_PASSWORD=x public.ecr.aws/supabase/postgres:17.6.1.106
+# ... roles + migraciones ...
+DB_CONTAINER=drill ./deploy/scripts/restore-db.sh <volcado>
+docker rm -f drill
+```
+
+No lo ensayes restaurando en una base con OTRO NOMBRE dentro del mismo Postgres: `pg_cron`
+solo puede existir en la base llamada `postgres` y la restauración se para ahí.
+
+### RPO y RTO
+
+| | |
+|---|---|
+| **RPO** (datos que se pierden) | Hasta **24 h** — `backup-db.sh` corre a las 3:30. Con más volumen, baja el cron a cada 6 h. |
+| **RTO** (tiempo hasta volver) | **~40 min** en servidor nuevo: instalar el stack (20) + migraciones (2) + restaurar (5) + DNS y certificados (10). |
+
+Si esos números no te valen para un cliente, la respuesta no es hacer más backups: es una
+réplica de Postgres, y eso es otra fase.
+
+## Los otros dos crons del sistema
+
+Mismo patrón que el de expirar pedidos, mismo `CRON_SECRET`, y los dos fallan cerrado si el
+secreto no está configurado.
+
+```bash
+# Retencion de datos del comensal (90 dias las notas, 24 meses el pedido).
+# NO es limpieza opcional: son los plazos que la politica de privacidad publicada promete.
+15 4 * * * CRON_SECRET=xxx APP_URL=https://admin.<tu-dominio> /opt/suarex/deploy/scripts/purge-orders.sh
+
+# Cierra las ventanas de gracia vencidas: suspende a quien lleva 7 dias sin pagar.
+0 5 * * * CRON_SECRET=xxx APP_URL=https://admin.<tu-dominio> /opt/suarex/deploy/scripts/suspend-overdue.sh
+```
+
+**Apúntalos al host de la consola (`admin.<tu-dominio>`), no al de un tenant.** Dos motivos, y
+el segundo es grave:
+
+1. El proxy resuelve tenant por Host en todas las rutas salvo `api/tls-check`. Con el dominio
+   raíz, `findTenantByHost` devuelve null y el cron recibe un 404 sin barrer nada, en silencio.
+2. Si apuntas al host de un tenant y ese tenant acaba suspendido —justo lo que provoca
+   `suspend-overdue`— el proxy devuelve 503 en esas rutas, el `curl -fsS` falla y el cron
+   **muere para todos los demás clientes**. Se autodestruye.
+
+Revisa también el cron de `expire-orders` que ya tengas instalado: si apunta al dominio raíz,
+lleva tiempo sin barrer nada.
+
 ## Limpiar fotos huérfanas del bucket
 
 Reimportar el catálogo de un cliente (`import-catalog --reemplazar`) borra sus filas y resube
@@ -389,28 +481,37 @@ docker stats --no-stream
 
 ---
 
-## Dar de alta un cliente
+## La consola de plataforma
 
-El primer owner de un cliente no puede salir del panel (el panel solo deja crear personal a
-un owner que ya exista). Ese arranque lo hace un script:
+La consola vive en su propio host, `admin.<tu-dominio>`, y el comodín de DNS del paso 2 ya lo
+cubre: **no hay que tocar ni DNS ni Caddy** para ella.
+
+Bajo ese host no se sirve nada del producto (ni carta, ni panel de cliente, ni tablero de
+personal), y `/plataforma` no se sirve NUNCA bajo el host de un cliente. Las dos direcciones
+están comprobadas en `tests/e2e/plataforma-host.spec.ts`.
+
+Crea el primer superadmin, una vez por instalación:
 
 ```bash
-node scripts/create-tenant.mjs --slug bar-paco --nombre "Bar Paco" --email dueno@barpaco.com
+node scripts/seed-platform-admin.mjs --email tu-correo@suarex.app
 ```
 
-Crea su fila de cliente, sus ajustes, su sede por defecto y su **primer owner** (con una
-contraseña que imprime al final para entregársela). Es **idempotente**: reejecutar no
-duplica nada. Opcionales: `--dominio` (dominio propio), `--tema` (por defecto `generic`),
-`--idioma`, `--moneda`, `--password` (si no, se genera).
+Imprime la contraseña generada. Es el **único** camino para crear un superadmin, y exige acceso
+al servidor a propósito: si la consola pudiera crearlos, comprometer una sola cuenta
+comprometería la plataforma entera. Los superadmins viven en `platform_admins`, una tabla
+aparte de `memberships` con RLS sin policies — un superadmin no tiene membership de ningún
+cliente, así que su JWT no lleva `tenant_id`.
 
-Luego:
+## Dar de alta un cliente
 
-1. El comodín de DNS y el certificado ya cubren su subdominio: **no hay que tocar ni DNS ni Caddy**.
-2. El owner entra en `https://<slug>.<tu-dominio>/admin` con las credenciales impresas y
-   configura su marca y su tema en Ajustes.
-3. Su carta se importa con `node scripts/import-catalog.mjs <volcado> <slug> --reemplazar`
-   (ver `docs/migrar-un-cliente.md`).
-4. Si lleva impresora: generar su instalador del agente con `PLATFORM_WEB_ORIGIN=https://<slug>.<tu-dominio>`.
+Desde la consola, en el navegador: `https://admin.<tu-dominio>/plataforma`.
+
+El procedimiento completo —qué datos pedirle al cliente antes de empezar, la importación del
+catálogo, las mesas, la impresora y la comprobación final— está en
+[`docs/dar-de-alta-un-cliente.md`](../docs/dar-de-alta-un-cliente.md).
+
+`scripts/create-tenant.mjs` queda para la primera instalación (cuando aún no hay superadmin) y
+para recuperación ante desastres. Para todo lo demás, la consola.
 
 ---
 

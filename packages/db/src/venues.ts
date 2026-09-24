@@ -44,3 +44,21 @@ export async function listVenues(tenantId: string): Promise<VenueRow[]> {
     isDefault: row.is_default,
   }));
 }
+
+/**
+ * Zona horaria de la sede por defecto del tenant. Mismo criterio que `marcar_agotado_hoy` en
+ * SQL (`order by is_default desc`, 'Europe/Madrid' de reserva): las franjas de carta y el
+ * "se acabó hoy" tienen que estar de acuerdo sobre qué hora es en el local, o un mismo
+ * restaurante vería aparecer la carta de cena a una hora y reponerse los platos a otra.
+ *
+ * Nunca lanza: si esta lectura fallara, el precio de acertar la zona es servir la carta con la
+ * hora del servidor; el de propagar el error, no servir carta.
+ */
+export async function zonaHorariaDelTenant(tenantId: string): Promise<string> {
+  const { data } = await tenantScoped("venues", tenantId)
+    .select("timezone")
+    .order("is_default", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return (data?.timezone as string | undefined) ?? "Europe/Madrid";
+}

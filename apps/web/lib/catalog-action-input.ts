@@ -38,3 +38,55 @@ export function parseAvailability(raw: string): boolean {
     `is_available inválido (se esperaba "true" o "false"): ${JSON.stringify(raw)}`,
   );
 }
+
+/** Franja horaria de una categoría, ya validada. `null` en ambas = se ofrece siempre. */
+export type FranjaHoraria = { visibleDesde: string | null; visibleHasta: string | null };
+
+const HORA = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+/**
+ * Las dos horas de la franja de carta (`<input type="time">`, que manda `"HH:MM"`).
+ *
+ * Devuelve `undefined` si el formulario no trae los campos -- eso es "no toques la franja",
+ * distinto de `{null, null}`, que es "quítala". Sin esa distinción, cualquier otro formulario
+ * que edite la categoría borraría la franja sin mencionarlo.
+ *
+ * Rechaza la media franja y la franja vacía en vez de dejar que reviente el CHECK de la base
+ * (`categories_franja_completa` / `categories_franja_no_vacia`): el error de Postgres llega
+ * como un 500 sin texto útil, y quien gestiona la carta se queda sin saber qué ha hecho mal.
+ */
+export function parseFranja(formData: FormData): FranjaHoraria | undefined {
+  const bruto = (campo: string): string | null => {
+    const raw = formData.get(campo);
+    return raw === null ? null : String(raw).trim();
+  };
+
+  const desde = bruto("visible_desde");
+  const hasta = bruto("visible_hasta");
+  if (desde === null && hasta === null) return undefined;
+
+  if (!desde && !hasta) return { visibleDesde: null, visibleHasta: null };
+
+  if (!desde || !hasta) {
+    throw new InvalidCatalogActionInputError(
+      "Para limitar la franja horaria hacen falta las dos horas: desde y hasta. Déjalas en blanco las dos para que la categoría se ofrezca siempre.",
+    );
+  }
+  for (const [campo, valor] of [
+    ["visible_desde", desde],
+    ["visible_hasta", hasta],
+  ] as const) {
+    if (!HORA.test(valor)) {
+      throw new InvalidCatalogActionInputError(
+        `${campo} inválido (se esperaba HH:MM): ${JSON.stringify(valor)}`,
+      );
+    }
+  }
+  if (desde === hasta) {
+    throw new InvalidCatalogActionInputError(
+      "La hora de inicio y la de fin no pueden ser la misma. Déjalas en blanco las dos para que la categoría se ofrezca siempre.",
+    );
+  }
+
+  return { visibleDesde: desde, visibleHasta: hasta };
+}
