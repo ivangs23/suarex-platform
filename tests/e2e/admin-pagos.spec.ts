@@ -71,6 +71,12 @@ test("el owner activa el rol kiosko de un dispositivo y le fija el pinpad", asyn
     await card.getByTestId("device-role-kiosko").check();
     await card.getByTestId("device-roles-save").click();
 
+    // Se espera a que el rol esté GUARDADO antes de recargar. `page.goto` pinta una vez: si la
+    // Server Action sigue en vuelo, la página nueva llega sin el campo del pinpad -- que solo
+    // se pinta si el device ya es kiosko -- y el `fill` de abajo falla contra un DOM que ya no
+    // va a cambiar. Era la causa de que este test saliera flaky también en aislamiento.
+    await expect.poll(async () => (await deviceRolesAndPinpad(deviceId)).roles).toContain("kiosko");
+
     // El pinpad solo aparece cuando el device es kiosko: tras recargar, se rellena y se guarda.
     await page.goto(`${ORIGIN}/admin/dispositivos`);
     const card2 = page.locator(`[data-testid="admin-device"][data-device-id="${deviceId}"]`);
