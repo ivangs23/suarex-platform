@@ -10,8 +10,10 @@ import {
 } from "./agent-runner.js";
 import { loadCredentials } from "./config-store.js";
 import { registerIpc } from "./ipc.js";
+import { instalarLogDeFichero } from "./log-file.js";
 import { listLocalPrinters } from "./printers.js";
 import { realConfigBackend } from "./real-config-backend.js";
+import { realLogBackend } from "./real-log-backend.js";
 import { TRAY_ICON_DATA_URL } from "./tray-icon.js";
 import { startAutoUpdate } from "./updater.js";
 import { ejecutorDelSistema, registrarWatchdog } from "./watchdog.js";
@@ -22,6 +24,12 @@ let tray: Tray | null = null;
 let quitting = false;
 
 const TRAY_BASE_TOOLTIP = "SuarEx — Agente de impresión";
+
+// Log a fichero, lo PRIMERO de todo: a partir de aquí cualquier `console` de este proceso
+// -- incluidas las de `packages/agent`, que corre aquí dentro -- queda también en disco. Antes
+// de esta línea solo hay imports, así que no se pierde nada. Un proceso oculto en la bandeja
+// no tiene consola que mirar: sin esto, la única información tras un fallo era "no imprime".
+instalarLogDeFichero(realLogBackend());
 
 // Watchdog dentro del proceso. Este agente corre desatendido: un error suelto no capturado no
 // debe llevarse por delante toda la app y dejar la cocina sin imprimir hasta reiniciar el PC.

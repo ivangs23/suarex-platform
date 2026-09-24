@@ -80,8 +80,6 @@ La propina se descartó (D2): no compensa el riesgo fiscal para lo que aporta.
 
 Priorizado por valor/coste. Detalle en el hilo; resumen:
 
-- **9. Logs a fichero + exportar diagnóstico** (recomendado el siguiente): hoy solo `console`,
-  inaccesible en una app oculta en bandeja. Log rotativo en `userData` + botón "exportar".
 - **7. Desplegable de impresoras** en el panel admin en vez de teclear el nombre a mano (un typo =
   la USB no casa y no imprime en silencio). El desktop ya las lista (`getPrintersAsync`).
 - **8. Realtime** además del polling de 4 s (menos latencia y carga; polling como respaldo).

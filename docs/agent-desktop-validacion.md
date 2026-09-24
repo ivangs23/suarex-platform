@@ -92,7 +92,25 @@ duplicado.
 consulta del paso 1: la tarea ya no debe existir. Si se quedara, el PC seguiría reabriendo
 cada cinco minutos una app que ya no pertenece a ningún restaurante.
 
+## Validar el diagnóstico exportable
+
+No se puede probar fuera de Windows empaquetado, así que va aquí con el resto.
+
+1. En **Ayuda**, pulsa **Guardar diagnóstico**. Debe abrirse el diálogo nativo con el
+   Escritorio y un nombre tipo `suarex-diagnostico-2026-09-24-1830.txt`.
+2. Guarda y ábrelo. Arriba tiene que estar la versión, el sistema, si está emparejado y en
+   marcha, y el id del dispositivo.
+3. **Busca dentro la palabra `password` y el correo `@devices.local`.** No deben aparecer: este
+   fichero se manda por correo y la contraseña del dispositivo vive cifrada en ese mismo
+   directorio. Si salieran, es un fallo grave, no una errata.
+4. Debajo de `--- Registro ---` tiene que haber líneas con fecha ISO y nivel. Si pone
+   `(sin entradas)` en una instalación que lleva días funcionando, el log no se está
+   escribiendo: comprueba `%APPDATA%/suarex-agente/agente.log`.
+5. Pulsa el botón y **cancela** el diálogo: el panel de registro no debe decir nada (cancelar
+   no es un error).
+
 ## Qué capturar si algo falla
-- El **panel de registro** completo de la app (cópialo entero).
+- El **fichero de diagnóstico** (Ayuda → Guardar diagnóstico). Sustituye a copiar el panel a
+  mano y trae además el registro de los días anteriores.
 - El nombre exacto de la impresora (paso 3).
 - Si es el instalador: el mensaje de error de Windows.

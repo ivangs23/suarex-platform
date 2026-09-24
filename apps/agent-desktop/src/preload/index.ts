@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { AgentActivity } from "../main/agent-activity.js";
-import type { PairIpcResult } from "../main/ipc.js";
+import type { ExportIpcResult, PairIpcResult } from "../main/ipc.js";
 import type { ShowWebPanelResult } from "../main/web-panel.js";
 
 /** Puente seguro: el renderer solo ve estas funciones, nunca Node/Electron directo
@@ -18,6 +18,8 @@ contextBridge.exposeInMainWorld("agent", {
     activity: AgentActivity;
   }> => ipcRenderer.invoke("get-status"),
   confirmUnpair: (): Promise<boolean> => ipcRenderer.invoke("confirm-unpair"),
+  /** Deja un .txt de diagnóstico donde el usuario elija, para adjuntarlo a un correo. */
+  exportDiagnostic: (): Promise<ExportIpcResult> => ipcRenderer.invoke("export-diagnostic"),
   unpair: (): Promise<{ ok: boolean }> => ipcRenderer.invoke("unpair"),
   showSection: (section: string): Promise<ShowWebPanelResult> =>
     ipcRenderer.invoke("show-section", section),

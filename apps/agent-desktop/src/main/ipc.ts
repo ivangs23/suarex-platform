@@ -1,12 +1,18 @@
-import { type BrowserWindow, dialog, ipcMain } from "electron";
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { app, type BrowserWindow, dialog, ipcMain } from "electron";
 import { getActivity, isAgentRunning, startAgent, stopAgent } from "./agent-runner.js";
 import { PLATFORM_WEB_ORIGIN } from "./baked-config.js";
 import { loadCredentials, saveCredentials } from "./config-store.js";
+import { componerDiagnostico, nombreDeFicheroDiagnostico } from "./diagnostico.js";
 import { type PairError, pairDevice } from "./pairing.js";
 import { listLocalPrinters, printTestTicket } from "./printers.js";
 import { realConfigBackend } from "./real-config-backend.js";
+import { realLogBackend } from "./real-log-backend.js";
 import { ejecutorDelSistema, quitarWatchdog } from "./watchdog.js";
 import { hideWebPanel, isWebSection, type ShowWebPanelResult, showWebPanel } from "./web-panel.js";
+
+export type ExportIpcResult = { ok: true; ruta: string } | { ok: false; motivo: string };
 
 export type PairIpcResult =
   | { ok: true; deviceId: string; tenantId: string }
@@ -102,6 +108,57 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
       ? await dialog.showMessageBox(win, opciones)
       : await dialog.showMessageBox(opciones);
     return response === 1;
+  });
+
+  /**
+   * Deja un `.txt` de diagnóstico donde el usuario elija, con el Escritorio por defecto.
+   *
+   * El dueño del bar no va a buscar un fichero en `%APPDATA%` y soporte no puede entrar en su
+   * PC: un botón que produce algo adjuntable a un correo es la única vía realista. El
+   * contenido lo compone `componerDiagnostico`, que es puro y garantiza por test que no
+   * lleva credenciales -- este fichero SALE de la máquina.
+   */
+  ipcMain.handle("export-diagnostic", async (): Promise<ExportIpcResult> => {
+    const ahora = new Date();
+    const win = getWindow();
+    const porDefecto = join(app.getPath("desktop"), nombreDeFicheroDiagnostico(ahora));
+
+    const opciones = {
+      title: "Guardar diagnóstico",
+      defaultPath: porDefecto,
+      filters: [{ name: "Texto", extensions: ["txt"] }],
+    };
+    const { canceled, filePath } = win
+      ? await dialog.showSaveDialog(win, opciones)
+      : await dialog.showSaveDialog(opciones);
+    if (canceled || !filePath) return { ok: false, motivo: "cancelado" };
+
+    const creds = loadCredentials(realConfigBackend());
+    const activity = getActivity();
+    const texto = componerDiagnostico(
+      {
+        version: app.getVersion(),
+        plataforma: process.platform,
+        emparejado: creds !== null,
+        enMarcha: isAgentRunning(),
+        // `email` y `password` NO viajan: el id basta para localizar el dispositivo en el panel.
+        deviceId: creds?.deviceId ?? null,
+        tenantId: creds?.tenantId ?? null,
+        impresorasCaidas: activity.downPrinters.map((p) => p.destination),
+        ultimoError: activity.lastError,
+        generadoEn: ahora,
+      },
+      realLogBackend().read(),
+    );
+
+    try {
+      writeFileSync(filePath, texto, "utf8");
+    } catch (e) {
+      // Un USB retirado, una carpeta sin permisos. Se devuelve el motivo para que la interfaz
+      // lo diga, en vez de dejar un botón que aparenta haber funcionado.
+      return { ok: false, motivo: e instanceof Error ? e.message : "no se pudo guardar" };
+    }
+    return { ok: true, ruta: filePath };
   });
 
   ipcMain.handle("unpair", async () => {

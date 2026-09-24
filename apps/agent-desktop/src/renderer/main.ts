@@ -1,5 +1,5 @@
 import type { AgentActivity } from "../main/agent-activity.js";
-import type { PairIpcResult } from "../main/ipc.js";
+import type { ExportIpcResult, PairIpcResult } from "../main/ipc.js";
 import type { ShowWebPanelResult } from "../main/web-panel.js";
 import { setupNavigation } from "./navigation.js";
 
@@ -17,6 +17,7 @@ type AgentApi = {
   testPrint(printerName: string): Promise<{ ok: boolean }>;
   getStatus(): Promise<AgentStatus>;
   confirmUnpair(): Promise<boolean>;
+  exportDiagnostic(): Promise<ExportIpcResult>;
   unpair(): Promise<{ ok: boolean }>;
   showSection(section: string): Promise<ShowWebPanelResult>;
   onActivity(cb: (activity: AgentActivity) => void): () => void;
@@ -195,6 +196,14 @@ if (!agent) {
     await agent.unpair();
     log("Des-emparejado.");
     await refreshStatus();
+  });
+
+  $("diagnostico").addEventListener("click", async () => {
+    const r = await agent.exportDiagnostic();
+    // Se dice la RUTA y no solo "guardado": el diálogo nativo permite cambiar de carpeta, y
+    // sin la ruta el siguiente paso -- adjuntarlo a un correo -- empieza por buscarlo.
+    if (r.ok) log(`Diagnóstico guardado en ${r.ruta}`);
+    else if (r.motivo !== "cancelado") log(`No se pudo guardar el diagnóstico: ${r.motivo}`);
   });
 
   $("refresh").addEventListener("click", refreshPrinters);
