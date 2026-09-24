@@ -16,7 +16,7 @@ import { CategoryEditForm } from "./CategoryEditForm";
 import { CategoryForm } from "./CategoryForm";
 import { CategoryTree } from "./CategoryTree";
 import { ConfirmDeleteForm } from "./ConfirmDeleteForm";
-import { buildCatalogView } from "./catalog-view";
+import { buildCatalogView, describirFranja } from "./catalog-view";
 import styles from "./catalogo.module.css";
 import { ExtraForm } from "./ExtraForm";
 import { MoveCategoryForm } from "./MoveCategoryForm";
@@ -280,6 +280,11 @@ export default async function AdminCatalogoPage({
               <h3 data-testid="admin-category-name">
                 {seleccionada.nameI18n.es ?? seleccionada.slug}
               </h3>
+              {/* La franja, en palabras. Sin esto, una rama entera fuera de la carta solo se
+                  explica abriendo el formulario y leyendo dos campos de hora. */}
+              <p data-testid="admin-category-franja">
+                {describirFranja(seleccionada.visibleDesde, seleccionada.visibleHasta)}
+              </p>
               <details className={styles.details}>
                 <summary>Editar categoría</summary>
                 <CategoryEditForm
@@ -287,6 +292,8 @@ export default async function AdminCatalogoPage({
                   name={seleccionada.nameI18n.es ?? seleccionada.slug}
                   slug={seleccionada.slug}
                   destination={seleccionada.destination}
+                  visibleDesde={seleccionada.visibleDesde}
+                  visibleHasta={seleccionada.visibleHasta}
                 />
               </details>
               <details className={styles.details}>

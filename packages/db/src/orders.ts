@@ -5,6 +5,7 @@ import {
   lineTotal,
   type PricedLine,
 } from "@suarex/domain";
+import { getCategories } from "./catalog.js";
 import {
   expirePendingOrdersRpc,
   nextOrderNumberRpc,
@@ -18,6 +19,7 @@ import type { CartLineInput, OrderReceipt, OrderStatus, ReceiptLine } from "./ty
 
 type ProductRow = {
   id: string;
+  category_id: string;
   name_i18n: Record<string, string>;
   price: string | number;
   is_available: boolean;
@@ -85,10 +87,20 @@ export async function createPendingOrder(input: {
 
   // El filtro por tenant lo aplica tenantScoped: un producto de otro tenant
   // sencillamente no aparece, y la comprobación de abajo lo convierte en error.
-  const { data: products, error } = await tenantScoped("products", input.tenantId)
-    .select("id, name_i18n, price, is_available, unavailable_until, categories(destination)")
-    .in("id", productIds);
+  // Las categorías VISIBLES AHORA salen de `getCategories`, la misma función que pinta la
+  // carta, y no de una consulta propia: si las dos decidieran por separado, acabarían
+  // discrepando -- platos a la vista que no se pueden pedir, o al revés.
+  const [{ data: products, error }, categoriasVisibles] = await Promise.all([
+    tenantScoped("products", input.tenantId)
+      .select(
+        "id, category_id, name_i18n, price, is_available, unavailable_until, categories(destination)",
+      )
+      .in("id", productIds),
+    getCategories(input.tenantId),
+  ]);
   if (error) throw error;
+
+  const categoriasEnHorario = new Set(categoriasVisibles.map((c) => c.id));
 
   const byId = new Map((products as unknown as ProductRow[]).map((p) => [p.id, p]));
 
@@ -134,7 +146,10 @@ export async function createPendingOrder(input: {
     // agotara el plato seguiría pudiendo enviar la comanda a cocina.
     const agotadoHoy =
       product?.unavailable_until != null && new Date(product.unavailable_until) > new Date();
-    if (!product?.is_available || agotadoHoy) {
+    // Y fuera de la franja horaria de su categoría: un carrito abierto a las 15:50 no debe
+    // poder mandar la comanda de mediodía a las 16:05, cuando cocina ya no la hace.
+    const fueraDeHorario = product != null && !categoriasEnHorario.has(product.category_id);
+    if (!product?.is_available || agotadoHoy || fueraDeHorario) {
       throw new OrderCartError(`Producto no disponible: ${line.productId}`);
     }
 

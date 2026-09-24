@@ -1,5 +1,7 @@
 import { tenantScoped } from "./client.js";
+import { filtrarPorFranja, minutosEnZona } from "./franjas.js";
 import type { Category, Product, ProductExtra } from "./types.js";
+import { zonaHorariaDelTenant } from "./venues.js";
 
 type ProductExtraRow = {
   id: string;
@@ -8,13 +10,20 @@ type ProductExtraRow = {
 };
 
 export async function getCategories(tenantId: string): Promise<Category[]> {
-  const { data, error } = await tenantScoped("categories", tenantId)
-    .select("id, slug, name_i18n, icon, image_url, sort_order, parent_id")
-    .order("sort_order", { ascending: true });
+  // La zona va EN PARALELO con el catálogo, no antes: encadenarlas añadiría un viaje a la
+  // latencia de la carta, que es lo primero que ve el comensal con el móvil en la mano.
+  const [{ data, error }, timezone] = await Promise.all([
+    tenantScoped("categories", tenantId)
+      .select(
+        "id, slug, name_i18n, icon, image_url, sort_order, parent_id, visible_desde, visible_hasta",
+      )
+      .order("sort_order", { ascending: true }),
+    zonaHorariaDelTenant(tenantId),
+  ]);
 
   if (error) throw error;
 
-  return (data ?? []).map((row) => ({
+  const categorias = (data ?? []).map((row) => ({
     id: row.id as string,
     slug: row.slug as string,
     nameI18n: row.name_i18n as Record<string, string>,
@@ -25,7 +34,15 @@ export async function getCategories(tenantId: string): Promise<Category[]> {
     // permite cartas en ÁRBOL: una carta grande se navega por niveles en vez de volcar
     // cientos de productos en una lista. `null` = categoría raíz.
     parentId: (row.parent_id as string | null) ?? null,
+    // Franja horaria de la categoría (`null` = siempre visible). Viaja en el tipo, y no solo
+    // se usa para filtrar aquí, porque el panel necesita leerla para poder editarla.
+    visibleDesde: (row.visible_desde as string | null) ?? null,
+    visibleHasta: (row.visible_hasta as string | null) ?? null,
   }));
+
+  // El filtro va DESPUÉS del mapeo y no en la consulta: una franja que cruza medianoche
+  // (cena de 20:00 a 02:00) no es un `between`, y PostgREST no sabe expresarla.
+  return filtrarPorFranja(categorias, minutosEnZona(new Date(), timezone));
 }
 
 /**

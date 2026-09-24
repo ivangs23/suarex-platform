@@ -74,6 +74,7 @@ export type { DispositivoCaido, ResultadoSalud } from "./device-health.js";
 export { sweepDeviceHealth } from "./device-health.js";
 export type { PairDeviceResult } from "./devices.js";
 export { pairDevice } from "./devices.js";
+export { categoriaVisibleAhora, filtrarPorFranja, minutosEnZona } from "./franjas.js";
 export type { TableMenu } from "./menu.js";
 export { loadTableMenu } from "./menu.js";
 export type { MarkPaidOutcome, RefundOutcome } from "./orders.js";
@@ -146,4 +147,4 @@ export type {
   TenantSettingsRow,
 } from "./types.js";
 export type { VenueRow } from "./venues.js";
-export { listVenues } from "./venues.js";
+export { listVenues, zonaHorariaDelTenant } from "./venues.js";

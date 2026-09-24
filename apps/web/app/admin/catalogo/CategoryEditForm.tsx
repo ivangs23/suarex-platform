@@ -5,7 +5,15 @@ type Props = {
   name: string;
   slug: string;
   destination: "cocina" | "barra";
+  /** `"HH:MM:SS"` tal y como lo devuelve Postgres, o `null` si la categoría se ofrece siempre. */
+  visibleDesde: string | null;
+  visibleHasta: string | null;
 };
+
+/** `<input type="time">` quiere `"HH:MM"`; Postgres devuelve `"HH:MM:SS"`. */
+function aHoraDeInput(hora: string | null): string {
+  return hora ? hora.slice(0, 5) : "";
+}
 
 /**
  * Edición de una categoría. Componente de servidor (sin `"use client"`), a diferencia de
@@ -48,6 +56,26 @@ export function CategoryEditForm(props: Props) {
           <option value="barra">Barra</option>
         </select>
       </label>
+
+      {/* FRANJA HORARIA. Un local con dos servicios no quiere que a las 13:00 se vean los
+          desayunos. Va en la categoría y no en el plato porque es como se piensa la carta
+          ("la de mediodía") y porque marcarlo plato a plato no lo mantendría nadie. */}
+      <fieldset>
+        <legend>Horario en que se ofrece</legend>
+        <p>
+          En blanco las dos, se ofrece siempre. Si la hora de fin es menor que la de inicio, la
+          franja cruza medianoche (una cena de 20:00 a 02:00). Las subcategorías siguen a su
+          categoría padre.
+        </p>
+        <label>
+          Desde
+          <input name="visible_desde" type="time" defaultValue={aHoraDeInput(props.visibleDesde)} />
+        </label>
+        <label>
+          Hasta
+          <input name="visible_hasta" type="time" defaultValue={aHoraDeInput(props.visibleHasta)} />
+        </label>
+      </fieldset>
 
       <button type="submit">Guardar categoría</button>
     </form>

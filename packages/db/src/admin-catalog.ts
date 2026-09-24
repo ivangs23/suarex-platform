@@ -9,6 +9,10 @@ export type CreateCategoryInput = {
   parentId?: string | null;
   imageUrl?: string | null;
   sortOrder?: number;
+  /** Franja horaria en la que se ofrece esta categoría, `"HH:MM"` locales de la sede. `null`
+   * en ambas = siempre. Las dos o ninguna: lo impone `categories_franja_completa`. */
+  visibleDesde?: string | null;
+  visibleHasta?: string | null;
 };
 
 export type UpdateCategoryInput = Partial<CreateCategoryInput>;
@@ -74,6 +78,10 @@ export type AdminCategory = {
   icon: string | null;
   destination: CategoryDestination;
   sortOrder: number;
+  /** Franja horaria de la categoría (`null` en ambas = siempre visible). El panel la necesita
+   * para poder editarla y para avisar de que esa rama no está en la carta ahora mismo. */
+  visibleDesde: string | null;
+  visibleHasta: string | null;
   products: AdminProduct[];
 };
 
@@ -111,6 +119,8 @@ function categoryInsertValues(input: CreateCategoryInput): Record<string, unknow
     parent_id: input.parentId ?? null,
     image_url: input.imageUrl ?? null,
     sort_order: input.sortOrder ?? 0,
+    visible_desde: input.visibleDesde ?? null,
+    visible_hasta: input.visibleHasta ?? null,
   };
 }
 
@@ -200,6 +210,10 @@ export async function updateCategory(
   if (patch.parentId !== undefined) values.parent_id = patch.parentId;
   if (patch.imageUrl !== undefined) values.image_url = patch.imageUrl;
   if (patch.sortOrder !== undefined) values.sort_order = patch.sortOrder;
+  // `null` aquí SÍ escribe (quita la franja); `undefined` es "no la toques". Las dos viajan
+  // juntas a propósito: media franja la rechaza `categories_franja_completa`.
+  if (patch.visibleDesde !== undefined) values.visible_desde = patch.visibleDesde;
+  if (patch.visibleHasta !== undefined) values.visible_hasta = patch.visibleHasta;
 
   const { error } = await tenantScoped("categories", tenantId).update(values).eq("id", categoryId);
   if (error) throw error;
@@ -378,6 +392,8 @@ type AdminCategoryRow = {
   icon: string | null;
   destination: CategoryDestination;
   sort_order: number;
+  visible_desde: string | null;
+  visible_hasta: string | null;
   products: AdminProductRow[];
 };
 
@@ -403,6 +419,7 @@ export async function listAdminCatalog(tenantId: string): Promise<AdminCatalog> 
     tenantScoped("categories", tenantId)
       .select(
         "id, slug, name_i18n, parent_id, icon, destination, sort_order, " +
+          "visible_desde, visible_hasta, " +
           "products(id, category_id, name_i18n, description_i18n, price, image_url, " +
           "allergen_ids, is_available, unavailable_until, sort_order, product_extras(id, name_i18n, price))",
       )
@@ -447,6 +464,8 @@ export async function listAdminCatalog(tenantId: string): Promise<AdminCatalog> 
       icon: category.icon ?? null,
       destination: category.destination,
       sortOrder: category.sort_order,
+      visibleDesde: category.visible_desde ?? null,
+      visibleHasta: category.visible_hasta ?? null,
       products,
     };
   });

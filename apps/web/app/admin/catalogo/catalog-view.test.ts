@@ -1,6 +1,6 @@
 import type { AdminCategory, AdminProduct } from "@suarex/db";
 import { describe, expect, it } from "vitest";
-import { buildCatalogView, MAX_ITEMS } from "./catalog-view";
+import { buildCatalogView, describirFranja, MAX_ITEMS } from "./catalog-view";
 
 function prod(id: string, categoryId: string, name: string, sortOrder = 0): AdminProduct {
   return {
@@ -33,6 +33,8 @@ function cat(
     icon: null,
     destination: "cocina",
     sortOrder,
+    visibleDesde: null,
+    visibleHasta: null,
     products,
   };
 }
@@ -203,5 +205,24 @@ describe("buildCatalogView", () => {
     const v = buildCatalogView({ ...base, categories: ciclo });
     expect(v.totalProducts).toBe(1);
     expect(v.items).toHaveLength(1);
+  });
+});
+
+describe("describirFranja", () => {
+  // La franja es la única propiedad del catálogo que hace desaparecer productos sin que nadie
+  // los haya tocado: el panel tiene que decirlo con palabras, no con dos campos de hora.
+  it("sin franja, se ofrece siempre", () => {
+    expect(describirFranja(null, null)).toBe("Se ofrece siempre.");
+  });
+
+  it("una franja normal se lee tal cual, sin los segundos de Postgres", () => {
+    expect(describirFranja("08:00:00", "12:00:00")).toBe("Se ofrece de 08:00 a 12:00.");
+  });
+
+  it("una franja que cruza medianoche lo dice", () => {
+    // "de 20:00 a 02:00" a secas se lee como un error de quien lo tecleó.
+    expect(describirFranja("20:00:00", "02:00:00")).toBe(
+      "Se ofrece de 20:00 a 02:00 del día siguiente.",
+    );
   });
 });

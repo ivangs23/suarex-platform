@@ -39,6 +39,11 @@ export type Category = {
   /** Ruta de la foto de la categoría dentro del bucket `catalog`, o `null`. */
   imagePath: string | null;
   sortOrder: number;
+  /** Franja horaria en la que esta categoría se ofrece, como `"HH:MM:SS"` locales de la sede.
+   * `null` en ambas = siempre visible. Si `visibleHasta` es menor que `visibleDesde`, la franja
+   * cruza medianoche (cena de 20:00 a 02:00). Ver `franjas.ts`. */
+  visibleDesde: string | null;
+  visibleHasta: string | null;
 };
 
 export type ProductExtra = {

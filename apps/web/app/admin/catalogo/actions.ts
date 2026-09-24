@@ -19,7 +19,7 @@ import {
   uploadProductImage,
 } from "@suarex/db";
 import { revalidatePath } from "next/cache";
-import { parseAllergenId, parseAvailability } from "@/lib/catalog-action-input";
+import { parseAllergenId, parseAvailability, parseFranja } from "@/lib/catalog-action-input";
 import { wouldCreateCycle } from "@/lib/category-move";
 import {
   InvalidFormFieldError,
@@ -181,10 +181,16 @@ export const updateCategoryAction = managerAction(async (session, formData: Form
   const categoryId = requiredString(formData, "category_id");
   const nameEs = optionalString(formData, "name_es");
 
+  // `undefined` = el formulario no traía los campos, así que la franja no se toca. Los otros
+  // formularios de la categoría (mover, borrar) no deben borrarla sin mencionarlo.
+  const franja = parseFranja(formData);
+
   await updateCategory(session.tenantId, categoryId, {
     slug: optionalString(formData, "slug"),
     nameI18n: nameEs !== undefined ? { es: nameEs } : undefined,
     destination: parseDestination(formData),
+    visibleDesde: franja?.visibleDesde,
+    visibleHasta: franja?.visibleHasta,
   });
   revalidatePath("/admin/catalogo");
 });
