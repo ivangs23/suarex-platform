@@ -222,3 +222,41 @@ describe("analiticaDeCarta", () => {
     }
   });
 });
+
+describe("conversión con totem", () => {
+  it("un pedido de totem NO cuenta como conversión del QR", async () => {
+    // El totem no escanea nada: entra por `/totem/<token>`, no por `/m/<token>`, así que nunca
+    // incrementa `menu_scans`. Si sus pedidos contaran en el numerador, el ratio se inflaría y
+    // podría pasar del 100 % -- un número que no significa nada y sobre el que alguien podría
+    // rehacer su carta. La venta del totem sigue en el informe de ventas, que no filtra canal.
+    const f = await createTenantFixture(`tot-${nonce()}`);
+    try {
+      const seed = await seedCatalog(f.tenantId, "tot");
+      const mesaId = await seedMesa(f.tenantId, seed.venueId);
+      await registrarEscaneo(mesaId);
+
+      const comun = {
+        tenant_id: f.tenantId,
+        venue_id: seed.venueId,
+        table_id: mesaId,
+        status: "paid",
+        paid_at: new Date().toISOString(),
+        total: 950,
+        subtotal: 864,
+        tax_amount: 86,
+      };
+      await admin.from("orders").insert([
+        { ...comun, order_number: 10, channel: "qr-mesa" },
+        { ...comun, order_number: 11, channel: "kiosko" },
+        { ...comun, order_number: 12, channel: "kiosko" },
+      ]);
+
+      const analitica = await analiticaDeCarta(f.tenantId, 30);
+      expect(analitica.escaneos).toBe(1);
+      expect(analitica.pedidos, "solo el del QR").toBe(1);
+      expect(analitica.pedidosPorEscaneo).toBe(1);
+    } finally {
+      await deleteTenantFixture(f);
+    }
+  });
+});

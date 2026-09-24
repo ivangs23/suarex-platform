@@ -107,7 +107,7 @@ export default async function InformesPage() {
               ? "—"
               : `${Math.round(analitica.pedidosPorEscaneo * 100)}%`}
           </span>
-          <span className={styles.etiqueta}>pedidos por escaneo</span>
+          <span className={styles.etiqueta}>pedidos por escaneo del QR</span>
         </p>
       </section>
 
@@ -116,7 +116,9 @@ export default async function InformesPage() {
           la que alguien podría cambiar su carta. */}
       <p className={styles.nota}>
         Cada comensal de una mesa suele escanear su propio QR, así que esto no es el porcentaje de
-        gente que pide. Sirve para comparar el local consigo mismo con el paso de las semanas.
+        gente que pide. Sirve para comparar el local consigo mismo con el paso de las semanas. Solo
+        cuenta los pedidos hechos desde el QR: los del totem no escanean nada, y mezclarlos daría un
+        número por encima del 100 %. Su venta sí está arriba, en el total cobrado.
       </p>
 
       <h2>Platos que no ha pedido nadie</h2>

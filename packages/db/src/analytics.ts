@@ -28,7 +28,11 @@ export type AnaliticaDeCarta = {
   /** Días que abarca el informe, contando hoy. */
   dias: number;
   escaneos: number;
-  /** Pedidos COBRADOS en el periodo. Un carrito abandonado no es una conversión. */
+  /**
+   * Pedidos COBRADOS del canal QR en el periodo. Un carrito abandonado no es una conversión, y
+   * un pedido de TOTEM tampoco: ese comensal no escaneó nada. La venta del totem está en el
+   * informe de ventas, que sí cuenta todos los canales.
+   */
   pedidos: number;
   /**
    * Pedidos por escaneo. `null` -- no `0` -- cuando no hubo escaneos: cero entre cero no es
@@ -71,7 +75,7 @@ export async function analiticaDeCarta(tenantId: string, dias = 30): Promise<Ana
   const [scans, pedidos, catalogo] = await Promise.all([
     tenantScoped("menu_scans", tenantId).select("escaneos").gte("dia", desdeDia),
     tenantScoped("orders", tenantId)
-      .select("id, order_items(product_id)")
+      .select("id, channel, order_items(product_id)")
       .in("status", [...ESTADOS_COBRADOS])
       .not("paid_at", "is", null)
       .gte("paid_at", desde.toISOString()),
@@ -86,8 +90,16 @@ export async function analiticaDeCarta(tenantId: string, dias = 30): Promise<Ana
   if (catalogo.error) throw catalogo.error;
 
   const escaneos = (scans.data ?? []).reduce((acc, fila) => acc + (fila.escaneos as number), 0);
-  const numPedidos = (pedidos.data ?? []).length;
 
+  // SOLO el canal del QR cuenta para la conversión. El totem entra por `/totem/<token>`, no por
+  // `/m/<token>`, así que nunca incrementa `menu_scans`: contar sus pedidos en el numerador
+  // inflaría el ratio y en un local que vende sobre todo por totem pasaría del 100 %, un número
+  // que no significa nada y sobre el que alguien podría rehacer su carta. Su venta sigue
+  // entera en el informe de ventas, que no filtra canal a propósito.
+  const numPedidos = (pedidos.data ?? []).filter((p) => p.channel !== "kiosko").length;
+
+  // Los platos que no vende nadie, en cambio, SÍ miran todos los canales: un plato que el totem
+  // vende no es un plato que sobra en la carta.
   const vendidos = new Set<string>();
   for (const pedido of pedidos.data ?? []) {
     const lineas = (pedido.order_items ?? []) as unknown as { product_id: string | null }[];
