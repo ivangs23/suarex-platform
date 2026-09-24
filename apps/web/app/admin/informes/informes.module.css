@@ -1,0 +1,75 @@
+.resumen {
+  display: flex;
+  gap: 2rem;
+  margin: 0 0 1.5rem;
+}
+
+.dato {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+}
+
+.numero {
+  font-size: 1.8rem;
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.etiqueta {
+  font-size: 0.8rem;
+  opacity: 0.65;
+}
+
+.franjas {
+  list-style: none;
+  margin: 0 0 1.5rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.franja {
+  display: grid;
+  grid-template-columns: 3.5rem 1fr auto;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.hora {
+  opacity: 0.65;
+  font-variant-numeric: tabular-nums;
+}
+
+.barra {
+  height: 0.75rem;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--color-primary, #a88445) 45%, transparent);
+  min-width: 2px;
+}
+
+.importe {
+  font-variant-numeric: tabular-nums;
+}
+
+.tabla {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  margin: 0 0 1.5rem;
+}
+
+.tabla th,
+.tabla td {
+  padding: 0.4rem 0.6rem;
+  text-align: left;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-fg, #1c1917) 12%, transparent);
+}
+
+.tabla td:not(:first-child),
+.tabla th:not(:first-child) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}

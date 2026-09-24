@@ -5,6 +5,7 @@ import styles from "./admin.module.css";
 
 const TABS = [
   { href: "/admin", label: "Inicio" },
+  { href: "/admin/informes", label: "Informes" },
   { href: "/admin/catalogo", label: "Catálogo" },
   { href: "/admin/mesas", label: "Mesas" },
   { href: "/admin/dispositivos", label: "Dispositivos" },
