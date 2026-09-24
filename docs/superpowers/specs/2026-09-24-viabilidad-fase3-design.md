@@ -55,13 +55,39 @@ depende la cocina — y los tests de Realtime ya son los más frágiles de la su
 
 Se hará cuando haya una queja real de latencia, no antes.
 
+### D4 — La franja va en la categoría, no en el plato
+
+Un hostelero piensa "la carta de mediodía", no "este plato de 13:00 a 16:00". Marcarlo plato a
+plato sería más flexible y no lo mantendría nadie: 184 productos con dos horas cada uno es un
+trabajo que se hace una vez y se abandona.
+
+Tres decisiones dentro de esa:
+
+- **La franja puede cruzar medianoche.** Una cena de 20:00 a 02:00 es lo normal, no el caso
+  raro. `visible_hasta < visible_desde` significa exactamente eso, y la comparación lo tiene en
+  cuenta; con la ingenua, la carta de cena desaparecería a medianoche en pleno servicio.
+- **La hora es la de la sede** (`venues.timezone`), no la del servidor. Mismo criterio que
+  `marcar_agotado_hoy`, y por la misma razón: un local canario vería la carta de cena una hora
+  antes de lo que cree.
+- **La franja se hereda hacia abajo.** Una subcategoría dentro de un padre fuera de hora se
+  oculta también. Si no, ocultar "Cenas" dejaría "Cenas › Postres" accesible y pedible desde su
+  propia URL, fuera de la carta a efectos de navegación pero vendible.
+
+No se puede BORRAR la franja a medias (las dos horas o ninguna) ni ponerlas iguales: media
+franja daría una carta que aparece y no desaparece, y "de 12:00 a 12:00" no tiene lectura
+obvia. Lo impiden dos CHECK y el parser de la action, que da un mensaje legible en vez del 500
+de Postgres.
+
+Pedir fuera de horario se rechaza en el servidor, no solo en la carta: un carrito abierto a las
+15:50 podía mandar la comanda de mediodía a las 16:05.
+
 ## Alcance
 
 1. **Informes del día** — ventas, por producto, por franja, export CSV.
 2. ~~Propina~~ — descartada el 2026-09-24.
 3. **Histórico de pedidos** en el panel — hoy `/admin` es un placeholder literal.
 4. **Restablecer el 86-ing** al día siguiente.
-5. **Franjas horarias de carta** — carta de mediodía y de noche.
+5. ~~Franjas horarias de carta~~ — hecho el 2026-09-24 (ver D4).
 6. **Analítica de producto** — conversión del QR y qué se pide.
 
 Orden: el informe primero (lo que se pregunta el día 2), luego el histórico de pedidos.
