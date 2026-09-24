@@ -24,6 +24,8 @@ export {
   listAdminCatalog,
   listAssignableAllergens,
   listCategoryParents,
+  marcarAgotadoHoy,
+  reponerProducto,
   setProductAvailability,
   updateCategory,
   updateProduct,

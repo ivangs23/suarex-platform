@@ -12,6 +12,7 @@ function prod(id: string, categoryId: string, name: string, sortOrder = 0): Admi
     imageUrl: null,
     allergenIds: [],
     isAvailable: true,
+    agotadoHoy: false,
     sortOrder,
     extras: [],
   };

@@ -10,7 +10,9 @@ import {
   deleteProduct,
   deleteTenantAllergen,
   listCategoryParents,
+  marcarAgotadoHoy,
   removeProductImage,
+  reponerProducto,
   setProductAvailability,
   updateCategory,
   updateProduct,
@@ -291,6 +293,24 @@ export const setProductAvailabilityAction = managerAction(async (session, formDa
   const isAvailable = parseAvailability(requiredString(formData, "is_available"));
 
   await setProductAvailability(session.tenantId, productId, isAvailable);
+  revalidatePath("/admin/catalogo");
+});
+
+/**
+ * AGOTADO HOY. Distinto de "fuera de carta" (`setProductAvailabilityAction`): esto vuelve
+ * solo a las 06:00 del día siguiente, en la zona del local. Fundirlos haría que el
+ * restablecimiento automático devolviera a la carta platos retirados a propósito.
+ */
+export const marcarAgotadoHoyAction = managerAction(async (session, formData: FormData) => {
+  const productId = requiredString(formData, "product_id");
+  await marcarAgotadoHoy(session.tenantId, productId);
+  revalidatePath("/admin/catalogo");
+});
+
+/** Llegó género antes de lo previsto: devuelve el producto a la carta sin esperar a mañana. */
+export const reponerProductoAction = managerAction(async (session, formData: FormData) => {
+  const productId = requiredString(formData, "product_id");
+  await reponerProducto(session.tenantId, productId);
   revalidatePath("/admin/catalogo");
 });
 

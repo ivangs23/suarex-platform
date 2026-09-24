@@ -21,6 +21,7 @@ type ProductRow = {
   name_i18n: Record<string, string>;
   price: string | number;
   is_available: boolean;
+  unavailable_until: string | null;
   categories: { destination: string } | null;
 };
 
@@ -85,7 +86,7 @@ export async function createPendingOrder(input: {
   // El filtro por tenant lo aplica tenantScoped: un producto de otro tenant
   // sencillamente no aparece, y la comprobación de abajo lo convierte en error.
   const { data: products, error } = await tenantScoped("products", input.tenantId)
-    .select("id, name_i18n, price, is_available, categories(destination)")
+    .select("id, name_i18n, price, is_available, unavailable_until, categories(destination)")
     .in("id", productIds);
   if (error) throw error;
 
@@ -129,7 +130,11 @@ export async function createPendingOrder(input: {
 
   for (const line of input.lines) {
     const product = byId.get(line.productId);
-    if (!product?.is_available) {
+    // Agotado HOY además de fuera de carta: sin esto, un carrito abierto antes de que se
+    // agotara el plato seguiría pudiendo enviar la comanda a cocina.
+    const agotadoHoy =
+      product?.unavailable_until != null && new Date(product.unavailable_until) > new Date();
+    if (!product?.is_available || agotadoHoy) {
       throw new OrderCartError(`Producto no disponible: ${line.productId}`);
     }
 

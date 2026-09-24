@@ -429,6 +429,19 @@ export function expirePendingOrdersRpc(timeoutMinutes: number) {
 }
 
 /**
+ * MISMA EXENCIÓN. `marcar_agotado_hoy` es SECURITY DEFINER y recibe el tenant como parámetro,
+ * así que el filtro va dentro de la función SQL -- que además calcula la hora de vuelta en la
+ * ZONA DEL LOCAL, algo que en JavaScript exigiría aritmética de husos horarios propensa a
+ * fallar. Acotado por firma a `marcarAgotadoHoy` (`src/admin-catalog.ts`).
+ */
+export function marcarAgotadoHoyRpc(tenantId: string, productId: string) {
+  return serviceClient().rpc("marcar_agotado_hoy", {
+    p_tenant_id: tenantId,
+    p_product_id: productId,
+  });
+}
+
+/**
  * MISMA EXENCIÓN. `record_order_refund` es SECURITY DEFINER y localiza el pedido por
  * `stripe_payment_intent_id` (índice único global) porque el webhook de Stripe no conoce el
  * tenant -- Stripe no sabe nada de tenants. El bloqueo de fila y la decisión de si el

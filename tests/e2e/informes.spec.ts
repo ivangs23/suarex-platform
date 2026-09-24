@@ -57,7 +57,7 @@ test("el histórico de pedidos es alcanzable y está tras el guard", async ({ pa
 
   const password = process.env.OWNER_SEED_PASSWORD;
   test.skip(!password, "corre `pnpm seed:staff`");
-  await login(page, "owner@garum.local", password);
+  await login(page, "owner@garum.local", password as string);
 
   await page.goto(`${BASE}/admin/pedidos`);
   // El seed no trae pedidos: la pantalla lo dice en vez de romperse con una lista vacía.

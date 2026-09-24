@@ -41,6 +41,11 @@ export async function getProducts(tenantId: string): Promise<Product[]> {
       "id, category_id, name_i18n, description_i18n, price, image_url, allergen_ids, is_available, sort_order, product_extras(id, name_i18n, price)",
     )
     .eq("is_available", true)
+    // Agotado HOY: oculto hasta su hora de vuelta. Se compara contra el reloj del cliente y
+    // no con `now()` de Postgres porque PostgREST no permite comparar una columna con una
+    // función en el filtro; la diferencia de unos milisegundos es irrelevante para algo que
+    // se restablece a las seis de la mañana.
+    .or(`unavailable_until.is.null,unavailable_until.lt.${new Date().toISOString()}`)
     .order("sort_order", { ascending: true });
 
   if (error) throw error;

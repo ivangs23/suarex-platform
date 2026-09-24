@@ -1,4 +1,4 @@
-import { globalAllergensTable, tenantScoped } from "./client.js";
+import { globalAllergensTable, marcarAgotadoHoyRpc, tenantScoped } from "./client.js";
 
 export type CategoryDestination = "cocina" | "barra";
 
@@ -48,6 +48,8 @@ export type AdminExtra = {
 };
 
 export type AdminProduct = {
+  /** Agotado HOY: vuelve solo a las 06:00 del día siguiente. Distinto de `isAvailable`. */
+  agotadoHoy: boolean;
   id: string;
   categoryId: string;
   nameI18n: Record<string, string>;
@@ -214,6 +216,29 @@ export async function deleteProduct(tenantId: string, productId: string): Promis
   if (error) throw error;
 }
 
+/**
+ * AGOTADO HOY. Oculta el producto hasta las 06:00 del día siguiente en la zona del local, y
+ * devuelve esa hora para poder decírsela al dueño.
+ *
+ * Distinto de `setProductAvailability(false)`, que es "fuera de carta" indefinidamente: si
+ * fueran lo mismo, el restablecimiento automático devolvería a la carta platos que el dueño
+ * había retirado a propósito.
+ */
+export async function marcarAgotadoHoy(tenantId: string, productId: string): Promise<string> {
+  const { data, error } = await marcarAgotadoHoyRpc(tenantId, productId);
+  if (error) throw error;
+  return data as string;
+}
+
+/** Devuelve a la carta un producto agotado, sin esperar a mañana: llegó género antes de lo
+ *  previsto. No toca `is_available`. */
+export async function reponerProducto(tenantId: string, productId: string): Promise<void> {
+  const { error } = await tenantScoped("products", tenantId)
+    .update({ unavailable_until: null })
+    .eq("id", productId);
+  if (error) throw error;
+}
+
 export async function setProductAvailability(
   tenantId: string,
   productId: string,
@@ -288,6 +313,7 @@ type AdminProductRow = {
   image_url: string | null;
   allergen_ids: number[];
   is_available: boolean;
+  unavailable_until: string | null;
   sort_order: number;
   product_extras: AdminExtraRow[];
 };
@@ -326,7 +352,7 @@ export async function listAdminCatalog(tenantId: string): Promise<AdminCatalog> 
       .select(
         "id, slug, name_i18n, parent_id, icon, destination, sort_order, " +
           "products(id, category_id, name_i18n, description_i18n, price, image_url, " +
-          "allergen_ids, is_available, sort_order, product_extras(id, name_i18n, price))",
+          "allergen_ids, is_available, unavailable_until, sort_order, product_extras(id, name_i18n, price))",
       )
       .order("sort_order", { ascending: true }),
     tenantScoped("allergens", tenantId).select("id, name_i18n, icon"),
@@ -349,6 +375,10 @@ export async function listAdminCatalog(tenantId: string): Promise<AdminCatalog> 
         imageUrl: product.image_url,
         allergenIds: product.allergen_ids,
         isAvailable: product.is_available,
+        // Agotado HOY solo mientras la hora de vuelta siga en el futuro: pasada esa hora el
+        // producto ya está en la carta otra vez aunque la columna conserve el valor.
+        agotadoHoy:
+          product.unavailable_until != null && new Date(product.unavailable_until) > new Date(),
         sortOrder: product.sort_order,
         extras: product.product_extras.map((extra) => ({
           id: extra.id,

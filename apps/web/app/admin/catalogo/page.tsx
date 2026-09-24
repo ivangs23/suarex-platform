@@ -7,6 +7,8 @@ import {
   deleteExtraAction,
   deleteProductAction,
   deleteTenantAllergenAction,
+  marcarAgotadoHoyAction,
+  reponerProductoAction,
   setProductAvailabilityAction,
 } from "./actions";
 import { CatalogToolbar } from "./CatalogToolbar";
@@ -228,6 +230,10 @@ export default async function AdminCatalogoPage({
                       </ul>
                     ) : null}
 
+                    {/* DOS conceptos distintos, dos botones. "Ocultar" saca el plato de la
+                        carta indefinidamente (decisión del dueño); "Se acabó hoy" lo saca
+                        hasta mañana a las 06:00 y vuelve solo. Fundirlos haría que el
+                        restablecimiento automático devolviera platos retirados a propósito. */}
                     <form action={setProductAvailabilityAction}>
                       <input type="hidden" name="product_id" value={product.id} />
                       <input
@@ -237,6 +243,21 @@ export default async function AdminCatalogoPage({
                       />
                       <button type="submit">{product.isAvailable ? "Ocultar" : "Mostrar"}</button>
                     </form>
+                    {product.agotadoHoy ? (
+                      <form action={reponerProductoAction}>
+                        <input type="hidden" name="product_id" value={product.id} />
+                        <button type="submit" data-testid="reponer-producto">
+                          Reponer ahora
+                        </button>
+                      </form>
+                    ) : (
+                      <form action={marcarAgotadoHoyAction}>
+                        <input type="hidden" name="product_id" value={product.id} />
+                        <button type="submit" data-testid="agotado-hoy">
+                          Se acabó hoy
+                        </button>
+                      </form>
+                    )}
                     <ConfirmDeleteForm
                       action={deleteProductAction}
                       hiddenName="product_id"
