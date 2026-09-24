@@ -81,16 +81,42 @@ de Postgres.
 Pedir fuera de horario se rechaza en el servidor, no solo en la carta: un carrito abierto a las
 15:50 podía mandar la comanda de mediodía a las 16:05.
 
+### D5 — La analítica mide con contadores, no con un registro de eventos
+
+Medir qué fichas de producto se abren exigiría una baliza desde el navegador del comensal y una
+fila por visita. Eso es un tratamiento de datos personales NUEVO: retención, mención en la
+política de privacidad —que hoy declara una cookie técnica y ninguna analítica— y una tabla que
+crece sin techo.
+
+Las dos preguntas que de verdad se hacen se responden sin nada de eso:
+
+- **"¿Cuánta gente escanea y no pide?"** — un entero por sede y día. No identifica a nadie, no
+  crece (365 filas por sede y año) y deja la política de privacidad intacta.
+- **"¿Qué platos no pide nadie?"** — no necesita medir NADA: sale de cruzar los pedidos que ya
+  existen con el catálogo.
+
+El contador se incrementa por RPC, no por upsert: dos comensales escaneando a la vez se
+pisarían. Y la fecha es la local de la sede, por el mismo motivo que las franjas.
+
+La pantalla dice lo que el número **no** significa. Una mesa de cuatro escanea cuatro veces y
+hace un pedido: leer un 25 % como "solo pide uno de cada cuatro comensales" es falso y es una
+conclusión sobre la que alguien rehace su carta. Sin escaneos se pinta un guión, no un 0 %.
+
+Queda fuera, y se apunta por si algún día se pide: el embudo dentro de la carta (qué categorías
+se abren, dónde se abandona). Necesita la baliza, y con ella la conversación de privacidad.
+
 ## Alcance
 
-1. **Informes del día** — ventas, por producto, por franja, export CSV.
+1. ~~Informes del día~~ — hecho el 2026-09-24 (ventas, por producto, por franja, CSV).
 2. ~~Propina~~ — descartada el 2026-09-24.
-3. **Histórico de pedidos** en el panel — hoy `/admin` es un placeholder literal.
-4. **Restablecer el 86-ing** al día siguiente.
+3. ~~Histórico de pedidos~~ — hecho el 2026-09-24.
+4. ~~Restablecer el 86-ing~~ — hecho el 2026-09-24 ("se acabó hoy").
 5. ~~Franjas horarias de carta~~ — hecho el 2026-09-24 (ver D4).
-6. **Analítica de producto** — conversión del QR y qué se pide.
+6. ~~Analítica de producto~~ — hecho el 2026-09-24 (ver D5).
 
 Orden: el informe primero (lo que se pregunta el día 2), luego el histórico de pedidos.
+
+**Fase 3 cerrada el 2026-09-24.** Los seis puntos, resueltos o descartados con su razón.
 
 ## Restricciones globales
 
