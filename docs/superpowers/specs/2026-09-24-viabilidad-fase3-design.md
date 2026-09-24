@@ -34,9 +34,10 @@ rehacerlo.
 El informe cubre la necesidad diaria real —"¿cuánto he vendido hoy y de qué?"— sin inventar un
 proceso.
 
-### D2 — Propina sobre tarjeta. NO pago en barra
+### D2 — Ni propina ni pago en barra
 
-Se añade propina al pago con tarjeta y **no se toca el flujo de pago**.
+**La propina se descartó (Iván, 2026-09-24).** Se conserva escrito el razonamiento del pago en
+barra porque sigue siendo válido si algún día se retoma.
 
 El pago en barra cambia el ciclo de vida del pedido: hoy nada llega a cocina sin estar pagado
 (`unprintedPaidOrders` selecciona `status = 'paid'`), así que permitir "pido ahora, pago
@@ -57,13 +58,13 @@ Se hará cuando haya una queja real de latencia, no antes.
 ## Alcance
 
 1. **Informes del día** — ventas, por producto, por franja, export CSV.
-2. **Propina** — selector antes de pagar, cobrada con el pedido, desglosada en el recibo.
+2. ~~Propina~~ — descartada el 2026-09-24.
 3. **Histórico de pedidos** en el panel — hoy `/admin` es un placeholder literal.
 4. **Restablecer el 86-ing** al día siguiente.
 5. **Franjas horarias de carta** — carta de mediodía y de noche.
 6. **Analítica de producto** — conversión del QR y qué se pide.
 
-En ese orden: 1 y 2 son lo que el hostelero pide en la primera semana.
+Orden: el informe primero (lo que se pregunta el día 2), luego el histórico de pedidos.
 
 ## Restricciones globales
 

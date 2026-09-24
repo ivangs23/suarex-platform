@@ -49,3 +49,18 @@ test("el informe aparece en la navegación del panel", async ({ page }) => {
   await page.goto(`${BASE}/admin/catalogo`);
   await expect(page.getByRole("link", { name: "Informes" })).toBeVisible();
 });
+
+test("el histórico de pedidos es alcanzable y está tras el guard", async ({ page }) => {
+  const sinSesion = await page.goto(`${BASE}/admin/pedidos`);
+  expect(sinSesion?.status()).toBeLessThan(400);
+  await expect(page).toHaveURL(/\/staff\/login/);
+
+  const password = process.env.OWNER_SEED_PASSWORD;
+  test.skip(!password, "corre `pnpm seed:staff`");
+  await login(page, "owner@garum.local", password);
+
+  await page.goto(`${BASE}/admin/pedidos`);
+  // El seed no trae pedidos: la pantalla lo dice en vez de romperse con una lista vacía.
+  await expect(page.getByTestId("pedidos-vacio")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Pedidos" })).toBeVisible();
+});

@@ -122,3 +122,85 @@ export function ventasACsv(ventas: VentasDelDia): string {
   ];
   return lineas.join("\n");
 }
+
+export type LineaHistorial = { nombre: string; cantidad: number; importeCents: number };
+
+export type PedidoHistorial = {
+  id: string;
+  orderNumber: number;
+  tableLabel: string | null;
+  status: string;
+  createdAt: string;
+  paidAt: string | null;
+  totalCents: number;
+  /** Devuelto, en céntimos. 0 si no hubo reembolso. Sin esto, un total de 38 € en la lista
+   *  engañaría sobre un pedido que se devolvió entero. */
+  refundedCents: number;
+  lineas: LineaHistorial[];
+};
+
+type FilaHistorial = {
+  id: string;
+  order_number: number;
+  status: string;
+  created_at: string;
+  paid_at: string | null;
+  total: number;
+  refunded_cents: number | null;
+  tables: { label?: string } | null;
+  order_items: { name_snapshot: Record<string, string>; quantity: number; line_total: number }[];
+};
+
+/** Tope por defecto. Un restaurante con un año de servicio tiene decenas de miles de pedidos:
+ *  traerlos todos tumbaría la página y no le sirve a nadie. */
+const LIMITE_POR_DEFECTO = 50;
+
+/**
+ * HISTÓRICO DE PEDIDOS.
+ *
+ * El tablero de `/staff` solo enseña lo ACTIVO —`listActiveOrders` filtra servidos, cancelados
+ * y reembolsados— así que en cuanto una comanda se sirve desaparece y no hay dónde volver a
+ * verla. Esto contesta "¿qué pidió la mesa 4 anoche?" y "¿este cobro de 38 € de qué era?".
+ *
+ * A diferencia del informe de ventas, aquí NO se filtra por estado: un pedido cancelado o
+ * reembolsado es justo el que se viene a buscar.
+ *
+ * Se ordena por `created_at` y no por `paid_at`: un pedido sin pagar no tiene `paid_at`, y
+ * ordenar por una columna nula lo mandaría al final —o al principio— de forma arbitraria.
+ */
+export async function listOrderHistory(
+  tenantId: string,
+  opciones: { limite?: number; desde?: Date; hasta?: Date } = {},
+): Promise<PedidoHistorial[]> {
+  let consulta = tenantScoped("orders", tenantId)
+    .select(
+      "id, order_number, status, created_at, paid_at, total, refunded_cents, tables(label), " +
+        "order_items(name_snapshot, quantity, line_total)",
+    )
+    .order("created_at", { ascending: false })
+    .limit(Math.min(opciones.limite ?? LIMITE_POR_DEFECTO, 500));
+
+  if (opciones.desde) consulta = consulta.gte("created_at", opciones.desde.toISOString());
+  if (opciones.hasta) consulta = consulta.lte("created_at", opciones.hasta.toISOString());
+
+  const { data, error } = await consulta;
+  if (error) throw error;
+
+  return ((data ?? []) as unknown as FilaHistorial[]).map((fila) => ({
+    id: fila.id,
+    orderNumber: fila.order_number,
+    tableLabel: fila.tables?.label ?? null,
+    status: fila.status,
+    createdAt: fila.created_at,
+    paidAt: fila.paid_at,
+    totalCents: eurosToCents(Number(fila.total)),
+    refundedCents: fila.refunded_cents ?? 0,
+    // Del snapshot congelado, no del catálogo de hoy: se consulta para saber qué se pidió
+    // entonces, aunque el plato se haya renombrado o borrado después.
+    lineas: (fila.order_items ?? []).map((linea) => ({
+      nombre: linea.name_snapshot?.es ?? Object.values(linea.name_snapshot ?? {})[0] ?? "—",
+      cantidad: linea.quantity,
+      importeCents: eurosToCents(Number(linea.line_total)),
+    })),
+  }));
+}
