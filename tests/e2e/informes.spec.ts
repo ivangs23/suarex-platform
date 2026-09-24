@@ -64,3 +64,35 @@ test("el histórico de pedidos es alcanzable y está tras el guard", async ({ pa
   await expect(page.getByTestId("pedidos-vacio")).toBeVisible();
   await expect(page.getByRole("link", { name: "Pedidos" })).toBeVisible();
 });
+
+test("escanear el QR se cuenta y sube en el informe", async ({ page }) => {
+  // La cadena entera: la ruta del QR incrementa el contador, la RPC lo acumula y el panel lo
+  // lee. Ninguna de las tres piezas por separado demuestra que el número llega a la pantalla.
+  const password = process.env.OWNER_SEED_PASSWORD;
+  test.skip(!password, "corre `pnpm seed:staff`");
+  await login(page, "owner@garum.local", password as string);
+
+  await page.goto(`${BASE}/admin/informes`);
+  const contador = page.getByTestId("analitica-escaneos");
+  // Se compara contra el valor ANTERIOR, no contra un número fijo: otros specs de esta suite
+  // también escanean el QR de garum, y la suite corre en serie sobre una sola base.
+  const antes = Number((await contador.innerText()).trim());
+
+  await page.goto(`${BASE}/m/11111111-1111-1111-1111-111111111111`);
+  await expect(page).toHaveURL(`${BASE}/1`);
+
+  await page.goto(`${BASE}/admin/informes`);
+  await expect(contador).toHaveText(String(antes + 1), { timeout: 15_000 });
+});
+
+test("la conversión avisa de lo que NO significa", async ({ page }) => {
+  // Una mesa de cuatro escanea cuatro veces y hace un pedido. Sin el aviso, un 25 % se lee
+  // como "solo pide uno de cada cuatro comensales" y alguien rehace su carta por nada.
+  const password = process.env.OWNER_SEED_PASSWORD;
+  test.skip(!password, "corre `pnpm seed:staff`");
+  await login(page, "owner@garum.local", password as string);
+
+  await page.goto(`${BASE}/admin/informes`);
+  await expect(page.getByTestId("analitica-conversion")).toBeVisible();
+  await expect(page.getByText(/no es el porcentaje de gente que pide/i)).toBeVisible();
+});

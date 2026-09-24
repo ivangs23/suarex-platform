@@ -46,6 +46,10 @@ export type TenantScopedTable =
   | "order_items"
   | "order_item_extras"
   | "printers"
+  // Contador agregado de escaneos del QR (`20260924000003_analitica_carta.sql`). Lleva
+  // `tenant_id` y se LEE como cualquier otra tabla del tenant; lo que no pasa por aquí es la
+  // escritura, que va por `registrarEscaneoRpc` para que dos escaneos simultáneos no se pisen.
+  | "menu_scans"
   // Task 3 (D2, generación del código de emparejamiento, `src/admin-devices.ts`):
   // `devices` tiene `tenant_id` igual que el resto de esta unión y encaja sin más.
   // NO sustituye a `devicesTableForPairing` (quinta exención más abajo): esa sigue
@@ -291,6 +295,21 @@ export function nextOrderNumberRpc(tenantId: string, venueId: string) {
     p_tenant_id: tenantId,
     p_venue_id: venueId,
   });
+}
+
+/**
+ * DECIMONOVENA EXENCIÓN DELIBERADA, mismo razonamiento que `nextOrderNumberRpc`:
+ * `registrar_escaneo` es SECURITY DEFINER y deduce el tenant y la sede de la propia mesa, que
+ * es lo único que el llamante conoce en ese punto -- la ruta del QR resuelve el token ANTES de
+ * saber de quién es la mesa.
+ *
+ * Es una RPC y no un upsert porque el incremento tiene que ser atómico: dos comensales
+ * escaneando en el mismo segundo se pisarían y el contador se quedaría corto.
+ *
+ * Acotado por firma a esa única RPC.
+ */
+export function registrarEscaneoRpc(tableId: string) {
+  return serviceClient().rpc("registrar_escaneo", { p_table_id: tableId });
 }
 
 /**

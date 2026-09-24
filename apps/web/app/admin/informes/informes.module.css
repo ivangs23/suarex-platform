@@ -73,3 +73,12 @@
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
+
+/* Advertencia de lectura bajo un número. Menos peso visual que el dato: matiza, no compite. */
+.nota {
+  margin: -0.5rem 0 1.5rem;
+  max-width: 48ch;
+  color: #6b6b6b;
+  font-size: 0.875rem;
+  line-height: 1.4;
+}

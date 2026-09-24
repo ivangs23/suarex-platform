@@ -88,6 +88,19 @@ const WRITE_FIXTURES: Record<string, WriteFixture> = {
     updateColumn: "sort_order",
     updateValue: 999,
   },
+  menu_scans: {
+    // Contador agregado de escaneos del QR. La policy es solo de LECTURA, así que un INSERT
+    // de `authenticated` lo rechaza RLS igual que en las tablas con policy FOR ALL.
+    insertPayload: ({ tenantB, seedB }) => ({
+      tenant_id: tenantB.tenantId,
+      venue_id: seedB.venueId,
+      dia: "2026-02-02",
+      escaneos: 1,
+    }),
+    expectedInsertRejection: RLS_REJECTION,
+    updateColumn: "escaneos",
+    updateValue: 999,
+  },
   venues: {
     insertPayload: ({ tenantB }) => ({
       tenant_id: tenantB.tenantId,

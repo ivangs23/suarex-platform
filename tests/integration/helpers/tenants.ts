@@ -292,6 +292,15 @@ export async function seedCatalog(tenantId: string, label: string): Promise<Seed
     .insert({ tenant_id: tenantId, venue_id: venue.id, date: "2026-01-01", last_number: 1 });
   if (counterError) throw counterError;
 
+  // menu_scans (contador de escaneos del QR, 20260924000003_analitica_carta.sql) es tenant-scoped
+  // y entra en el descubrimiento dinámico. Se siembra con una fecha vieja a propósito: los
+  // informes miran una ventana móvil de 30 días, así que esta fila da el control positivo de
+  // lectura sin contaminar los conteos que comprueba `analitica-carta.test.ts`.
+  const { error: scanError } = await admin
+    .from("menu_scans")
+    .insert({ tenant_id: tenantId, venue_id: venue.id, dia: "2026-01-01", escaneos: 1 });
+  if (scanError) throw scanError;
+
   // orders/order_items/order_item_extras también son tenant-scoped y quedan cubiertas por
   // el descubrimiento dinámico de listTenantScopedTables(): sin una fila propia sembrada
   // aquí, el control positivo de "SELECT ve las propias filas" y los de UPDATE/DELETE

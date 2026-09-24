@@ -1,4 +1,4 @@
-import { ventasDelDia } from "@suarex/db";
+import { analiticaDeCarta, ventasDelDia } from "@suarex/db";
 import { formatCents } from "@suarex/domain";
 import { requireManager } from "@/lib/require-manager";
 import { descargarCsvAction } from "./actions";
@@ -15,7 +15,10 @@ import styles from "./informes.module.css";
  */
 export default async function InformesPage() {
   const session = await requireManager();
-  const ventas = await ventasDelDia(session.tenantId);
+  const [ventas, analitica] = await Promise.all([
+    ventasDelDia(session.tenantId),
+    analiticaDeCarta(session.tenantId),
+  ]);
 
   const maximoPorHora = Math.max(1, ...ventas.porHora.map((h) => h.importeCents));
 
@@ -83,6 +86,61 @@ export default async function InformesPage() {
 
           <DescargarCsv accion={descargarCsvAction} />
         </>
+      )}
+
+      {/* ANALÍTICA DE CARTA. Treinta días y no hoy: la conversión de una tarde no dice nada, y
+          un plato sin vender en una tarde es lo normal. */}
+      <h2>Últimos {analitica.dias} días</h2>
+
+      <section className={styles.resumen} data-testid="analitica-resumen">
+        <p className={styles.dato}>
+          <span className={styles.numero} data-testid="analitica-escaneos">
+            {analitica.escaneos}
+          </span>
+          <span className={styles.etiqueta}>
+            {analitica.escaneos === 1 ? "escaneo del QR" : "escaneos del QR"}
+          </span>
+        </p>
+        <p className={styles.dato}>
+          <span className={styles.numero} data-testid="analitica-conversion">
+            {analitica.pedidosPorEscaneo === null
+              ? "—"
+              : `${Math.round(analitica.pedidosPorEscaneo * 100)}%`}
+          </span>
+          <span className={styles.etiqueta}>pedidos por escaneo</span>
+        </p>
+      </section>
+
+      {/* Se dice qué NO es el número. Una mesa de cuatro escanea cuatro veces y hace un pedido,
+          así que leerlo como "solo pide el 25 % de la gente" sería una conclusión falsa sobre
+          la que alguien podría cambiar su carta. */}
+      <p className={styles.nota}>
+        Cada comensal de una mesa suele escanear su propio QR, así que esto no es el porcentaje de
+        gente que pide. Sirve para comparar el local consigo mismo con el paso de las semanas.
+      </p>
+
+      <h2>Platos que no ha pedido nadie</h2>
+      {analitica.sinVender.length === 0 ? (
+        <p data-testid="analitica-sin-vender-vacio">
+          Todos los platos de la carta se han pedido al menos una vez.
+        </p>
+      ) : (
+        <table className={styles.tabla} data-testid="analitica-sin-vender">
+          <thead>
+            <tr>
+              <th>Plato</th>
+              <th>Categoría</th>
+            </tr>
+          </thead>
+          <tbody>
+            {analitica.sinVender.map((p) => (
+              <tr key={p.id}>
+                <td>{p.nombre}</td>
+                <td>{p.categoria}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       )}
     </main>
   );

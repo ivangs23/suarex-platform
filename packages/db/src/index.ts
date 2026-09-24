@@ -62,6 +62,8 @@ export type { CreateStaffInput, CreateStaffResult, StaffMember } from "./admin-s
 export { createStaff, listStaff } from "./admin-staff.js";
 export type { CreateTableInput, UpdateTableInput } from "./admin-tables.js";
 export { createTable, deleteTable, listTables, updateTable } from "./admin-tables.js";
+export type { AnaliticaDeCarta, ProductoSinVender } from "./analytics.js";
+export { analiticaDeCarta, registrarEscaneo } from "./analytics.js";
 export type { ApplyOutcome, DecisionServicio } from "./billing.js";
 export {
   applySubscriptionState,
