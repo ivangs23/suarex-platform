@@ -3,6 +3,7 @@ import {
   listDevices,
   listPrinters,
   listVenues,
+  usbPrintersNotReported,
   usbPrintersWithoutDevice,
 } from "@suarex/db";
 import { requireManager } from "@/lib/require-manager";
@@ -25,6 +26,11 @@ import { PrinterForm } from "./PrinterForm";
  * `usbPrintersWithoutDevice` (fase C2b-a Task 5) señala las USB habilitadas sin
  * `device_id`: ningún agente las reclama, así que sus tickets se pierden en silencio --
  * mismo espíritu que el aviso de `destinationsMissingPrinter`.
+ *
+ * `usbPrintersNotReported` cierra el otro lado del mismo problema: la USB SÍ tiene
+ * dispositivo, pero su nombre de Windows no está entre los que ese PC reporta ver. El
+ * desplegable del formulario reduce ese typo, no lo elimina -- está vacío hasta que el agente
+ * late por primera vez, y en ese hueco se teclea a mano.
  */
 export default async function AdminImpresorasPage() {
   const session = await requireManager();
@@ -35,7 +41,10 @@ export default async function AdminImpresorasPage() {
     listVenues(session.tenantId),
   ]);
   const venueGaps = await destinationsMissingPrinter(session.tenantId);
-  const usbSinDispositivo = await usbPrintersWithoutDevice(session.tenantId);
+  const [usbSinDispositivo, usbNoReportadas] = await Promise.all([
+    usbPrintersWithoutDevice(session.tenantId),
+    usbPrintersNotReported(session.tenantId),
+  ]);
 
   const defaultVenueId = venues.find((venue) => venue.isDefault)?.id ?? venues[0]?.id;
   const deviceOptions = devices.map((device) => ({
@@ -67,6 +76,22 @@ export default async function AdminImpresorasPage() {
           {usbSinDispositivo.map((p) => p.name).join(", ")}. No imprimen hasta que las ates a un
           dispositivo.
         </p>
+      ) : null}
+
+      {/* El typo que el desplegable no puede evitar. Sigue habiendo texto libre a propósito
+          -- el desplegable está vacío hasta que el agente late por primera vez -- y un nombre
+          mal tecleado ahí no falla de forma visible: el agente pide a Windows una impresora
+          que no existe y el ticket se pierde. Se dice QUÉ PC no la ve, porque sin eso el
+          aviso no es accionable. */}
+      {usbNoReportadas.length > 0 ? (
+        <div role="alert" data-testid="usb-not-reported-warning">
+          {usbNoReportadas.map((p) => (
+            <p key={p.id}>
+              ⚠ {p.name}: el PC "{p.deviceName}" no ve ninguna impresora llamada "{p.printerName}
+              ". Revisa el nombre exacto en Windows; hasta entonces sus tickets no se imprimen.
+            </p>
+          ))}
+        </div>
       ) : null}
 
       {printers.length === 0 ? <p>Todavía no hay impresoras.</p> : null}

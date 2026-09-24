@@ -49,3 +49,64 @@ export async function deletePrinterForTest(printerId: string): Promise<void> {
   const { error } = await admin.from("printers").delete().eq("id", printerId);
   if (error) throw error;
 }
+
+/**
+ * Siembra un dispositivo que YA ha reportado su lista de impresoras, más una impresora USB
+ * atada a él con un nombre que NO está en esa lista -- el typo que el aviso tiene que cazar.
+ *
+ * Va por service key y no por la UI porque el panel no tiene (ni debe tener) forma de fingir
+ * que un agente ha reportado: eso lo escribe la RPC `device_heartbeat` desde el PC del
+ * cliente, y montar un agente falso para un aviso de pantalla sería más máquina que prueba.
+ */
+export async function seedPrinterNotReportedForTest(reportadas: string[], configurada: string) {
+  // Acotado a garum por su tenant: hay más de una sede con el slug "principal" en la base
+  // local (garum y manuela), así que filtrar solo por slug devolvería dos filas.
+  const { data: tenant, error: tenantError } = await admin
+    .from("tenants")
+    .select("id")
+    .eq("slug", "garum")
+    .single();
+  if (tenantError) throw tenantError;
+
+  const { data: venue, error: venueError } = await admin
+    .from("venues")
+    .select("id, tenant_id")
+    .eq("tenant_id", tenant.id)
+    .eq("is_default", true)
+    .single();
+  if (venueError) throw venueError;
+
+  const { data: device, error: deviceError } = await admin
+    .from("devices")
+    .insert({
+      tenant_id: venue.tenant_id,
+      venue_id: venue.id,
+      name: `PC E2E ${Date.now()}`,
+      reported_printers: reportadas,
+    })
+    .select("id, name")
+    .single();
+  if (deviceError) throw deviceError;
+
+  const { data: printer, error: printerError } = await admin
+    .from("printers")
+    .insert({
+      tenant_id: venue.tenant_id,
+      venue_id: venue.id,
+      device_id: device.id,
+      name: `Impresora E2E ${Date.now()}`,
+      connection: { type: "usb", printerName: configurada },
+      destination: "cocina",
+      enabled: true,
+    })
+    .select("id, name")
+    .single();
+  if (printerError) throw printerError;
+
+  return {
+    deviceId: device.id as string,
+    deviceName: device.name as string,
+    printerId: printer.id as string,
+    printerName: printer.name as string,
+  };
+}

@@ -80,8 +80,6 @@ La propina se descartó (D2): no compensa el riesgo fiscal para lo que aporta.
 
 Priorizado por valor/coste. Detalle en el hilo; resumen:
 
-- **7. Desplegable de impresoras** en el panel admin en vez de teclear el nombre a mano (un typo =
-  la USB no casa y no imprime en silencio). El desktop ya las lista (`getPrintersAsync`).
 - **8. Realtime** además del polling de 4 s (menos latencia y carga; polling como respaldo).
 - **11. Guardar refresh token** en vez de la contraseña (menor superficie si se rompe DPAPI).
 - **12. Estado de impresoras de red** en el desktop (probar conexión, no solo test USB).

@@ -111,7 +111,11 @@ export type {
   PrintableOrder,
 } from "./print-jobs.js";
 export { reservePrinted, selectUnprintedOrders, unprintedPaidOrders } from "./print-jobs.js";
-export { destinationsMissingPrinter, usbPrintersWithoutDevice } from "./printer-coverage.js";
+export {
+  destinationsMissingPrinter,
+  usbPrintersNotReported,
+  usbPrintersWithoutDevice,
+} from "./printer-coverage.js";
 export { checkOrderRateLimit, checkRateLimit } from "./rate-limit.js";
 export type {
   LineaHistorial,
