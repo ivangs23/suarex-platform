@@ -123,3 +123,32 @@ test("una USB cuyo nombre SÍ reporta su PC no avisa de nada", async ({ page }) 
   await expect(page.locator("h1")).toHaveText("Gestión de impresoras");
   await expect(page.getByTestId("usb-not-reported-warning")).toHaveCount(0);
 });
+
+test("un totem sin impresora de recibo sale avisado en el panel", async ({ page }) => {
+  // El aviso más grave de esta pantalla: no es un ticket de cocina que no sale, es alguien que
+  // paga con tarjeta en el totem y se va sin justificante. Ese comensal no tiene recibo digital
+  // -- tras pagar solo ve el código de recogida en pantalla -- así que el papel es el único que
+  // puede llevarse, y sin impresora de recibo el pedido se marca impreso igualmente.
+  createdDeviceId = await createDeviceWithPrintersForTest(
+    `Totem E2E ${Date.now()}`,
+    [],
+    ["kiosko"],
+  );
+
+  await login(page, "owner@garum.local", OWNER_PASSWORD as string);
+  await page.goto("http://garum.localhost:3000/admin/impresoras");
+
+  const aviso = page.getByTestId("totem-sin-recibo-warning");
+  await expect(aviso).toBeVisible({ timeout: 15_000 });
+  await expect(aviso, "hay que decir QUÉ local").toContainText("Principal");
+});
+
+test("sin totem, ese aviso no aparece", async ({ page }) => {
+  // Control negativo: la mayoría de clientes no tiene totem y el canal QR no necesita recibo
+  // impreso (ese comensal tiene el suyo digital). Un aviso permanente se aprende a ignorar.
+  await login(page, "owner@garum.local", OWNER_PASSWORD as string);
+  await page.goto("http://garum.localhost:3000/admin/impresoras");
+
+  await expect(page.locator("h1")).toHaveText("Gestión de impresoras");
+  await expect(page.getByTestId("totem-sin-recibo-warning")).toHaveCount(0);
+});

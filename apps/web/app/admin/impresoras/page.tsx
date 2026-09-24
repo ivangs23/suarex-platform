@@ -5,6 +5,7 @@ import {
   listVenues,
   usbPrintersNotReported,
   usbPrintersWithoutDevice,
+  venuesWithTotemWithoutReceiptPrinter,
 } from "@suarex/db";
 import { requireManager } from "@/lib/require-manager";
 import { ConfirmDeleteForm } from "../catalogo/ConfirmDeleteForm";
@@ -41,9 +42,10 @@ export default async function AdminImpresorasPage() {
     listVenues(session.tenantId),
   ]);
   const venueGaps = await destinationsMissingPrinter(session.tenantId);
-  const [usbSinDispositivo, usbNoReportadas] = await Promise.all([
+  const [usbSinDispositivo, usbNoReportadas, totemsSinRecibo] = await Promise.all([
     usbPrintersWithoutDevice(session.tenantId),
     usbPrintersNotReported(session.tenantId),
+    venuesWithTotemWithoutReceiptPrinter(session.tenantId),
   ]);
 
   const defaultVenueId = venues.find((venue) => venue.isDefault)?.id ?? venues[0]?.id;
@@ -64,6 +66,21 @@ export default async function AdminImpresorasPage() {
               ⚠ {gap.venueName}: no hay impresora habilitada para {gap.destinations.join(", ")}. Los
               tickets de {gap.destinations.length === 1 ? "ese destino" : "esos destinos"} en este
               local no se imprimen hasta que añadas una impresora habilitada.
+            </p>
+          ))}
+        </div>
+      ) : null}
+
+      {/* El más grave de los avisos de esta pantalla, y por eso va primero: no es un ticket
+          que no sale, es alguien que paga con tarjeta y se va sin justificante. El comensal
+          del totem no tiene recibo digital -- solo ve el código de recogida en pantalla. */}
+      {totemsSinRecibo.length > 0 ? (
+        <div role="alert" data-testid="totem-sin-recibo-warning">
+          {totemsSinRecibo.map((v) => (
+            <p key={v.venueId}>
+              ⚠ {v.venueName} tiene un totem y ninguna impresora de recibo habilitada. Quien pague
+              en él no se lleva ningún justificante: añade una impresora con destino "Recibo
+              (totem)".
             </p>
           ))}
         </div>
