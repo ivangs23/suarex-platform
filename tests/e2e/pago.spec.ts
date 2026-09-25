@@ -6,6 +6,7 @@ import {
   deleteOrdersForTenant,
   firstProductIdOfTenant,
   latestOrderForTenant,
+  setTenantStripeAccountForTest,
   tableIdForToken,
 } from "./helpers/orders-db.js";
 
@@ -104,6 +105,62 @@ test("una mesa no puede saturar la cocina: al superar el tope se rechaza (429)",
     expect(estados[10]).toBe(429);
   } finally {
     // Los 10 pedidos son reales: se borran todos los de la mesa.
+    await deleteOrdersForTenant("garum");
+  }
+});
+
+test("con cuenta conectada, el cargo se crea SOBRE esa cuenta", async ({ page }) => {
+  /**
+   * LA RAMA QUE USA TODO CLIENTE REAL.
+   *
+   * Si el tenant tiene cuenta conectada, el cargo va sobre ella y el dinero acaba en la caja
+   * del restaurante. Sin ella se cobra por la plataforma, que es el respaldo de desarrollo y de
+   * un tenant sin onboarding terminado. Hasta ahora NINGÚN test ponía `stripe_account_id`, así
+   * que toda la suite recorría el respaldo y la rama de producción no la ejercitaba nadie.
+   *
+   * Cómo se comprueba sin tener una cuenta conectada real: se pone una inventada. Si la ruta
+   * la pasa a Stripe, Stripe la rechaza y la creación del pedido falla. Si alguien borrara el
+   * `stripeAccount` de la llamada, el cargo se crearía tan campante contra la plataforma y
+   * esto devolvería 200 -- que es justo el fallo que se quiere cazar: el dinero yendo a la
+   * caja equivocada sin que nada se queje.
+   *
+   * Lo que NO prueba: que un cobro real por Connect se confirme. Eso necesita una cuenta de
+   * pruebas conectada de verdad.
+   */
+  // Los tres POST crean pedidos REALES (incluido el que falla: el pedido se crea antes de
+  // llamar a Stripe). Se borran pase lo que pase: `listOrderHistory` no filtra por estado, así
+  // que cualquiera que sobrase rompería el test del histórico vacío en otro fichero.
+  try {
+    await page.goto(QR_MESA_1);
+    const productId = await firstProductIdOfTenant("garum");
+    const cuerpo = { lines: [{ productId, quantity: 1, extraIds: [], notes: null }] };
+
+    // Control positivo primero: sin cuenta conectada el pedido se crea y trae su clientSecret.
+    await clearRateLimit(await tableIdForToken("11111111-1111-1111-1111-111111111111"));
+    const sinCuenta = await page.request.post(`${BASE}/api/orders`, { data: cuerpo });
+    expect(sinCuenta.status(), "el respaldo por plataforma debe seguir funcionando").toBe(200);
+    expect((await sinCuenta.json()).clientSecret).toBeTruthy();
+
+    const anterior = await setTenantStripeAccountForTest("garum", "acct_inventada_para_el_test");
+    try {
+      await clearRateLimit(await tableIdForToken("11111111-1111-1111-1111-111111111111"));
+      const conCuenta = await page.request.post(`${BASE}/api/orders`, { data: cuerpo });
+      expect(
+        conCuenta.status(),
+        "con cuenta conectada el cargo tiene que ir a Stripe CON ella; si saliera 200, se " +
+          "estaría cobrando por la plataforma e ignorando la cuenta del restaurante",
+      ).not.toBe(200);
+    } finally {
+      // Pase lo que pase: el resto de la suite comparte este tenant y una cuenta inventada
+      // dejaría todos los pagos rotos.
+      await setTenantStripeAccountForTest("garum", anterior);
+    }
+
+    // Y queda como estaba: se vuelve a poder cobrar.
+    await clearRateLimit(await tableIdForToken("11111111-1111-1111-1111-111111111111"));
+    const restaurado = await page.request.post(`${BASE}/api/orders`, { data: cuerpo });
+    expect(restaurado.status(), "restaurado").toBe(200);
+  } finally {
     await deleteOrdersForTenant("garum");
   }
 });

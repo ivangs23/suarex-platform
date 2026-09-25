@@ -1,8 +1,8 @@
 "use client";
 
 import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
-import { loadStripe, type Stripe } from "@stripe/stripe-js";
 import { type FormEvent, useState } from "react";
+import { stripeFor } from "@/lib/stripe-browser";
 import { useCart } from "./CartProvider";
 import styles from "./cart.module.css";
 
@@ -17,27 +17,6 @@ import styles from "./cart.module.css";
  * Modo de PRUEBAS: las claves son `pk_test`/`sk_test`. Tarjeta de test 4242 4242 4242 4242,
  * cualquier fecha futura y CVC. No se mueve dinero real.
  */
-
-/**
- * `loadStripe` devuelve una promesa que NO debe recrearse en cada render (Elements re-montaría
- * y perdería el formulario a medio rellenar). Se memoiza por (clave publicable + cuenta
- * conectada): un cargo directo sobre la cuenta de un cliente solo se confirma si Stripe.js se
- * inicializó contra ESA cuenta, así que cada cuenta necesita su propia instancia.
- */
-const instancias = new Map<string, Promise<Stripe | null>>();
-
-function stripeFor(publishableKey: string, connectedAccount: string | null) {
-  const clave = `${publishableKey}::${connectedAccount ?? "platform"}`;
-  let promesa = instancias.get(clave);
-  if (!promesa) {
-    promesa = loadStripe(
-      publishableKey,
-      connectedAccount ? { stripeAccount: connectedAccount } : undefined,
-    );
-    instancias.set(clave, promesa);
-  }
-  return promesa;
-}
 
 export function PaymentStep() {
   const cart = useCart();
