@@ -140,6 +140,39 @@ Priorizado por valor/coste. Detalle en el hilo; resumen:
   proceso si murió (el single-instance lock deduplica). `build/installer.nsh` la borra al
   desinstalar. **Pendiente de validar en un build empaquetado real** (en dev no se registra).
 
+## Pendiente — seguridad (auditoría del 2026-09-25)
+
+Auditoría corrida contra la IMAGEN DE PRODUCCIÓN, no solo en desarrollo: se construyó, se
+arrancó contra la Supabase local y se le mandó tráfico. Lo que salió y sigue abierto:
+
+- **Electron 33 está fuera de soporte.** Los avisos de seguridad piden >= 38.8.6 (varios
+  use-after-free). Subir cinco majors es un proyecto, no un parche, pero conviene planificarlo:
+  el agente corre desatendido en el PC de cada cliente.
+- **Sin protección contra clickjacking.** `deploy/Caddyfile` pone HSTS, `X-Content-Type-Options`
+  y `Referrer-Policy`, pero NO `X-Frame-Options` ni CSP: `/admin` se puede meter en un iframe.
+  Comprobado que el panel incrustado del agente usa `WebContentsView` y no un iframe, así que
+  añadir la cabecera no rompería la app de escritorio.
+- **`tar` (crítica) entra por electron-builder**: es de build del instalador, no de ejecución.
+
+Comprobado y descartado, para que nadie lo vuelva a mirar: no hay ningún secreto en el
+historial de git (solo se versionaron `.env.example`), la imagen de producción no contiene la
+service role key ni la clave secreta de Stripe ni el `CRON_SECRET`, y ninguno de ellos viaja al
+navegador.
+
+### Manuela (producto anterior, otros repos)
+
+Ramas locales preparadas y **sin pushear**, en `../web-manuela` y `../kiosko-manuela`:
+
+- **Rotar el `GH_TOKEN` es lo urgente y no lo puede hacer nadie más.** Viajaba dentro de cada
+  instalador del kiosko (`.env` estaba en `build.files`) y sigue en el historial de git. Quitarlo
+  del build no deshace nada de lo ya distribuido.
+- `web-manuela/supabase/migrations/007_rls_acotar_lectura_publica.sql`, escrita y **sin
+  aplicar**: `order_counter` es hoy `FOR ALL USING(true)` y `pedidos`/`cierres_dia` tienen
+  `SELECT USING(true)`. `cierres_dia` guarda `usuario_email`, que es dato personal.
+- Lo que esa migración no cierra: el INSERT anónimo sigue abierto, así que cualquiera puede
+  inyectar un pedido que la cocina imprime. Necesita credenciales propias para agente y kiosko,
+  como el rol `device` de este producto.
+
 ## Pendiente — infra (tareas de Iván, no código)
 
 - **Rotar/borrar `/root/.git-credentials`** en el VPS.
