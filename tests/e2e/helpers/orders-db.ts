@@ -190,3 +190,28 @@ export async function clearAllRateLimits(): Promise<void> {
   const { error } = await admin.from("rate_limit_hits").delete().neq("bucket", "__none__");
   if (error) throw error;
 }
+
+/**
+ * Fija (o limpia) la cuenta de Stripe conectada del tenant y devuelve lo que había, para
+ * restaurarlo. La rama Connect no se puede alcanzar de otro modo desde un test: el panel no
+ * gestiona el onboarding de Connect, lo hace Stripe.
+ */
+export async function setTenantStripeAccountForTest(
+  tenantSlug: string,
+  accountId: string | null,
+): Promise<string | null> {
+  const { data: tenant, error: te } = await admin
+    .from("tenants")
+    .select("id, stripe_account_id")
+    .eq("slug", tenantSlug)
+    .single();
+  if (te) throw te;
+
+  const { error } = await admin
+    .from("tenants")
+    .update({ stripe_account_id: accountId })
+    .eq("id", tenant.id);
+  if (error) throw error;
+
+  return (tenant.stripe_account_id as string | null) ?? null;
+}
