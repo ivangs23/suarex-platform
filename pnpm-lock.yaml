@@ -62,9 +62,6 @@ importers:
 
   apps/agent-desktop:
     dependencies:
-      '@suarex/payments':
-        specifier: workspace:*
-        version: link:../../packages/payments
       electron-updater:
         specifier: ^6.8.9
         version: 6.8.9
@@ -81,6 +78,9 @@ importers:
       '@suarex/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@suarex/payments':
+        specifier: workspace:*
+        version: link:../../packages/payments
       '@suarex/printing':
         specifier: workspace:*
         version: link:../../packages/printing
