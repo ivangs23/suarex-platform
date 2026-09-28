@@ -5,6 +5,10 @@ Una conversación de Claude no transfiere sola; lee esto + `git log` + `CLAUDE.m
 
 ## Estado
 
+> **Si retomas desde otra máquina, empieza por [`RETOMAR-EN-WINDOWS.md`](RETOMAR-EN-WINDOWS.md):**
+> qué hay montado, qué hacer para levantarlo y qué está pendiente y en qué orden.
+
+
 `main` con las **fases 1-3 del plan de viabilidad ya integradas**. Suite completa en verde tras un
 `db:reset` desde cero: lint · typecheck 9/9 · unit (7 paquetes) · **integración 411** (66 ficheros)
 · **e2e 112**.
