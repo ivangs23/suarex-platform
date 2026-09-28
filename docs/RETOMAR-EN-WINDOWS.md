@@ -57,7 +57,7 @@ Verde de punta a punta, medido sobre este árbol con la base reseteada desde cer
 | lint · typecheck | limpio · 10/10 |
 | unit | 9 paquetes, **665** |
 | integración | **472** en 70 ficheros |
-| e2e | **131** |
+| e2e | **132** |
 | migraciones | 44, aplican limpias desde cero |
 
 ---
@@ -78,7 +78,13 @@ como administrador, en `C:\Windows\System32\drivers\etc\hosts`:
 ```
 127.0.0.1 garum.localhost
 127.0.0.1 manuela.localhost
+127.0.0.1 admin.localhost
+127.0.0.1 notadmin.localhost
+127.0.0.1 admin.garum.localhost
 ```
+
+Las tres últimas son de la consola de plataforma: sin ellas, `plataforma-host.spec.ts` cae con
+`ENOTFOUND` y todo lo demás pasa, que es justo el tipo de rojo que se descarta por "de entorno".
 
 El porqué, y las otras tres fricciones de portabilidad (CRLF, `tsc`, grants), en `CLAUDE.md` →
 "En Windows (setup por máquina)".
@@ -87,6 +93,7 @@ El porqué, y las otras tres fricciones de portabilidad (CRLF, `tsc`, grants), e
 
 ```bash
 pnpm install
+pnpm exec playwright install chromium   # navegador de la versión de Playwright del lockfile
 pnpm db:start                 # Supabase local; imprime las claves
 pnpm db:reset                 # migraciones + seed
 pnpm db:env && pnpm seed:staff

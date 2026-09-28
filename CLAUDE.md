@@ -77,7 +77,17 @@ administrador):
 ```
 127.0.0.1 garum.localhost
 127.0.0.1 manuela.localhost
+127.0.0.1 admin.localhost
+127.0.0.1 notadmin.localhost
+127.0.0.1 admin.garum.localhost
 ```
+
+Las tres últimas son de la consola de plataforma (`plataforma-host.spec.ts` las pide por
+`request`). Sin ellas, esos tres tests caen con `getaddrinfo ENOTFOUND` y el resto pasa.
+
+**Tras un `pnpm install` que suba Playwright**, `pnpm exec playwright install chromium`: sin el
+navegador de la versión nueva, el e2e cae entero con "Executable doesn't exist" (cada máquina
+guarda los navegadores en su caché de usuario, no en el repo).
 
 Los saltos de línea los fija `.gitattributes` (`* text=auto eol=lf`): sin él, `core.autocrlf`
 de Windows mete CRLF y `pnpm lint` (Biome, lineEnding lf) marca todos los ficheros. Si un clon
