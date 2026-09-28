@@ -1,4 +1,4 @@
-import { findTableByToken } from "@suarex/db";
+import { findTableByToken, registrarEscaneo } from "@suarex/db";
 import { NextResponse } from "next/server";
 import { MESA_COOKIE, mesaCookieOptions } from "@/lib/mesa-cookie";
 
@@ -24,6 +24,12 @@ export async function GET(_request: Request, context: { params: Promise<{ token:
   if (!table?.isActive) {
     return new NextResponse(null, { status: 404 });
   }
+
+  // Se cuenta el escaneo ANTES de redirigir, que es el único momento en que sabemos que
+  // alguien ha apuntado la cámara a un QR. Es un incremento sobre una fila indexada y no
+  // lanza nunca: quedarse sin carta porque no se pudo contar sería cambiar una venta por una
+  // estadística.
+  await registrarEscaneo(table.id);
 
   // `Location` RELATIVA a propósito. Componerla absoluta a partir de `request.url` mandaba a
   // `localhost:3000`: `proxy.ts` reescribe la petición y esa URL ya no lleva el Host del

@@ -24,8 +24,13 @@ RUN pnpm install --frozen-lockfile
 # key NO se pasa aquí ni se usa en build: solo entra como variable de entorno en runtime.
 ARG NEXT_PUBLIC_SUPABASE_URL
 ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
+# La clave PUBLICABLE de Stripe (no la secreta): la usa Stripe Elements en el navegador, así
+# que se hornea igual que las de Supabase. Sin ella el formulario de pago no se pinta y el
+# comensal ve "no se pudo cobrar" -- la carta funciona y nadie puede pagar.
+ARG NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
 ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
 ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY
+ENV NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=$NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
 
 # TENANT_ROOT_DOMAINS se lee en runtime (proxy.ts), pero `resolveRootDomains` lanza fuera de
 # `development` si falta, y Next evalúa el módulo del proxy durante el build. Un valor de

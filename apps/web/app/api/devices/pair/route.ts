@@ -1,6 +1,7 @@
 import { checkPairRateLimit, pairDevice } from "@suarex/db";
 import { NextResponse } from "next/server";
 import { getClientIp } from "@/lib/client-ip";
+import { log } from "@/lib/log";
 
 /**
  * `POST /api/devices/pair`: la única puerta por la que un instalador sin secretos (sin
@@ -34,7 +35,7 @@ export async function POST(request: Request) {
     const allowed = await checkPairRateLimit(getClientIp(request));
     if (!allowed) return tooManyRequests();
   } catch (error) {
-    console.error("[devices] Error en rate-limit de emparejamiento:", error);
+    log.error("dispositivo.rate_limit_no_disponible", { error });
     return notFound();
   }
 
@@ -42,7 +43,7 @@ export async function POST(request: Request) {
   try {
     result = await pairDevice(pairingCode);
   } catch (error) {
-    console.error("[devices] Error emparejando dispositivo:", error);
+    log.error("dispositivo.emparejamiento_fallo", { error });
     return notFound();
   }
 

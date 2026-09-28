@@ -1,0 +1,25 @@
+.page {
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 4rem;
+  line-height: 1.6;
+}
+
+.title {
+  font-size: 1.6rem;
+  margin: 0 0 1.5rem;
+}
+
+.section {
+  margin: 0 0 1.75rem;
+}
+
+.sectionTitle {
+  font-size: 1.05rem;
+  margin: 0 0 0.5rem;
+}
+
+.paragraph {
+  margin: 0 0 0.75rem;
+  font-size: 0.95rem;
+}

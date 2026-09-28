@@ -11,6 +11,7 @@ import { resolveLang, strings } from "@/lib/i18n";
 import { requireTenant } from "@/lib/tenant-context";
 import styles from "./pedido.module.css";
 import { Receipt } from "./Receipt";
+import type { ReciboFiscal } from "./receipt-pdf";
 import { StatusPoller } from "./StatusPoller";
 
 export default async function PedidoPage({ params }: { params: Promise<{ publicToken: string }> }) {
@@ -38,7 +39,13 @@ export default async function PedidoPage({ params }: { params: Promise<{ publicT
     <main className={styles.page}>
       <StatusPoller publicToken={publicToken} initialOrder={order} locale={locale} strings={t} />
       {receipt && receipt.lines.length > 0 ? (
-        <Receipt receipt={receipt} businessName={businessName} locale={locale} strings={t} />
+        <Receipt
+          receipt={receipt}
+          businessName={businessName}
+          fiscal={(settings?.fiscal ?? {}) as ReciboFiscal}
+          locale={locale}
+          strings={t}
+        />
       ) : null}
 
       {/* Vuelta a la carta de la mesa: tras pagar, el comensal se queda en esta pantalla y sin

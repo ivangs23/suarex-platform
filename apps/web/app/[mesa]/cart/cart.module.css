@@ -467,3 +467,15 @@
 .sheetFoot .pay:disabled {
   cursor: not-allowed;
 }
+
+.payLegalNote {
+  margin: 0.5rem 0 0;
+  font-size: 0.7rem;
+  line-height: 1.35;
+  text-align: center;
+  color: color-mix(in srgb, var(--color-fg) 60%, transparent);
+}
+
+.payLegalText {
+  display: block;
+}

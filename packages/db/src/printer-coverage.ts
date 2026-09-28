@@ -92,3 +92,133 @@ export async function usbPrintersWithoutDevice(
     .filter((p) => p.connection?.type === "usb" && p.device_id === null)
     .map((p) => ({ id: p.id, name: p.name }));
 }
+
+type UsbPrinterConDispositivoRow = {
+  id: string;
+  name: string;
+  device_id: string | null;
+  connection: { type?: string; printerName?: string };
+};
+
+export type UsbPrinterNoReportada = {
+  id: string;
+  /** Nombre que el gestor le puso a la impresora en el panel. */
+  name: string;
+  /** Nombre de Windows configurado, el que el agente busca y no encuentra. */
+  printerName: string;
+  /** Qué PC no la ve. Sin esto el aviso no es accionable: no se sabe dónde mirar. */
+  deviceName: string;
+};
+
+/**
+ * Impresoras USB habilitadas cuyo nombre de Windows NO aparece en la lista que reporta su
+ * propio dispositivo.
+ *
+ * El panel ya ofrece un desplegable con lo que cada PC reporta ver, pero sigue habiendo texto
+ * libre -- y tiene que haberlo: el desplegable está vacío hasta que el agente late por primera
+ * vez, y en ese hueco hay que poder configurar la impresora igualmente. Un typo escrito ahí no
+ * falla de forma visible: el agente pide a winspool un nombre que no existe y el ticket se
+ * pierde. Esto lo detecta DESPUÉS, que es lo único que puede hacerse con un campo libre.
+ *
+ * Mismo espíritu que `usbPrintersWithoutDevice` y `destinationsMissingPrinter`: hacer visible
+ * una configuración que deja pedidos sin imprimir.
+ *
+ * Dos silencios deliberados:
+ *
+ * - **Un dispositivo que todavía no ha reportado no acusa a nadie.** Una lista vacía significa
+ *   "no sé" (agente recién instalado, o versión anterior al reporte), no "no existe". Tratarla
+ *   como acusación llenaría el panel de avisos falsos el día del alta.
+ * - **Una USB sin `device_id` tampoco.** Ya la cubre `usbPrintersWithoutDevice`, y dos avisos
+ *   sobre la misma impresora dirían dos cosas distintas sin que ninguna sea la accionable.
+ *
+ * La comparación ignora mayúsculas porque Windows abre las impresoras por nombre sin
+ * distinguirlas: avisar de algo que funciona enseña a ignorar los avisos, y entonces también se
+ * ignora el que importa.
+ */
+export async function usbPrintersNotReported(tenantId: string): Promise<UsbPrinterNoReportada[]> {
+  const [printers, devices] = await Promise.all([
+    tenantScoped("printers", tenantId)
+      .select("id, name, device_id, connection")
+      .eq("enabled", true),
+    tenantScoped("devices", tenantId).select("id, name, printers"),
+  ]);
+  if (printers.error) throw printers.error;
+  if (devices.error) throw devices.error;
+
+  // `devices.printers` es NOT NULL con default `{}` (ver 20260724000001): "todavía no ha
+  // reportado" es una lista VACÍA, no un null.
+  type DeviceRow = { id: string; name: string; printers: string[] };
+  const porDispositivo = new Map(
+    (devices.data as unknown as DeviceRow[]).map((d) => [d.id, d] as const),
+  );
+
+  const avisos: UsbPrinterNoReportada[] = [];
+  for (const p of printers.data as unknown as UsbPrinterConDispositivoRow[]) {
+    if (p.connection?.type !== "usb" || p.device_id === null) continue;
+
+    const dispositivo = porDispositivo.get(p.device_id);
+    const reportadas = dispositivo?.printers;
+    if (!dispositivo || !reportadas || reportadas.length === 0) continue;
+
+    const configurada = (p.connection.printerName ?? "").toLowerCase();
+    if (reportadas.some((r) => r.toLowerCase() === configurada)) continue;
+
+    avisos.push({
+      id: p.id,
+      name: p.name,
+      printerName: p.connection.printerName ?? "",
+      deviceName: dispositivo.name,
+    });
+  }
+  return avisos;
+}
+
+export type VenueSinRecibo = { venueId: string; venueName: string };
+
+/**
+ * Locales con un TOTEM y sin impresora de recibo habilitada.
+ *
+ * Un pedido de canal `kiosko` necesita destino `recibo` (`targetPrinterIds` y
+ * `20260724000005_recibo_printer.sql`). Si no hay ninguna, el pedido se marca impreso igual
+ * -- "estación sin impresora == trivialmente cubierta" -- así que no hay error ni reintentos.
+ *
+ * Y el comensal del totem no tiene recibo digital: tras pagar solo ve el código de recogida en
+ * pantalla, sin QR ni enlace. Así que sin esta impresora PAGA CON TARJETA Y SE VA SIN NADA, en
+ * silencio. Por eso es un aviso propio y no un destino más de `destinationsMissingPrinter`: allí
+ * la consecuencia es un ticket de cocina que no sale, aquí es un justificante que no existe.
+ *
+ * Solo mira los locales que TIENEN totem. El canal QR no necesita recibo impreso -- ese comensal
+ * tiene el suyo digital -- y avisar a todo el mundo haría que el aviso se ignorase.
+ */
+export async function venuesWithTotemWithoutReceiptPrinter(
+  tenantId: string,
+): Promise<VenueSinRecibo[]> {
+  const [venues, devices, printers] = await Promise.all([
+    listVenues(tenantId),
+    tenantScoped("devices", tenantId).select("venue_id, roles"),
+    tenantScoped("printers", tenantId).select("venue_id, destination").eq("enabled", true),
+  ]);
+  if (devices.error) throw devices.error;
+  if (printers.error) throw printers.error;
+
+  type DeviceRolRow = { venue_id: string; roles: string[] | null };
+  const conTotem = new Set(
+    (devices.data as unknown as DeviceRolRow[])
+      .filter((d) => (d.roles ?? []).includes("kiosko"))
+      .map((d) => d.venue_id),
+  );
+  if (conTotem.size === 0) return [];
+
+  type PrinterDestRow = { venue_id: string; destination: string };
+  // `all` cubre el recibo, misma regla que `targetPrinterIds`. Si aquí no contara, el aviso
+  // saldría en locales que sí lo sacan.
+  const conRecibo = new Set(
+    (printers.data as unknown as PrinterDestRow[])
+      .filter((p) => p.destination === "recibo" || p.destination === "all")
+      .map((p) => p.venue_id),
+  );
+
+  return venues
+    .filter((v) => conTotem.has(v.id) && !conRecibo.has(v.id))
+    .map((v) => ({ venueId: v.id, venueName: v.name }));
+}

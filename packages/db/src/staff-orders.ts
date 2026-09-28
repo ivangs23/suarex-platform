@@ -66,6 +66,10 @@ export async function listActiveOrders(tenantId: string): Promise<StaffOrder[]> 
     )
     .neq("status", "served")
     .neq("status", "cancelled")
+    // Un pedido reembolsado sale del tablero: si al comensal se le ha devuelto el dinero,
+    // la cocina tiene que dejar de prepararlo. Sin este filtro se quedaría ahí pidiendo
+    // trabajo que ya nadie va a cobrar.
+    .neq("status", "refunded")
     .order("created_at", { ascending: true });
   if (error) throw error;
 
