@@ -129,8 +129,9 @@ cada cinco minutos una app que ya no pertenece a ningún restaurante.
 
 No se puede probar fuera de Windows empaquetado, así que va aquí con el resto.
 
-1. En **Ayuda**, pulsa **Guardar diagnóstico**. Debe abrirse el diálogo nativo con el
-   Escritorio y un nombre tipo `suarex-diagnostico-2026-09-24-1830.txt`.
+1. En **Ayuda**, pulsa **Guardar diagnóstico**. Debe abrirse el diálogo nativo con un nombre
+   tipo `suarex-diagnostico-2026-09-24T16-30-12-345Z.txt`. La hora va en UTC, como todas las
+   de dentro del fichero: a las 18:30 de Madrid en verano pone `16-30`, y no es un error.
 2. Guarda y ábrelo. Arriba tiene que estar la versión, el sistema, si está emparejado y en
    marcha, y el id del dispositivo.
 3. **Busca dentro la palabra `password` y el correo `@devices.local`.** No deben aparecer: este
