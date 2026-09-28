@@ -5,7 +5,7 @@ import { formatCents } from "@suarex/domain";
 import { useState } from "react";
 import type { Strings } from "@/lib/i18n";
 import styles from "./pedido.module.css";
-import { descargarReciboPdf } from "./receipt-pdf";
+import { descargarReciboPdf, type ReciboFiscal } from "./receipt-pdf";
 
 /**
  * RECIBO DEL COMENSAL: el desglose de su pedido, para guardarlo o imprimirlo. Todo sale de los
@@ -19,11 +19,13 @@ import { descargarReciboPdf } from "./receipt-pdf";
 export function Receipt({
   receipt,
   businessName,
+  fiscal,
   locale,
   strings: t,
 }: {
   receipt: OrderReceipt;
   businessName: string;
+  fiscal: ReciboFiscal;
   locale: string;
   strings: Strings;
 }) {
@@ -37,6 +39,7 @@ export function Receipt({
         fecha: new Date(receipt.createdAt).toLocaleDateString(locale),
         strings: t,
         formatearDinero: (cents) => formatCents(cents, locale, receipt.currency),
+        fiscal,
       });
     } finally {
       setDescargando(false);
@@ -74,9 +77,27 @@ export function Receipt({
         ))}
       </ul>
 
+      {receipt.taxCents > 0 ? (
+        <p className={styles.receiptTaxBreakdown} data-testid="receipt-tax-breakdown">
+          <span>
+            {t.receiptSubtotal}: {formatCents(receipt.subtotalCents, locale, receipt.currency)}
+          </span>
+          <span>
+            {t.receiptTax}: {formatCents(receipt.taxCents, locale, receipt.currency)}
+          </span>
+        </p>
+      ) : null}
+
       <p className={styles.receiptTotal}>
         <span>{t.total}</span>
         <span>{formatCents(receipt.totalCents, locale, receipt.currency)}</span>
+      </p>
+
+      {/* INCONDICIONAL, para todos los tenants (decisión D1 del spec de la Fase 1). Va en
+          pantalla, no solo en el PDF: el comensal que mira y se va también tiene que saber
+          que esto no es una factura. */}
+      <p className={styles.receiptNotInvoice} data-testid="receipt-not-invoice">
+        {t.receiptNotInvoice}
       </p>
 
       {/* `noPrint`: el botón no sale en el recibo descargado. */}

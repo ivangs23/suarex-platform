@@ -1,4 +1,9 @@
-import { destinationsMissingPrinter, usbPrintersWithoutDevice } from "@suarex/db";
+import {
+  destinationsMissingPrinter,
+  usbPrintersNotReported,
+  usbPrintersWithoutDevice,
+  venuesWithTotemWithoutReceiptPrinter,
+} from "@suarex/db";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   admin,
@@ -196,5 +201,274 @@ describe("usbPrintersWithoutDevice", () => {
       enabled: true,
     });
     expect(await usbPrintersWithoutDevice(tenant.tenantId)).toEqual([]);
+  });
+});
+
+/**
+ * IMPRESORA USB CON UN NOMBRE QUE NINGÚN PC VE.
+ *
+ * El panel ya ofrece un desplegable con lo que los agentes reportan, pero SIGUE habiendo texto
+ * libre -- y tiene que haberlo: el desplegable está vacío hasta que el agente late por primera
+ * vez. En ese hueco se teclea a mano, y un typo no falla de forma visible: el agente busca un
+ * nombre que no existe y el ticket se pierde. Esto lo detecta después.
+ */
+describe("usbPrintersNotReported", () => {
+  async function seedDevice(
+    tenant: TenantFixture,
+    venueId: string,
+    reportadas: string[],
+  ): Promise<string> {
+    const { data } = await admin
+      .from("devices")
+      .insert({
+        tenant_id: tenant.tenantId,
+        venue_id: venueId,
+        name: "PC de cocina",
+        printers: reportadas,
+      })
+      .select("id")
+      .single();
+    return data?.id as string;
+  }
+
+  async function seedUsb(
+    tenant: TenantFixture,
+    venueId: string,
+    deviceId: string | null,
+    printerName: string,
+  ): Promise<void> {
+    await admin.from("printers").insert({
+      tenant_id: tenant.tenantId,
+      venue_id: venueId,
+      name: `Impresora ${printerName}`,
+      connection: { type: "usb", printerName },
+      destination: "cocina",
+      enabled: true,
+      device_id: deviceId,
+    });
+  }
+
+  it("señala la que su PC no ve", async () => {
+    const tenant = await createTenantFixture(`unr-${nonce()}`);
+    fixtures.push(tenant);
+    const venueId = await seedVenue(tenant);
+    const deviceId = await seedDevice(tenant, venueId, ["EPSON TM-T20"]);
+    await seedUsb(tenant, venueId, deviceId, "EPSON TM-T2O"); // cero en vez de O
+
+    const avisos = await usbPrintersNotReported(tenant.tenantId);
+    expect(avisos).toHaveLength(1);
+    expect(avisos[0]?.printerName).toBe("EPSON TM-T2O");
+    expect(avisos[0]?.deviceName, "hay que decir QUÉ PC no la ve").toBe("PC de cocina");
+  });
+
+  it("no señala la que sí está en la lista", async () => {
+    const tenant = await createTenantFixture(`unr2-${nonce()}`);
+    fixtures.push(tenant);
+    const venueId = await seedVenue(tenant);
+    const deviceId = await seedDevice(tenant, venueId, ["EPSON TM-T20", "Microsoft Print to PDF"]);
+    await seedUsb(tenant, venueId, deviceId, "EPSON TM-T20");
+
+    expect(await usbPrintersNotReported(tenant.tenantId)).toHaveLength(0);
+  });
+
+  it("una diferencia solo de mayúsculas no es un fallo", async () => {
+    // Los nombres de impresora de Windows no distinguen mayúsculas al abrirlas. Avisar de algo
+    // que funciona enseña a ignorar los avisos, y entonces también se ignora el que importa.
+    const tenant = await createTenantFixture(`unr3-${nonce()}`);
+    fixtures.push(tenant);
+    const venueId = await seedVenue(tenant);
+    const deviceId = await seedDevice(tenant, venueId, ["EPSON TM-T20"]);
+    await seedUsb(tenant, venueId, deviceId, "epson tm-t20");
+
+    expect(await usbPrintersNotReported(tenant.tenantId)).toHaveLength(0);
+  });
+
+  it("un PC que todavía no ha reportado no acusa a nadie", async () => {
+    // Agente recién instalado, o una versión anterior al reporte. Una lista vacía significa "no
+    // sé", no "no existe": tratarla como acusación llenaría el panel de avisos falsos justo el
+    // día del alta, que es cuando peor sienta.
+    const tenant = await createTenantFixture(`unr4-${nonce()}`);
+    fixtures.push(tenant);
+    const venueId = await seedVenue(tenant);
+    const deviceId = await seedDevice(tenant, venueId, []);
+    await seedUsb(tenant, venueId, deviceId, "La que sea");
+
+    expect(await usbPrintersNotReported(tenant.tenantId)).toHaveLength(0);
+  });
+
+  it("una USB sin dispositivo no se cuenta aquí: ya la cubre el otro aviso", async () => {
+    // Dos avisos sobre la misma impresora dirían dos cosas distintas y ninguna accionable.
+    const tenant = await createTenantFixture(`unr5-${nonce()}`);
+    fixtures.push(tenant);
+    const venueId = await seedVenue(tenant);
+    await seedDevice(tenant, venueId, ["EPSON TM-T20"]);
+    await seedUsb(tenant, venueId, null, "Inventada");
+
+    expect(await usbPrintersNotReported(tenant.tenantId)).toHaveLength(0);
+    expect(await usbPrintersWithoutDevice(tenant.tenantId)).toHaveLength(1);
+  });
+
+  it("una impresora deshabilitada no avisa", async () => {
+    const tenant = await createTenantFixture(`unr6-${nonce()}`);
+    fixtures.push(tenant);
+    const venueId = await seedVenue(tenant);
+    const deviceId = await seedDevice(tenant, venueId, ["EPSON TM-T20"]);
+    await admin.from("printers").insert({
+      tenant_id: tenant.tenantId,
+      venue_id: venueId,
+      name: "Apagada",
+      connection: { type: "usb", printerName: "Inventada" },
+      destination: "cocina",
+      enabled: false,
+      device_id: deviceId,
+    });
+
+    expect(await usbPrintersNotReported(tenant.tenantId)).toHaveLength(0);
+  });
+
+  it("una impresora de RED no se compara con nada", async () => {
+    const tenant = await createTenantFixture(`unr7-${nonce()}`);
+    fixtures.push(tenant);
+    const venueId = await seedVenue(tenant);
+    const deviceId = await seedDevice(tenant, venueId, ["EPSON TM-T20"]);
+    await admin.from("printers").insert({
+      tenant_id: tenant.tenantId,
+      venue_id: venueId,
+      name: "De red",
+      connection: { type: "network", host: "10.0.0.5", port: 9100 },
+      destination: "cocina",
+      enabled: true,
+      device_id: deviceId,
+    });
+
+    expect(await usbPrintersNotReported(tenant.tenantId)).toHaveLength(0);
+  });
+});
+
+/**
+ * TOTEM SIN IMPRESORA DE RECIBO.
+ *
+ * Un pedido de canal `kiosko` necesita una impresora de destino `recibo` (ver `targetPrinterIds`
+ * y `20260724000005_recibo_printer.sql`). Si no la hay, el pedido se marca impreso igualmente
+ * -- "estación sin impresora == trivialmente cubierta" -- así que no hay reintentos ni error.
+ *
+ * Y el comensal del totem no tiene recibo digital: tras pagar solo ve el código de recogida en
+ * pantalla, sin QR ni enlace. Sin impresora de recibo PAGA CON TARJETA Y SE VA SIN NADA, en
+ * silencio. De ahí que esto sea un aviso propio y no un destino más del de cocina/barra: la
+ * consecuencia no es un ticket que no sale, es un justificante que no existe.
+ */
+describe("venuesWithTotemWithoutReceiptPrinter", () => {
+  async function seedTotem(tenant: TenantFixture, venueId: string): Promise<void> {
+    await admin.from("devices").insert({
+      tenant_id: tenant.tenantId,
+      venue_id: venueId,
+      name: "Totem",
+      roles: ["kiosko"],
+    });
+  }
+
+  async function seedPrinter(
+    tenant: TenantFixture,
+    venueId: string,
+    destination: string,
+    enabled = true,
+  ): Promise<void> {
+    await admin.from("printers").insert({
+      tenant_id: tenant.tenantId,
+      venue_id: venueId,
+      name: `P-${destination}-${nonce()}`,
+      connection: { type: "network", host: "10.0.0.5", port: 9100 },
+      destination,
+      enabled,
+    });
+  }
+
+  it("avisa de un local con totem y sin impresora de recibo", async () => {
+    const tenant = await createTenantFixture(`tot-${nonce()}`);
+    fixtures.push(tenant);
+    const venueId = await seedVenue(tenant);
+    await seedTotem(tenant, venueId);
+    await seedPrinter(tenant, venueId, "cocina");
+
+    const avisos = await venuesWithTotemWithoutReceiptPrinter(tenant.tenantId);
+    expect(avisos).toHaveLength(1);
+    expect(avisos[0]?.venueId).toBe(venueId);
+    expect(avisos[0]?.venueName, "hay que decir QUÉ local").toBeTruthy();
+  });
+
+  it("con impresora de recibo habilitada no avisa", async () => {
+    const tenant = await createTenantFixture(`tot2-${nonce()}`);
+    fixtures.push(tenant);
+    const venueId = await seedVenue(tenant);
+    await seedTotem(tenant, venueId);
+    await seedPrinter(tenant, venueId, "recibo");
+
+    expect(await venuesWithTotemWithoutReceiptPrinter(tenant.tenantId)).toHaveLength(0);
+  });
+
+  it("una impresora 'all' también cubre el recibo", async () => {
+    // Misma regla que `targetPrinterIds`: `all` imprime todos los destinos. Si aquí no contara,
+    // el aviso saldría en locales que sí sacan el recibo.
+    const tenant = await createTenantFixture(`tot3-${nonce()}`);
+    fixtures.push(tenant);
+    const venueId = await seedVenue(tenant);
+    await seedTotem(tenant, venueId);
+    await seedPrinter(tenant, venueId, "all");
+
+    expect(await venuesWithTotemWithoutReceiptPrinter(tenant.tenantId)).toHaveLength(0);
+  });
+
+  it("una impresora de recibo DESHABILITADA no cuenta", async () => {
+    const tenant = await createTenantFixture(`tot4-${nonce()}`);
+    fixtures.push(tenant);
+    const venueId = await seedVenue(tenant);
+    await seedTotem(tenant, venueId);
+    await seedPrinter(tenant, venueId, "recibo", false);
+
+    expect(await venuesWithTotemWithoutReceiptPrinter(tenant.tenantId)).toHaveLength(1);
+  });
+
+  it("un local SIN totem no avisa aunque no tenga impresora de recibo", async () => {
+    // El canal QR no necesita recibo impreso: ese comensal tiene el suyo digital. Avisar aquí
+    // saldría en todos los clientes sin totem, que son la mayoría.
+    const tenant = await createTenantFixture(`tot5-${nonce()}`);
+    fixtures.push(tenant);
+    const venueId = await seedVenue(tenant);
+    await seedPrinter(tenant, venueId, "cocina");
+
+    expect(await venuesWithTotemWithoutReceiptPrinter(tenant.tenantId)).toHaveLength(0);
+  });
+
+  it("un dispositivo agente normal no es un totem", async () => {
+    const tenant = await createTenantFixture(`tot6-${nonce()}`);
+    fixtures.push(tenant);
+    const venueId = await seedVenue(tenant);
+    await admin.from("devices").insert({
+      tenant_id: tenant.tenantId,
+      venue_id: venueId,
+      name: "Agente",
+      roles: ["agente"],
+    });
+
+    expect(await venuesWithTotemWithoutReceiptPrinter(tenant.tenantId)).toHaveLength(0);
+  });
+
+  it("solo avisa del local que tiene el totem", async () => {
+    // La cobertura es POR LOCAL, igual que en `destinationsMissingPrinter`: que otro local tenga
+    // impresora de recibo no salva al que tiene el totem.
+    const tenant = await createTenantFixture(`tot7-${nonce()}`);
+    fixtures.push(tenant);
+    const conTotem = await seedVenue(tenant);
+    const { data: otro } = await admin
+      .from("venues")
+      .insert({ tenant_id: tenant.tenantId, slug: `v2-${nonce()}`, name: "Otro" })
+      .select("id")
+      .single();
+    await seedTotem(tenant, conTotem);
+    await seedPrinter(tenant, otro?.id as string, "recibo");
+
+    const avisos = await venuesWithTotemWithoutReceiptPrinter(tenant.tenantId);
+    expect(avisos).toHaveLength(1);
+    expect(avisos[0]?.venueId).toBe(conTotem);
   });
 });

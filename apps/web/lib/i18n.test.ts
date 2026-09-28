@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { availableLangs, pickI18n, resolveLang } from "./i18n";
+import { availableLangs, pickI18n, resolveLang, SUPPORTED_LANGS, strings } from "./i18n";
 
 /**
  * El idioma decide QUÉ LEE el comensal. Sus fallos son silenciosos: no revientan la carta,
@@ -76,5 +76,28 @@ describe("availableLangs", () => {
   it("los devuelve siempre en el mismo orden", () => {
     // El selector no puede bailar de sitio entre una pantalla y la siguiente.
     expect(availableLangs([{ pt: "Bica" }, { en: "Coffee" }], "es")).toEqual(["es", "en", "pt"]);
+  });
+});
+
+describe("cadenas del bloque fiscal del recibo", () => {
+  it("existen y no están vacías en los tres idiomas", () => {
+    // El aviso de "no es factura" es la razón de ser de este bloque (decisión D1 del spec):
+    // si falta en un idioma, ese comensal recibe un documento que parece una factura y no
+    // lo es. Por la doctrina del producto no es opcional por tenant ni por idioma.
+    for (const lang of SUPPORTED_LANGS) {
+      const t = strings(lang);
+      expect(t.receiptSubtotal.trim(), `receiptSubtotal vacío en ${lang}`).not.toBe("");
+      expect(t.receiptTax.trim(), `receiptTax vacío en ${lang}`).not.toBe("");
+      expect(t.receiptIssuer.trim(), `receiptIssuer vacío en ${lang}`).not.toBe("");
+      expect(t.receiptNotInvoice.trim(), `receiptNotInvoice vacío en ${lang}`).not.toBe("");
+    }
+  });
+
+  it("el aviso dice explícitamente que no es una factura, en cada idioma", () => {
+    // Sin esta comprobación, una traducción podría quedar en un genérico "gracias por su
+    // pedido" que no advierte de nada y el test anterior seguiría en verde.
+    expect(strings("es").receiptNotInvoice.toLowerCase()).toContain("no válido como factura");
+    expect(strings("en").receiptNotInvoice.toLowerCase()).toContain("not valid as an invoice");
+    expect(strings("pt").receiptNotInvoice.toLowerCase()).toContain("não válido como fatura");
   });
 });

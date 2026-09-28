@@ -1,0 +1,102 @@
+.shell {
+  min-height: 100vh;
+  background: #f7f7f6;
+  color: #1c1917;
+  font-family: system-ui, sans-serif;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  padding: 0.85rem 1.25rem;
+  background: #1c1917;
+  color: #fafaf9;
+}
+
+.brand {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.main {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem 4rem;
+}
+
+.tabla {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border: 1px solid #e7e5e4;
+  border-radius: 8px;
+  overflow: hidden;
+  font-size: 0.9rem;
+}
+
+.tabla th,
+.tabla td {
+  padding: 0.6rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid #f0efee;
+}
+
+.tabla th {
+  background: #fafaf9;
+  font-weight: 600;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #57534e;
+}
+
+.suspendido {
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+.impago {
+  color: #c2410c;
+  font-weight: 600;
+}
+
+.alta {
+  background: #fff;
+  border: 1px solid #e7e5e4;
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  margin: 0 0 1.5rem;
+}
+
+.campos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.75rem;
+  margin: 0.75rem 0;
+}
+
+.campo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+}
+
+.boton {
+  padding: 0.5rem 1rem;
+  border: 0;
+  border-radius: 6px;
+  background: #1c1917;
+  color: #fafaf9;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.botonLinea {
+  padding: 0.3rem 0.6rem;
+  border: 1px solid #d6d3d1;
+  border-radius: 5px;
+  background: #fff;
+  font-size: 0.8rem;
+  cursor: pointer;
+}

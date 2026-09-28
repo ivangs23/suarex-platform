@@ -167,6 +167,13 @@ export function CartPanel({ onClose }: { onClose: () => void }) {
           >
             {cart.enviando ? t.sending : t.pay}
           </button>
+          {/* Consentimiento informado en el punto donde se entregan los datos. */}
+          <p className={styles.payLegalNote}>
+            <a href="/legal/condiciones">{t.legalTerms}</a>
+            {" · "}
+            <a href="/legal/privacidad">{t.legalPrivacy}</a>
+            <span className={styles.payLegalText}>{t.legalPayNote}</span>
+          </p>
         </footer>
       </div>
     </div>

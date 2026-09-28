@@ -1,5 +1,6 @@
 import { getOrderByPublicToken } from "@suarex/db";
 import { NextResponse } from "next/server";
+import { log } from "@/lib/log";
 
 // El comensal sondea este endpoint cada pocos segundos (ver StatusPoller.tsx)
 // esperando ver avanzar `pending` -> `paid` -> `served` sin recargar: cachear la
@@ -48,7 +49,7 @@ export async function GET(
   try {
     order = await getOrderByPublicToken(publicToken);
   } catch (error) {
-    console.error(`[pedido] Error resolviendo publicToken ${publicToken}:`, error);
+    log.error("pedido.estado_no_resuelto", { error });
     return notFound();
   }
 

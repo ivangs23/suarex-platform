@@ -7,6 +7,7 @@ export type {
   ReceiptOrder,
   TicketBranding,
   TicketDestination,
+  TicketFiscal,
   TicketItem,
   TicketLine,
   TicketOrder,

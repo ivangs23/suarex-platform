@@ -7,3 +7,5 @@ export { isSelectionComplete, validateOptionGroups } from "./option-groups.js";
 export { pickupCodeFromToken } from "./pickup.js";
 export type { OrderTotals, PricedLine, TaxBucket } from "./pricing.js";
 export { computeTotals, lineTotal, taxBreakdown } from "./pricing.js";
+export type { IdiomaRecibo } from "./recibo.js";
+export { AVISO_NO_FACTURA, ETIQUETA_EMISOR, idiomaDeRecibo } from "./recibo.js";
