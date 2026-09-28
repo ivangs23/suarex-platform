@@ -61,14 +61,31 @@ Esto NO se puede probar fuera de Windows, así que es obligatorio hacerlo aquí.
 verifica es que el agente vuelve solo cuando alguien mata el proceso — no cuando se reinicia
 el PC, que ya lo cubre el auto-arranque en el login.
 
-**1. ¿Existe la tarea?** Tras abrir la app por primera vez, en PowerShell:
+La tarea solo existe mientras el equipo está **emparejado**: un PC sin emparejar no pertenece a
+ningún restaurante y no debe reabrir la app.
+
+**0. Sin emparejar, no hay tarea.** Con la app recién instalada y abierta, sin emparejar, la
+consulta del paso 1 tiene que decir que la tarea no existe.
+
+**1. ¿Existe la tarea?** Tras emparejar, en PowerShell:
 
 ```powershell
 schtasks /query /tn "SuarEx Agente Watchdog" /v /fo list
 ```
 
-Tiene que aparecer, apuntando al `.exe` instalado y con repetición cada 5 minutos. Si dice
-que no existe, mira el panel de registro de la app: se avisa del fallo al registrarla.
+Tiene que aparecer, apuntando al `.ps1` de `%APPDATA%\@suarex\agent-desktop` y con repetición
+cada 5 minutos. Si dice que no existe, mira el panel de registro de la app: se avisa del fallo
+al registrarla.
+
+**1b. El script lleva BOM.** PowerShell 5.1 lee un `.ps1` sin BOM como ANSI, y la ruta del exe
+lleva el nombre del usuario de Windows: con un usuario "José" o "Iván" la ruta se desfiguraría y
+el watchdog no relanzaría nada, sin avisar. Se comprueba en cualquier PC, tenga tildes o no:
+
+```powershell
+Format-Hex "$env:APPDATA\@suarex\agent-desktop\watchdog.ps1" | Select-Object -First 1
+```
+
+Los tres primeros bytes tienen que ser `EF BB BF`.
 
 **2. La prueba de verdad.** Con el agente emparejado y funcionando:
 
@@ -84,9 +101,18 @@ cocina se quedaría sin comandas hasta que alguien pasara por el ordenador.
 
 **3. Que no se duplique.** Con el agente ya funcionando, espera a que pase el ciclo de 5
 minutos y comprueba en el Administrador de tareas que **sigue habiendo un solo proceso**. La
-tarea lanza la app cada cinco minutos pase lo que pase; es el bloqueo de instancia única el
-que hace que la segunda salga sola. Si vieras dos procesos, los tickets se imprimirían por
-duplicado.
+tarea solo lanza la app si no encuentra su proceso; y si alguna vez coincidiera con un arranque,
+el bloqueo de instancia única hace que la segunda salga sola. Si vieras dos procesos, los tickets
+se imprimirían por duplicado.
+
+Durante esos cinco minutos, fíjate también en si **asoma alguna ventana** cuando salta la tarea:
+lanza `powershell.exe` oculto, pero con Windows Terminal como terminal por defecto podría
+parpadear. En un PC de cocina es una molestia; en un totem le quitaría el foco a la pantalla del
+cliente.
+
+**3b. "Salir" desde la bandeja.** Es una salida ordenada, pero el watchdog no la distingue de
+una caída: a los cinco minutos, como mucho, la app vuelve. Es el comportamiento actual; anótalo
+si en el local resulta un problema.
 
 **4. Al des-emparejar se limpia.** Des-empareja el dispositivo desde la app y repite la
 consulta del paso 1: la tarea ya no debe existir. Si se quedara, el PC seguiría reabriendo
@@ -105,7 +131,7 @@ No se puede probar fuera de Windows empaquetado, así que va aquí con el resto.
    directorio. Si salieran, es un fallo grave, no una errata.
 4. Debajo de `--- Registro ---` tiene que haber líneas con fecha ISO y nivel. Si pone
    `(sin entradas)` en una instalación que lleva días funcionando, el log no se está
-   escribiendo: comprueba `%APPDATA%/suarex-agente/agente.log`.
+   escribiendo: comprueba `%APPDATA%\@suarex\agent-desktop\logs\agent.log`.
 5. Pulsa el botón y **cancela** el diálogo: el panel de registro no debe decir nada (cancelar
    no es un error).
 

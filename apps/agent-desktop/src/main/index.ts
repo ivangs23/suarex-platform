@@ -36,7 +36,7 @@ import { realSessionStore } from "./real-session-store.js";
 import { openKioskWindow, registerTotemIpc } from "./totem-window.js";
 import { TRAY_ICON_DATA_URL } from "./tray-icon.js";
 import { startAutoUpdate } from "./updater.js";
-import { ensureWatchdogTask } from "./watchdog.js";
+import { ensureWatchdogTask, removeWatchdogTask } from "./watchdog.js";
 import { destroyWebPanel, layoutWebPanel, setWebPanelReporter } from "./web-panel.js";
 
 let mainWindow: BrowserWindow | null = null;
@@ -184,20 +184,18 @@ if (!gotLock) {
     // Auto-arranque en el login de Windows (desatendido, oculto en bandeja).
     app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true });
 
-    // Watchdog del SISTEMA: una tarea programada resucita el proceso si muere del TODO (crash
-    // duro/kill) -- el watchdog interno solo cubre errores del proceso vivo. Solo en un build
-    // empaquetado de Windows: en dev el exe es electron.exe y registraría una tarea basura.
-    if (process.platform === "win32" && app.isPackaged) {
-      ensureWatchdogTask(app.getPath("userData"), app.getPath("exe"), reportMain);
-    }
-
     createWindow();
     createTray();
     registerIpc(
       () => mainWindow,
       () => logSink.read(),
-      // Un totem recién emparejado entra en modo kiosko sin reiniciar.
-      () => maybeStartKiosk(),
+      // Recién emparejado: el watchdog del sistema pasa a vigilarlo y, si es un totem, entra en
+      // modo kiosko sin reiniciar.
+      async () => {
+        syncSystemWatchdog(true);
+        await maybeStartKiosk();
+      },
+      () => syncSystemWatchdog(false),
     );
     onAgentActivity(handleAgentActivity);
     // La versión de la build viaja al heartbeat (para saber qué locales están desactualizados).
@@ -215,6 +213,10 @@ if (!gotLock) {
 
     // Si ya está emparejado, arranca el agente al iniciar (imprime sin abrir la ventana).
     const creds = loadCredentials(realConfigBackend());
+    // En cada arranque, y no solo al emparejar: re-registrarla la deja apuntando al exe actual
+    // tras una actualización, y borrarla limpia la que dejaron versiones que la registraban
+    // estuviera o no emparejado el equipo.
+    syncSystemWatchdog(creds !== null);
     if (creds) {
       const store = realSessionStore();
       try {
@@ -250,6 +252,22 @@ if (!gotLock) {
     stopAgent();
     destroyWebPanel();
   });
+}
+
+/**
+ * Watchdog del SISTEMA: una tarea programada resucita el proceso si muere del TODO (crash duro o
+ * kill); el watchdog interno solo cubre errores del proceso vivo. Existe mientras el equipo está
+ * emparejado y se borra en cuanto deja de estarlo. Solo en un build empaquetado de Windows: en
+ * dev el exe es electron.exe y registraría una tarea basura.
+ */
+function syncSystemWatchdog(paired: boolean): void {
+  if (process.platform !== "win32" || !app.isPackaged) return;
+  const log = {
+    info: (msg: string) => logger?.info(msg),
+    error: (msg: string, err?: unknown) => reportMain(msg, err),
+  };
+  if (paired) ensureWatchdogTask(app.getPath("userData"), app.getPath("exe"), log);
+  else removeWatchdogTask(log);
 }
 
 /**
