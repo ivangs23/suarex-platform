@@ -77,6 +77,18 @@ Tiene que aparecer con repetición cada 5 minutos, y la tarea que ejecuta tiene 
 `SuarEx Agente.exe` con `--en-segundo-plano`, **no** `powershell.exe`. Si dice que no existe,
 mira el panel de registro de la app: se avisa del fallo al registrarla.
 
+El agente que resucita la tarea ES la instancia en marcha de la tarea, así que sus ajustes
+importan tanto como que exista:
+
+```powershell
+([xml](schtasks /query /tn "SuarEx Agente Watchdog" /xml)).Task.Settings
+```
+
+`ExecutionTimeLimit` tiene que ser `PT0S`, y `StopIfGoingOnBatteries` y
+`DisallowStartIfOnBatteries`, `false`. Con los valores por defecto, Windows mataría al agente a
+las 72 horas y al desenchufar un portátil. `Priority` 5: con la de por defecto (7) correría por
+debajo de lo normal.
+
 **1b. Sin ventanas.** Cada vez que salta la tarea no debe aparecer nada en pantalla: ni una
 consola, ni la ventana del agente. La primera versión del watchdog pasaba por PowerShell y, con
 Windows Terminal como terminal por defecto, dejaba una ventana negra abierta tras resucitar al
@@ -98,10 +110,12 @@ cocina se quedaría sin comandas hasta que alguien pasara por el ordenador.
 
 **3. Que no se duplique.** Con el agente ya funcionando, espera a que pase el ciclo de 5
 minutos y comprueba en el Administrador de tareas que **sigue habiendo un solo proceso**. La
-tarea lanza la app cada cinco minutos pase lo que pase; es el bloqueo de instancia única el que
-hace que ese segundo lanzamiento salga en el acto, y como llega con `--en-segundo-plano` tampoco
-saca la ventana del que ya corre. Si vieras dos procesos, los tickets se imprimirían por
-duplicado; si viste aparecer la ventana del agente, el flag no está llegando.
+tarea lanza la app cada cinco minutos; si ya corre, el bloqueo de instancia única hace que ese
+segundo lanzamiento salga en el acto, y como llega con `--en-segundo-plano` tampoco saca la
+ventana del que ya corre. Si el agente que corre lo resucitó la propia tarea, ni siquiera lanza:
+la tarea figura "En ejecución" mientras él viva, y es lo correcto. Si vieras dos procesos, los
+tickets se imprimirían por duplicado; si viste aparecer la ventana del agente, el flag no está
+llegando.
 
 **3b. "Salir" desde la bandeja.** Es una salida ordenada, pero el watchdog no la distingue de
 una caída: a los cinco minutos, como mucho, la app vuelve. Es el comportamiento actual; anótalo

@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { rmSync } from "node:fs";
+import { rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { FLAG_SEGUNDO_PLANO } from "./arranque-desatendido.js";
 import type { Logger } from "./logger.js";
@@ -16,36 +16,90 @@ import type { Logger } from "./logger.js";
 // mataba al agente sin dejar rastro en el registro; y el `.ps1` se leía en ANSI y desfiguraba
 // las rutas con tildes. El exe es una app de ventanas, no de consola: nada de eso existe.
 //
+// Como el agente que resucita ES la instancia en marcha de la tarea, los ajustes por defecto de
+// `schtasks /Create` lo matarían: a las 72 h (límite de ejecución) y al desenchufar un portátil
+// (parar si pasa a batería). Y lo dejarían en prioridad "por debajo de lo normal". Esos ajustes
+// solo se pueden dar por XML, así que la tarea se registra con `/XML`.
+//
 // Solo existe mientras el equipo está EMPAREJADO: un PC des-emparejado no pertenece a ningún
 // restaurante y no debe seguir reabriendo la app cada cinco minutos.
 export const WATCHDOG_TASK_NAME = "SuarEx Agente Watchdog";
 const INTERVAL_MINUTES = 5;
 /** Lo que dejaba en `userData` la versión que pasaba por PowerShell. */
 const SCRIPT_OBSOLETO = "watchdog.ps1";
+/** El XML se escribe aquí solo el tiempo de registrarlo. */
+const XML_TEMPORAL = "watchdog-tarea.xml";
 
 export type WatchdogLog = Pick<Logger, "info" | "error">;
 
+function escaparXml(texto: string): string {
+  return texto
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+/** `2026-09-28T13:55:00`: hora local, sin zona, que es como la entiende Task Scheduler. */
+function inicioDelMinuto(ahora: Date): string {
+  const dos = (n: number) => String(n).padStart(2, "0");
+  return `${ahora.getFullYear()}-${dos(ahora.getMonth() + 1)}-${dos(ahora.getDate())}T${dos(ahora.getHours())}:${dos(ahora.getMinutes())}:00`;
+}
+
 /**
- * Argumentos de `schtasks /Create` para (re)registrar la tarea, lanzando el exe del agente en
- * segundo plano cada `INTERVAL_MINUTES`. `/F` la sobrescribe -> idempotente: registrarla en cada
- * arranque la deja siempre apuntando al exe actual (p. ej. tras una actualización). Puro y
- * testeable; el `exec` real va aparte.
+ * Definición de la tarea: lanzar el exe del agente en segundo plano cada `INTERVAL_MINUTES`, para
+ * el usuario que la registra y solo con su sesión abierta. Puro y testeable.
+ *
+ * - `ExecutionTimeLimit` PT0S (sin límite) y nada de parar ni no arrancar con batería: el agente
+ *   resucitado es la instancia en marcha de la tarea y tiene que poder vivir indefinidamente.
+ * - `IgnoreNew`: mientras esa instancia vive, las ejecuciones siguientes no hacen nada, que es lo
+ *   que se quiere; cuando muere, la siguiente lo resucita.
+ * - `Priority` 5 (normal); la de por defecto, 7, lo dejaría por debajo de lo normal.
  */
-export function schtasksCreateArgs(exePath: string): string[] {
-  // La ruta lleva espacios ("SuarEx Agente"), así que va entre comillas dentro del comando.
-  const runCommand = `"${exePath}" ${FLAG_SEGUNDO_PLANO}`;
-  return [
-    "/Create",
-    "/TN",
-    WATCHDOG_TASK_NAME,
-    "/TR",
-    runCommand,
-    "/SC",
-    "MINUTE",
-    "/MO",
-    String(INTERVAL_MINUTES),
-    "/F",
-  ];
+export function watchdogTaskXml(exePath: string, ahora: Date): string {
+  return `<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Description>Vuelve a abrir el agente de impresión de SuarEx si se cierra de golpe.</Description>
+  </RegistrationInfo>
+  <Principals>
+    <Principal id="Author">
+      <LogonType>InteractiveToken</LogonType>
+      <RunLevel>LeastPrivilege</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
+    <Priority>5</Priority>
+  </Settings>
+  <Triggers>
+    <TimeTrigger>
+      <StartBoundary>${inicioDelMinuto(ahora)}</StartBoundary>
+      <Repetition>
+        <Interval>PT${INTERVAL_MINUTES}M</Interval>
+      </Repetition>
+    </TimeTrigger>
+  </Triggers>
+  <Actions Context="Author">
+    <Exec>
+      <Command>"${escaparXml(exePath)}"</Command>
+      <Arguments>${FLAG_SEGUNDO_PLANO}</Arguments>
+    </Exec>
+  </Actions>
+</Task>
+`;
+}
+
+/**
+ * Argumentos de `schtasks /Create` para (re)registrar la tarea desde su XML. `/F` la sobrescribe
+ * -> idempotente: registrarla en cada arranque la deja siempre apuntando al exe actual (p. ej.
+ * tras una actualización). Puro y testeable; el `exec` real va aparte.
+ */
+export function schtasksCreateArgs(xmlPath: string): string[] {
+  return ["/Create", "/TN", WATCHDOG_TASK_NAME, "/XML", xmlPath, "/F"];
 }
 
 /** Argumentos de `schtasks /Query`: sale con error si la tarea no existe. */
@@ -80,10 +134,17 @@ export function ensureWatchdogTask(
   exePath: string,
   log: WatchdogLog,
   run: RunSchtasks = runSchtasks,
+  ahora: Date = new Date(),
 ): void {
   try {
     rmSync(join(userDataDir, SCRIPT_OBSOLETO), { force: true });
-    run(schtasksCreateArgs(exePath), (err) => {
+    // UTF-16 con BOM, como exporta el propio Windows las tareas: la ruta lleva el nombre del
+    // usuario y puede traer tildes.
+    const xmlPath = join(userDataDir, XML_TEMPORAL);
+    const bom = String.fromCharCode(0xfeff);
+    writeFileSync(xmlPath, bom + watchdogTaskXml(exePath, ahora), "utf16le");
+    run(schtasksCreateArgs(xmlPath), (err) => {
+      rmSync(xmlPath, { force: true });
       if (err) log.error("[watchdog] no se pudo registrar la tarea programada:", err);
       else log.info("[watchdog] tarea programada registrada.");
     });

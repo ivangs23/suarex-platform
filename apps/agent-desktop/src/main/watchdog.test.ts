@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -11,6 +11,7 @@ import {
   schtasksDeleteArgs,
   schtasksQueryArgs,
   WATCHDOG_TASK_NAME,
+  watchdogTaskXml,
 } from "./watchdog.js";
 
 const EXE = "C:\\Users\\Iván\\AppData\\Local\\Programs\\SuarEx Agente\\SuarEx Agente.exe";
@@ -35,25 +36,59 @@ function fakeLog() {
   };
 }
 
-describe("schtasksCreateArgs", () => {
-  it("registra la tarea cada 5 minutos, sobrescribiendo (/F)", () => {
-    const args = schtasksCreateArgs(EXE);
-    expect(args).toContain("/Create");
-    expect(args).toContain("/F");
-    expect(args).toEqual(expect.arrayContaining(["/TN", WATCHDOG_TASK_NAME]));
-    expect(args).toEqual(expect.arrayContaining(["/SC", "MINUTE", "/MO", "5"]));
-  });
+/** El valor de una etiqueta del XML de la tarea (todas las que usa aparecen una sola vez). */
+function etiqueta(xml: string, nombre: string): string | undefined {
+  return xml.match(new RegExp(`<${nombre}>([^<]*)</${nombre}>`))?.[1];
+}
+
+describe("watchdogTaskXml", () => {
+  const xml = watchdogTaskXml(EXE, new Date(2026, 8, 28, 13, 57, 42));
 
   it("lanza el exe del agente directamente, en segundo plano, sin pasar por una consola", () => {
-    const args = schtasksCreateArgs(EXE);
-    const tr = args[args.indexOf("/TR") + 1] ?? "";
-    // La ruta (con espacios y con tildes: va tal cual, sin pasar por ningún fichero) entre comillas.
-    expect(tr.startsWith(`"${EXE}" `)).toBe(true);
+    // La ruta (con espacios) entre comillas; con tildes tal cual, porque el fichero va en UTF-16.
+    expect(etiqueta(xml, "Command")).toBe(`"${EXE}"`);
     // Con el flag del arranque desatendido: si el agente ya corre, no saca su ventana.
-    expect(esArranqueDesatendido(tr.split(" "))).toBe(true);
+    expect(esArranqueDesatendido([etiqueta(xml, "Arguments") ?? ""])).toBe(true);
     // Nada de PowerShell: con Windows Terminal su ventana no se oculta y, al cerrarla, mata al
     // agente que haya lanzado.
-    expect(tr.toLowerCase()).not.toContain("powershell");
+    expect(xml.toLowerCase()).not.toContain("powershell");
+  });
+
+  it("cada 5 minutos desde el minuto en que se registra, en hora local", () => {
+    expect(etiqueta(xml, "Interval")).toBe("PT5M");
+    expect(etiqueta(xml, "StartBoundary")).toBe("2026-09-28T13:57:00");
+  });
+
+  it("no mata al agente que resucita: sin límite de tiempo y sin pararlo por batería", () => {
+    // El agente resucitado ES la instancia en marcha de la tarea. Los valores por defecto lo
+    // matarían a las 72 h y al desenchufar un portátil.
+    expect(etiqueta(xml, "ExecutionTimeLimit")).toBe("PT0S");
+    expect(etiqueta(xml, "StopIfGoingOnBatteries")).toBe("false");
+    expect(etiqueta(xml, "DisallowStartIfOnBatteries")).toBe("false");
+    // Mientras vive, las ejecuciones siguientes no hacen nada.
+    expect(etiqueta(xml, "MultipleInstancesPolicy")).toBe("IgnoreNew");
+    // Prioridad normal: la de por defecto (7) lo dejaría por debajo de lo normal.
+    expect(etiqueta(xml, "Priority")).toBe("5");
+  });
+
+  it("escapa la ruta para que un & en el nombre del usuario no rompa el XML", () => {
+    const conAmpersand = watchdogTaskXml("C:\\Users\\Pili & Mili\\SuarEx Agente.exe", new Date());
+    expect(etiqueta(conAmpersand, "Command")).toBe(
+      '"C:\\Users\\Pili &amp; Mili\\SuarEx Agente.exe"',
+    );
+  });
+});
+
+describe("schtasksCreateArgs", () => {
+  it("registra la tarea desde su XML, sobrescribiendo (/F)", () => {
+    expect(schtasksCreateArgs("C:\\x\\tarea.xml")).toEqual([
+      "/Create",
+      "/TN",
+      WATCHDOG_TASK_NAME,
+      "/XML",
+      "C:\\x\\tarea.xml",
+      "/F",
+    ]);
   });
 });
 
@@ -64,14 +99,26 @@ describe("ensureWatchdogTask", () => {
     dir = null;
   });
 
-  it("registra la tarea y lo dice como info, no como error", () => {
+  it("registra la tarea desde un XML en UTF-16 con BOM, y lo borra al acabar", () => {
     dir = mkdtempSync(join(tmpdir(), "watchdog-"));
-    const { run, llamadas } = fakeSchtasks();
+    const xmlPath = join(dir, "watchdog-tarea.xml");
+    const ahora = new Date(2026, 8, 28, 13, 57);
+    const llamadas: string[][] = [];
+    const leidos: Buffer[] = [];
+    const run: RunSchtasks = (args, done) => {
+      llamadas.push(args);
+      leidos.push(readFileSync(xmlPath)); // schtasks lo lee en este momento
+      done(null);
+    };
     const { log, info, error } = fakeLog();
 
-    ensureWatchdogTask(dir, EXE, log, run);
+    ensureWatchdogTask(dir, EXE, log, run, ahora);
 
-    expect(llamadas).toEqual([schtasksCreateArgs(EXE)]);
+    expect(llamadas).toEqual([schtasksCreateArgs(xmlPath)]);
+    const [bytes = Buffer.alloc(0)] = leidos;
+    expect([...bytes.subarray(0, 2)]).toEqual([0xff, 0xfe]);
+    expect(bytes.subarray(2).toString("utf16le")).toBe(watchdogTaskXml(EXE, ahora));
+    expect(existsSync(xmlPath)).toBe(false);
     // Que todo fue bien no es un error: si lo fuera, el diagnóstico gritaría en cada arranque.
     expect(info).toEqual(["[watchdog] tarea programada registrada."]);
     expect(error).toEqual([]);
