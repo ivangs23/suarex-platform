@@ -73,19 +73,15 @@ consulta del paso 1 tiene que decir que la tarea no existe.
 schtasks /query /tn "SuarEx Agente Watchdog" /v /fo list
 ```
 
-Tiene que aparecer, apuntando al `.ps1` de `%APPDATA%\@suarex\agent-desktop` y con repetición
-cada 5 minutos. Si dice que no existe, mira el panel de registro de la app: se avisa del fallo
-al registrarla.
+Tiene que aparecer con repetición cada 5 minutos, y la tarea que ejecuta tiene que ser el propio
+`SuarEx Agente.exe` con `--en-segundo-plano`, **no** `powershell.exe`. Si dice que no existe,
+mira el panel de registro de la app: se avisa del fallo al registrarla.
 
-**1b. El script lleva BOM.** PowerShell 5.1 lee un `.ps1` sin BOM como ANSI, y la ruta del exe
-lleva el nombre del usuario de Windows: con un usuario "José" o "Iván" la ruta se desfiguraría y
-el watchdog no relanzaría nada, sin avisar. Se comprueba en cualquier PC, tenga tildes o no:
-
-```powershell
-Format-Hex "$env:APPDATA\@suarex\agent-desktop\watchdog.ps1" | Select-Object -First 1
-```
-
-Los tres primeros bytes tienen que ser `EF BB BF`.
+**1b. Sin ventanas.** Cada vez que salta la tarea no debe aparecer nada en pantalla: ni una
+consola, ni la ventana del agente. La primera versión del watchdog pasaba por PowerShell y, con
+Windows Terminal como terminal por defecto, dejaba una ventana negra abierta tras resucitar al
+agente; cerrarla mataba al agente sin dejar rastro. Si ves cualquier ventana al pasar el minuto
+múltiplo de 5, es un fallo.
 
 **2. La prueba de verdad.** Con el agente emparejado y funcionando:
 
@@ -93,7 +89,8 @@ Los tres primeros bytes tienen que ser `EF BB BF`.
 2. Abre el Administrador de tareas y **finaliza el proceso** del agente (no lo cierres desde
    la bandeja: eso es una salida ordenada, no una caída).
 3. Comprueba que el icono de la bandeja desaparece.
-4. **Espera hasta 5 minutos.** El icono tiene que volver solo.
+4. **Espera hasta 5 minutos.** El icono tiene que volver solo, **sin abrir ninguna ventana**:
+   un agente resucitado vuelve a la bandeja, igual que en el arranque de Windows.
 5. Manda otro pedido: tiene que imprimir sin que nadie haya tocado el PC.
 
 El paso 4 es el que importa. Si no vuelve, el watchdog no está haciendo su trabajo y la
@@ -101,14 +98,10 @@ cocina se quedaría sin comandas hasta que alguien pasara por el ordenador.
 
 **3. Que no se duplique.** Con el agente ya funcionando, espera a que pase el ciclo de 5
 minutos y comprueba en el Administrador de tareas que **sigue habiendo un solo proceso**. La
-tarea solo lanza la app si no encuentra su proceso; y si alguna vez coincidiera con un arranque,
-el bloqueo de instancia única hace que la segunda salga sola. Si vieras dos procesos, los tickets
-se imprimirían por duplicado.
-
-Durante esos cinco minutos, fíjate también en si **asoma alguna ventana** cuando salta la tarea:
-lanza `powershell.exe` oculto, pero con Windows Terminal como terminal por defecto podría
-parpadear. En un PC de cocina es una molestia; en un totem le quitaría el foco a la pantalla del
-cliente.
+tarea lanza la app cada cinco minutos pase lo que pase; es el bloqueo de instancia única el que
+hace que ese segundo lanzamiento salga en el acto, y como llega con `--en-segundo-plano` tampoco
+saca la ventana del que ya corre. Si vieras dos procesos, los tickets se imprimirían por
+duplicado; si viste aparecer la ventana del agente, el flag no está llegando.
 
 **3b. "Salir" desde la bandeja.** Es una salida ordenada, pero el watchdog no la distingue de
 una caída: a los cinco minutos, como mucho, la app vuelve. Es el comportamiento actual; anótalo

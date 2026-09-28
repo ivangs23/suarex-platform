@@ -1,7 +1,8 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { esArranqueDesatendido } from "./arranque-desatendido.js";
 import {
   ensureWatchdogTask,
   type RunSchtasks,
@@ -10,8 +11,9 @@ import {
   schtasksDeleteArgs,
   schtasksQueryArgs,
   WATCHDOG_TASK_NAME,
-  watchdogScript,
 } from "./watchdog.js";
+
+const EXE = "C:\\Users\\Iván\\AppData\\Local\\Programs\\SuarEx Agente\\SuarEx Agente.exe";
 
 /** Un `schtasks` de mentira: apunta qué se le pidió y responde con el error que diga `fallaSi`. */
 function fakeSchtasks(fallaSi: (args: string[]) => boolean = () => false) {
@@ -33,19 +35,25 @@ function fakeLog() {
   };
 }
 
-describe("watchdogScript", () => {
-  it("solo lanza el exe si NO hay ya un proceso del agente", () => {
-    const script = watchdogScript("C:\\Apps\\SuarEx Agente.exe", "SuarEx Agente");
-    expect(script).toContain("Get-Process -Name 'SuarEx Agente'");
-    expect(script).toContain("Start-Process -FilePath 'C:\\Apps\\SuarEx Agente.exe'");
-    // La comprobación va NEGADA: solo arranca si no corre ya.
-    expect(script).toContain("if (-not (Get-Process");
+describe("schtasksCreateArgs", () => {
+  it("registra la tarea cada 5 minutos, sobrescribiendo (/F)", () => {
+    const args = schtasksCreateArgs(EXE);
+    expect(args).toContain("/Create");
+    expect(args).toContain("/F");
+    expect(args).toEqual(expect.arrayContaining(["/TN", WATCHDOG_TASK_NAME]));
+    expect(args).toEqual(expect.arrayContaining(["/SC", "MINUTE", "/MO", "5"]));
   });
 
-  it("empieza por BOM, o PowerShell 5.1 leería una ruta con tildes en ANSI y no la encontraría", () => {
-    const script = watchdogScript("C:\\Users\\Iván\\SuarEx Agente.exe", "SuarEx Agente");
-    expect(script.startsWith("\uFEFF")).toBe(true);
-    expect(script).toContain("C:\\Users\\Iván\\SuarEx Agente.exe");
+  it("lanza el exe del agente directamente, en segundo plano, sin pasar por una consola", () => {
+    const args = schtasksCreateArgs(EXE);
+    const tr = args[args.indexOf("/TR") + 1] ?? "";
+    // La ruta (con espacios y con tildes: va tal cual, sin pasar por ningún fichero) entre comillas.
+    expect(tr.startsWith(`"${EXE}" `)).toBe(true);
+    // Con el flag del arranque desatendido: si el agente ya corre, no saca su ventana.
+    expect(esArranqueDesatendido(tr.split(" "))).toBe(true);
+    // Nada de PowerShell: con Windows Terminal su ventana no se oculta y, al cerrarla, mata al
+    // agente que haya lanzado.
+    expect(tr.toLowerCase()).not.toContain("powershell");
   });
 });
 
@@ -56,25 +64,27 @@ describe("ensureWatchdogTask", () => {
     dir = null;
   });
 
-  it("escribe en disco el .ps1 con BOM UTF-8 y la ruta intacta, y registra la tarea", () => {
+  it("registra la tarea y lo dice como info, no como error", () => {
     dir = mkdtempSync(join(tmpdir(), "watchdog-"));
     const { run, llamadas } = fakeSchtasks();
     const { log, info, error } = fakeLog();
 
-    ensureWatchdogTask(
-      dir,
-      "C:\\Users\\Iván\\AppData\\Local\\Programs\\SuarEx Agente\\SuarEx Agente.exe",
-      log,
-      run,
-    );
+    ensureWatchdogTask(dir, EXE, log, run);
 
-    const bytes = readFileSync(join(dir, "watchdog.ps1"));
-    expect([...bytes.subarray(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
-    expect(bytes.toString("utf8")).toContain("\\Iván\\");
-    expect(llamadas).toEqual([schtasksCreateArgs(join(dir, "watchdog.ps1"))]);
+    expect(llamadas).toEqual([schtasksCreateArgs(EXE)]);
     // Que todo fue bien no es un error: si lo fuera, el diagnóstico gritaría en cada arranque.
     expect(info).toEqual(["[watchdog] tarea programada registrada."]);
     expect(error).toEqual([]);
+  });
+
+  it("borra el .ps1 que dejaba la versión que pasaba por PowerShell", () => {
+    dir = mkdtempSync(join(tmpdir(), "watchdog-"));
+    writeFileSync(join(dir, "watchdog.ps1"), "Start-Process ...");
+    const { run } = fakeSchtasks();
+
+    ensureWatchdogTask(dir, EXE, fakeLog().log, run);
+
+    expect(existsSync(join(dir, "watchdog.ps1"))).toBe(false);
   });
 
   it("si schtasks falla lo registra como error, sin lanzar", () => {
@@ -82,9 +92,7 @@ describe("ensureWatchdogTask", () => {
     const { run } = fakeSchtasks(() => true);
     const { log, info, error } = fakeLog();
 
-    expect(() =>
-      ensureWatchdogTask(dir as string, "C:\\A\\SuarEx Agente.exe", log, run),
-    ).not.toThrow();
+    expect(() => ensureWatchdogTask(dir as string, EXE, log, run)).not.toThrow();
     expect(error).toEqual(["[watchdog] no se pudo registrar la tarea programada:"]);
     expect(info).toEqual([]);
   });
@@ -126,21 +134,5 @@ describe("removeWatchdogTask", () => {
   it("consulta y borra la MISMA tarea que se registra, y borra sin pedir confirmación", () => {
     expect(schtasksQueryArgs()).toEqual(expect.arrayContaining(["/TN", WATCHDOG_TASK_NAME]));
     expect(schtasksDeleteArgs()).toEqual(expect.arrayContaining(["/TN", WATCHDOG_TASK_NAME, "/F"]));
-  });
-});
-
-describe("schtasksCreateArgs", () => {
-  it("registra la tarea cada 5 minutos, sobrescribiendo (/F), corriendo el .ps1", () => {
-    const args = schtasksCreateArgs("C:\\Users\\x\\AppData\\Roaming\\SuarEx Agente\\watchdog.ps1");
-    expect(args).toContain("/Create");
-    expect(args).toContain("/F");
-    expect(args).toEqual(expect.arrayContaining(["/TN", WATCHDOG_TASK_NAME]));
-    expect(args).toEqual(expect.arrayContaining(["/SC", "MINUTE", "/MO", "5"]));
-
-    const tr = args[args.indexOf("/TR") + 1];
-    expect(tr).toContain("powershell.exe");
-    expect(tr).toContain("-WindowStyle Hidden");
-    // La ruta del script (con espacios) va entre comillas dentro del comando de la tarea.
-    expect(tr).toContain('-File "C:\\Users\\x\\AppData\\Roaming\\SuarEx Agente\\watchdog.ps1"');
   });
 });

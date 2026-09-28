@@ -1,49 +1,39 @@
 import { execFile } from "node:child_process";
-import { writeFileSync } from "node:fs";
-import { basename, join } from "node:path";
+import { rmSync } from "node:fs";
+import { join } from "node:path";
+import { FLAG_SEGUNDO_PLANO } from "./arranque-desatendido.js";
 import type { Logger } from "./logger.js";
 
 // La tarea programada que resucita el agente si el PROCESO entero muere (crash duro o kill) --
 // el watchdog interno (uncaughtException/unhandledRejection) solo cubre errores DENTRO del
-// proceso vivo. Cada 5 min comprueba si el agente corre y lo relanza si no; el single-instance
-// lock del propio agente descarta un lanzamiento duplicado, así que la comprobación es una
-// salvaguarda, no un requisito de corrección.
+// proceso vivo. Cada 5 min lanza el exe del agente: si ya corre, el single-instance lock hace que
+// el lanzamiento nuevo salga en el acto y no pase nada; si no corre, arranca.
+//
+// Lanza el EXE directamente, no un script. La primera versión pasaba por
+// `powershell.exe -WindowStyle Hidden` y, validada en un Windows 11 real, falló por tres lados:
+// con Windows Terminal como terminal por defecto la ventana NO se oculta (asomaba cada 5 min);
+// el agente relanzado heredaba esa consola, así que la ventana se quedaba abierta y CERRARLA
+// mataba al agente sin dejar rastro en el registro; y el `.ps1` se leía en ANSI y desfiguraba
+// las rutas con tildes. El exe es una app de ventanas, no de consola: nada de eso existe.
 //
 // Solo existe mientras el equipo está EMPAREJADO: un PC des-emparejado no pertenece a ningún
 // restaurante y no debe seguir reabriendo la app cada cinco minutos.
 export const WATCHDOG_TASK_NAME = "SuarEx Agente Watchdog";
 const INTERVAL_MINUTES = 5;
+/** Lo que dejaba en `userData` la versión que pasaba por PowerShell. */
+const SCRIPT_OBSOLETO = "watchdog.ps1";
 
 export type WatchdogLog = Pick<Logger, "info" | "error">;
 
 /**
- * Contenido EXACTO del `.ps1` que ejecuta la tarea: si NO hay ningún proceso del agente, lo lanza.
- * `Start-Process` no bloquea. El nombre de proceso y la ruta del exe se hornean (no se calculan
- * en runtime) para que el script no dependa de nada. Puro y testeable.
- *
- * Empieza por BOM a propósito. Windows PowerShell 5.1 lee un `.ps1` SIN BOM en la página de
- * códigos ANSI (1252 en un Windows español), y la ruta del exe lleva el nombre del usuario
- * porque la instalación es por usuario: en el PC de "Iván" se leería `IvÃ¡n`, `Start-Process`
- * apuntaría a una ruta que no existe y el watchdog no resucitaría nada, en silencio.
+ * Argumentos de `schtasks /Create` para (re)registrar la tarea, lanzando el exe del agente en
+ * segundo plano cada `INTERVAL_MINUTES`. `/F` la sobrescribe -> idempotente: registrarla en cada
+ * arranque la deja siempre apuntando al exe actual (p. ej. tras una actualización). Puro y
+ * testeable; el `exec` real va aparte.
  */
-export function watchdogScript(exePath: string, processName: string): string {
-  return [
-    "\uFEFF$ErrorActionPreference = 'SilentlyContinue'",
-    `if (-not (Get-Process -Name '${processName}')) {`,
-    `  Start-Process -FilePath '${exePath}'`,
-    "}",
-    "",
-  ].join("\r\n");
-}
-
-/**
- * Argumentos de `schtasks /Create` para (re)registrar la tarea, ejecutando el `.ps1` cada
- * `INTERVAL_MINUTES`. `/F` la sobrescribe -> idempotente: registrarla en cada arranque la deja
- * siempre apuntando al exe/script actual (p. ej. tras una actualización). Puro y testeable; el
- * `exec` real va aparte.
- */
-export function schtasksCreateArgs(scriptPath: string): string[] {
-  const runCommand = `powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "${scriptPath}"`;
+export function schtasksCreateArgs(exePath: string): string[] {
+  // La ruta lleva espacios ("SuarEx Agente"), así que va entre comillas dentro del comando.
+  const runCommand = `"${exePath}" ${FLAG_SEGUNDO_PLANO}`;
   return [
     "/Create",
     "/TN",
@@ -76,10 +66,11 @@ const runSchtasks: RunSchtasks = (args, done) => {
 };
 
 /**
- * Escribe el `.ps1` en `userData` y registra/actualiza la tarea programada per-user (sin admin).
- * Solo tiene sentido en un build EMPAQUETADO de Windows: en dev el exe es `electron.exe` y
- * registraría una tarea basura. Un fallo aquí NUNCA debe tumbar la app -- es una mejora de
- * resiliencia, no algo de lo que dependa imprimir -- así que se envuelve y se registra.
+ * Registra/actualiza la tarea programada per-user (sin admin) y borra el `.ps1` que dejaba la
+ * versión anterior en `userData`. Solo tiene sentido en un build EMPAQUETADO de Windows: en dev
+ * el exe es `electron.exe` y registraría una tarea basura. Un fallo aquí NUNCA debe tumbar la app
+ * -- es una mejora de resiliencia, no algo de lo que dependa imprimir -- así que se envuelve y se
+ * registra.
  *
  * NOTA: al desinstalar, la tarea la borra el script NSIS (`build/installer.nsh`), no la app
  * (una desinstalación no ejecuta código de la app).
@@ -91,10 +82,8 @@ export function ensureWatchdogTask(
   run: RunSchtasks = runSchtasks,
 ): void {
   try {
-    const processName = basename(exePath).replace(/\.exe$/i, "");
-    const scriptPath = join(userDataDir, "watchdog.ps1");
-    writeFileSync(scriptPath, watchdogScript(exePath, processName), "utf8");
-    run(schtasksCreateArgs(scriptPath), (err) => {
+    rmSync(join(userDataDir, SCRIPT_OBSOLETO), { force: true });
+    run(schtasksCreateArgs(exePath), (err) => {
       if (err) log.error("[watchdog] no se pudo registrar la tarea programada:", err);
       else log.info("[watchdog] tarea programada registrada.");
     });

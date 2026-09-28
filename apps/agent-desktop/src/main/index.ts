@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { app, BrowserWindow, Menu, Notification, nativeImage, Tray } from "electron";
 import { WebSocket as WsWebSocket } from "ws";
 import { type ActivityAlerts, type AgentActivity, INITIAL_ACTIVITY } from "./agent-activity.js";
+import { esArranqueDesatendido, opcionesDeInicioConWindows } from "./arranque-desatendido.js";
 
 // Electron 33 corre sobre Node 20, que NO expone `WebSocket` global (estable desde Node 22).
 // Supabase Realtime (`@suarex/realtime` -> subscribeToOrders, la vía rápida del agente ante un
@@ -144,7 +145,10 @@ const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
 } else {
-  app.on("second-instance", () => {
+  app.on("second-instance", (_e, argv) => {
+    // El watchdog lanza el exe cada 5 min aunque el agente esté vivo: ese lanzamiento solo
+    // comprueba que sigue ahí. Sacar la ventana por él la pondría encima de todo cada 5 min.
+    if (esArranqueDesatendido(argv)) return;
     if (mainWindow) {
       mainWindow.show();
       mainWindow.focus();
@@ -181,8 +185,9 @@ if (!gotLock) {
     // enchufe a mitad de un pago. Se crea aquí para que exista ANTES de que se pueda cobrar.
     chargeJournal = createChargeJournal(app.getPath("userData"));
 
-    // Auto-arranque en el login de Windows (desatendido, oculto en bandeja).
-    app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true });
+    // Auto-arranque en el login de Windows (desatendido, oculto en bandeja). Solo empaquetado:
+    // en dev registraría el `electron.exe` de node_modules para arrancar con cada sesión.
+    if (app.isPackaged) app.setLoginItemSettings(opcionesDeInicioConWindows());
 
     createWindow();
     createTray();
@@ -349,10 +354,10 @@ function createWindow(): void {
     },
   });
 
-  // Solo se muestra si el usuario lanzó la app a mano; si fue el auto-arranque de Windows
-  // en el login, se queda oculta en la bandeja (paso 8 de la checklist de validación).
+  // Solo se muestra si el usuario lanzó la app a mano; si la lanzó Windows (inicio de sesión o
+  // watchdog), se queda oculta en la bandeja (paso 8 de la checklist de validación).
   mainWindow.once("ready-to-show", () => {
-    if (!app.getLoginItemSettings().wasOpenedAtLogin) {
+    if (!esArranqueDesatendido(process.argv)) {
       mainWindow?.show();
     }
   });
