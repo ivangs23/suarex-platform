@@ -18,6 +18,15 @@ import styles from "./cart.module.css";
  * cualquier fecha futura y CVC. No se mueve dinero real.
  */
 
+/**
+ * Sin Link (el pago guardado de Stripe). Link pide el correo del comensal dentro del formulario,
+ * y quien lo escribe espera recibir algo -- un recibo -- que nunca llega: la plataforma no envía
+ * correos y el recibo es la pantalla del pedido. Se quita aquí, en el formulario, porque desde el
+ * cobro no se puede (`excluded_payment_method_types` no admite `link`) y desactivarlo en el panel
+ * de Stripe habría que hacerlo cuenta por cuenta. Tarjeta, Apple Pay y Google Pay no cambian.
+ */
+export const OPCIONES_DEL_FORMULARIO = { wallets: { link: "never" } } as const;
+
 export function PaymentStep() {
   const cart = useCart();
 
@@ -101,7 +110,7 @@ function PaymentForm() {
   return (
     <form className={styles.sheetBody} data-testid="payment-step" onSubmit={onSubmit}>
       <h2 className={styles.sheetTitle}>{t.payTitle}</h2>
-      <PaymentElement />
+      <PaymentElement options={OPCIONES_DEL_FORMULARIO} />
 
       {error ? (
         <p className={styles.error} role="alert" data-testid="payment-error">
