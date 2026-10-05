@@ -456,9 +456,9 @@ describe("unprintedPaidOrders", () => {
  * Revisión final whole-branch (seam entre fases): `unprintedPaidOrders` filtraba por
  * `status = 'paid'`, pero `paid` NO es un estado estable -- el trigger `orders_auto_serve`
  * (`20260721000008_orders_auto_serve.sql`) puede saltar de `paid` a `served` en la MISMA
- * sentencia que lo marca pagado, si el personal ya había resuelto ambas estaciones ANTES
- * de que el webhook de Stripe confirmara el cobro (el tablero de cocina/barra no espera al
- * pago -- ver `listActiveOrders`, `packages/db/src/staff-orders.ts`). El pedido nunca
+ * sentencia que lo marca pagado, si ambas estaciones ya estaban resueltas ANTES de que el
+ * webhook de Stripe confirmara el cobro (el tablero ya no enseña lo que no está pagado --
+ * ver `listActiveOrders` -- pero `markStationDone` no exige el pago). El pedido nunca
  * "descansa" en `paid`, así que un filtro `status = 'paid'` nunca lo ve: su ticket no se
  * imprime jamás y nada lo registra ("targets vacío = trivialmente cubierto" no aplica
  * aquí -- el pedido ni siquiera entra en la consulta).
