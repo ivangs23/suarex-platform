@@ -38,7 +38,13 @@ import { openKioskWindow, registerTotemIpc } from "./totem-window.js";
 import { TRAY_ICON_DATA_URL } from "./tray-icon.js";
 import { startAutoUpdate } from "./updater.js";
 import { ensureWatchdogTask, removeWatchdogTask } from "./watchdog.js";
-import { destroyWebPanel, layoutWebPanel, setWebPanelReporter } from "./web-panel.js";
+import {
+  destroyWebPanel,
+  layoutWebPanel,
+  olvidarSesionDeGestion,
+  setWebPanelReporter,
+  vaciarParticionAntigua,
+} from "./web-panel.js";
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -171,6 +177,10 @@ if (!gotLock) {
     // Los fallos del panel incrustado (página que no carga, JavaScript que revienta) van al
     // MISMO registro. Sin esto, lo único observable desde fuera era un recuadro en blanco.
     setWebPanelReporter((mensaje) => logger?.error(mensaje));
+    // La sesión única de antes podía ser de owner y seguiría en disco aunque ya no la use nadie.
+    vaciarParticionAntigua().catch((err) =>
+      reportMain("[panel] no se pudo vaciar la partición antigua:", err),
+    );
 
     /* Un ejecutable incompleto se dice en la PRIMERA línea del registro, antes de intentar nada.
        Si no, lo único que queda escrito es el fallo derivado ("no hay sesión guardada") y quien
@@ -374,6 +384,12 @@ function createWindow(): void {
     if (!quitting) {
       e.preventDefault();
       mainWindow?.hide();
+      // Quien la vuelva a abrir tiene que identificarse para tocar precios o cerrar caja, y la
+      // ventana reaparece en el menú, no en una sección de gestión ya vaciada.
+      olvidarSesionDeGestion().catch((err) =>
+        reportMain("[panel] no se pudo cerrar la sesión de gestión:", err),
+      );
+      mainWindow?.webContents.send("volver-al-menu");
     }
   });
 
