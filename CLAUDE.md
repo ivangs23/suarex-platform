@@ -77,6 +77,28 @@ administrador):
 ```
 127.0.0.1 garum.localhost
 127.0.0.1 manuela.localhost
+127.0.0.1 admin.localhost
+127.0.0.1 notadmin.localhost
+127.0.0.1 admin.garum.localhost
+```
+
+Las tres últimas son de la consola de plataforma (`plataforma-host.spec.ts` las pide por
+`request`). Sin ellas, esos tres tests caen con `getaddrinfo ENOTFOUND` y el resto pasa.
+
+**Tras un `pnpm install` que suba Playwright**, `pnpm exec playwright install chromium`: sin el
+navegador de la versión nueva, el e2e cae entero con "Executable doesn't exist" (cada máquina
+guarda los navegadores en su caché de usuario, no en el repo).
+
+**Si `supabase start` falla con "bind: An attempt was made to access a socket in a way forbidden
+by its access permissions"**, no es Supabase: tras algún reinicio, WinNAT (Hyper-V) se reserva un
+rango de puertos que pisa los del stack (54320–54329). Se ve con
+`netsh interface ipv4 show excludedportrange protocol=tcp`. Una vez, como administrador, y no
+vuelve a pasar:
+
+```
+net stop winnat
+netsh int ipv4 add excludedportrange protocol=tcp startport=54320 numberofports=10
+net start winnat
 ```
 
 Los saltos de línea los fija `.gitattributes` (`* text=auto eol=lf`): sin él, `core.autocrlf`
