@@ -79,6 +79,18 @@ test("un staff no ve el panel de gestión", async ({ page }) => {
   // alguien sin sesión, ver `apps/web/lib/require-manager.ts`.
   await expect(page).toHaveURL(/\/staff\/login/);
   await expect(page.locator("h1")).not.toHaveText("Catálogo");
+  // Pero, a diferencia de quien no tiene sesión, se le dice POR QUÉ está en el login: sin esto,
+  // el camarero que pulsa "Productos" en el PC de cocina cree que la app olvidó su contraseña.
+  await expect(page.getByTestId("login-aviso-permiso")).toContainText("encargado");
+});
+
+test("sin sesión, la gestión manda al login de siempre, sin aviso de permisos", async ({
+  page,
+}) => {
+  await page.goto("http://garum.localhost:3000/admin/catalogo");
+  await expect(page).toHaveURL(/\/staff\/login/);
+  await expect(page.getByRole("heading", { name: "Acceso del personal" })).toBeVisible();
+  await expect(page.getByTestId("login-aviso-permiso")).toHaveCount(0);
 });
 
 test("un owner crea una categoría y un producto (con imagen), y aparecen en la carta", async ({
