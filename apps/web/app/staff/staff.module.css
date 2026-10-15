@@ -225,6 +225,12 @@
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
 }
 
+/* Dentro de la tarjeta del login no hacen falta los márgenes de `.notice`, que es para el tablero. */
+.loginNotice {
+  composes: notice;
+  margin: 0;
+}
+
 .loginTitle {
   margin: 0 0 0.5rem;
   font-family: var(--font-playfair), Georgia, serif;

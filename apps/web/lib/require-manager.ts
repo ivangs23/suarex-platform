@@ -1,16 +1,13 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { guardedAction } from "./guarded-action";
+import { isManagerRole, type ManagerRole } from "./manager-role";
 import { resolveStaffSession } from "./staff-session";
 import { staffServerClient } from "./supabase-server";
 import { requireTenant } from "./tenant-context";
 
-export type ManagerRole = "owner" | "admin";
+export { isManagerRole, type ManagerRole };
 export type ManagerSession = { userId: string; tenantId: string; role: ManagerRole };
-
-export function isManagerRole(role: string): role is ManagerRole {
-  return role === "owner" || role === "admin";
-}
 
 /**
  * Guard del panel de administración. Devuelve la sesión SOLO si el usuario está
