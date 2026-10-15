@@ -158,9 +158,10 @@ const LIMITE_POR_DEFECTO = 50;
 /**
  * HISTÓRICO DE PEDIDOS.
  *
- * El tablero de `/staff` solo enseña lo ACTIVO —`listActiveOrders` filtra servidos, cancelados
- * y reembolsados— así que en cuanto una comanda se sirve desaparece y no hay dónde volver a
- * verla. Esto contesta "¿qué pidió la mesa 4 anoche?" y "¿este cobro de 38 € de qué era?".
+ * El tablero de `/staff` solo enseña lo que hay que preparar —`listActiveOrders` deja fuera lo
+ * no pagado, servido, cancelado o reembolsado— así que en cuanto una comanda se sirve
+ * desaparece y no hay dónde volver a verla. Esto contesta "¿qué pidió la mesa 4 anoche?" y
+ * "¿este cobro de 38 € de qué era?".
  *
  * A diferencia del informe de ventas, aquí NO se filtra por estado: un pedido cancelado o
  * reembolsado es justo el que se viene a buscar.

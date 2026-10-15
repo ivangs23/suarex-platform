@@ -204,10 +204,10 @@ export function selectUnprintedOrders(
  * Fix (revisión final whole-branch, seam entre fases): el predicado YA NO es
  * `status = 'paid'`. `paid` no es un estado estable -- el trigger `orders_auto_serve`
  * (`20260721000008_orders_auto_serve.sql`) puede saltar `paid -> served` dentro de la
- * MISMA sentencia que `markOrderPaid` ejecuta, si el personal ya había resuelto ambas
- * estaciones en el tablero ANTES de que el webhook de Stripe confirmara el cobro (el
- * tablero no espera al pago, ver `listActiveOrders`/`markStationDone` en
- * `staff-orders.ts`). El pedido nunca "descansa" en `paid`, así que un filtro
+ * MISMA sentencia que `markOrderPaid` ejecuta, si ambas estaciones ya estaban resueltas
+ * ANTES de que el webhook de Stripe confirmara el cobro. El tablero ya no enseña lo que no
+ * está pagado (ver `listActiveOrders`), pero `markStationDone` no exige el pago, así que el
+ * caso sigue siendo posible. El pedido nunca "descansa" en `paid`, así que un filtro
  * `status = 'paid'` no lo ve jamás: su ticket no se imprime nunca y nada lo registra.
  *
  * El predicado correcto es "pagado pero todavía no completamente impreso",

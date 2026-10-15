@@ -83,6 +83,7 @@ describe("listActiveOrders", () => {
     const ownOrderId = await insertOrder(tenantA.tenantId, venueA, productA, {
       orderNumber: 101,
       destination: "barra",
+      status: "paid",
     });
     // Pedido de OTRO tenant, con su propio venue/producto: si listActiveOrders(tenantA)
     // alguna vez lo devolviera, sería una fuga cross-tenant real, no un accidente de
@@ -100,11 +101,13 @@ describe("listActiveOrders", () => {
       .select("id")
       .eq("tenant_id", tenantB.tenantId)
       .single();
+    // Pagado, como el propio: si no, el filtro de estado lo ocultaría por sí solo y el control
+    // de fuga no probaría el aislamiento por tenant.
     const foreignOrderId = await insertOrder(
       tenantB.tenantId,
       venueB?.id as string,
       productB?.id as string,
-      { orderNumber: 999, destination: "cocina" },
+      { orderNumber: 999, destination: "cocina", status: "paid" },
     );
 
     const orders = await listActiveOrders(tenantA.tenantId);
@@ -118,7 +121,7 @@ describe("listActiveOrders", () => {
     expect(leaked, "listActiveOrders devolvió un pedido de otro tenant").toHaveLength(0);
   });
 
-  it("excluye pedidos servidos y cancelados", async () => {
+  it("excluye pedidos servidos, cancelados y reembolsados", async () => {
     const before = (await listActiveOrders(tenantA.tenantId)).length;
 
     await insertOrder(tenantA.tenantId, venueA, productA, {
@@ -133,15 +136,50 @@ describe("listActiveOrders", () => {
       destination: "barra",
       status: "cancelled",
     });
+    await insertOrder(tenantA.tenantId, venueA, productA, {
+      orderNumber: 105,
+      destination: "barra",
+      status: "refunded",
+    });
 
     const after = await listActiveOrders(tenantA.tenantId);
     expect(after.length).toBe(before);
+  });
+
+  it("un pedido sin pagar no aparece; en cuanto se paga, sí", async () => {
+    // Los dos canales cobran ANTES de enviar: un `pending` es un cliente que aún está pagando
+    // o que lo dejó. Prepararlo es trabajo que quizá nadie pague, y la impresora tampoco lo
+    // saca hasta que se paga.
+    const orderId = await insertOrder(tenantA.tenantId, venueA, productA, {
+      orderNumber: 106,
+      destination: "barra",
+      status: "pending",
+    });
+    expect((await listActiveOrders(tenantA.tenantId)).some((o) => o.id === orderId)).toBe(false);
+
+    // Lo que hace el webhook de Stripe (`markOrderPaid`).
+    const { error } = await admin
+      .from("orders")
+      .update({ status: "paid", paid_at: new Date().toISOString() })
+      .eq("id", orderId);
+    if (error) throw error;
+    expect((await listActiveOrders(tenantA.tenantId)).some((o) => o.id === orderId)).toBe(true);
+  });
+
+  it("un pedido en preparación sigue en el tablero", async () => {
+    const orderId = await insertOrder(tenantA.tenantId, venueA, productA, {
+      orderNumber: 107,
+      destination: "barra",
+      status: "preparing",
+    });
+    expect((await listActiveOrders(tenantA.tenantId)).some((o) => o.id === orderId)).toBe(true);
   });
 
   it("un pedido solo de bebidas no aparece con estación de cocina pendiente", async () => {
     const orderId = await insertOrder(tenantA.tenantId, venueA, productA, {
       orderNumber: 104,
       destination: "barra",
+      status: "paid",
     });
 
     const orders = await listActiveOrders(tenantA.tenantId);

@@ -74,18 +74,20 @@ test("un pedido pagado aparece en el panel", async ({ page }) => {
   // del test (incluido un fallo de aserción a mitad), el `finally` lo borra. El test es
   // dueño de este pedido, no del estado global del tablero.
   try {
-    // Fix round 2 (Finding 3): simula lo que haría el webhook de Stripe -- este test
-    // nunca completa un cobro real, así que sin esto el pedido queda "pending" para
-    // siempre y "Marcar hecho" ya NO lo autosirve (por diseño, ver el trigger
-    // `orders_auto_serve`). El nombre del test ("un pedido PAGADO aparece en el panel")
-    // asume precisamente este paso.
-    await markOrderPaidForTest(orderId);
-
     const card = cardFor(page, orderId);
 
-    // Llega solo, sin recargar: eso es lo que prueba Realtime. La página se cargó ANTES
-    // de que este pedido existiera, así que su aparición solo puede venir de la
-    // suscripción, no de datos ya presentes en el render inicial.
+    // Sin pagar, barra no lo ve: el cliente puede estar aún en la pantalla de pago o haberla
+    // abandonado. Se espera a que la creación haya llegado por Realtime (la página recarga
+    // con cualquier cambio en `orders`) para que la ausencia signifique algo.
+    await page.waitForTimeout(3_000);
+    await expect(card).toHaveCount(0);
+
+    // Simula lo que haría el webhook de Stripe: este test nunca completa un cobro real.
+    await markOrderPaidForTest(orderId);
+
+    // Llega solo, sin recargar, en cuanto se paga: eso es lo que prueba Realtime. La página
+    // se cargó ANTES de que este pedido existiera, así que su aparición solo puede venir de
+    // la suscripción, no de datos ya presentes en el render inicial.
     await expect(card).toHaveCount(1, { timeout: REALTIME_WAIT_MS });
 
     // El producto de garum (Ribera del Duero) es de categoría "vinos", destino barra:
@@ -183,6 +185,8 @@ test("el personal de un tenant no ve los pedidos del otro (con control positivo)
     expect(garumResponse.ok()).toBeTruthy();
     const { publicToken: garumToken } = (await garumResponse.json()) as { publicToken: string };
     garumOrderId = (await findOrderByPublicToken(garumToken)).orderId;
+    // El tablero solo enseña lo pagado: sin esto el control positivo no vería nada.
+    await markOrderPaidForTest(garumOrderId);
 
     await expect(cardFor(garumPage, garumOrderId)).toHaveCount(1, { timeout: REALTIME_WAIT_MS });
     await expect(cardFor(manuelaPage, garumOrderId)).toHaveCount(0);
@@ -203,18 +207,12 @@ test("el personal de un tenant no ve los pedidos del otro (con control positivo)
       publicToken: string;
     };
     manuelaOrderId = (await findOrderByPublicToken(manuelaToken)).orderId;
+    await markOrderPaidForTest(manuelaOrderId);
 
     await expect(cardFor(manuelaPage, manuelaOrderId)).toHaveCount(1, {
       timeout: REALTIME_WAIT_MS,
     });
     await expect(cardFor(garumPage, manuelaOrderId)).toHaveCount(0);
-
-    // Fix round 2 (Finding 3): sin marcar pagado, "Marcar hecho" ya no autosirve el
-    // pedido (ver el comentario equivalente en el test anterior) y las aserciones de
-    // "desaparece del tablero" de abajo fallarían por una razón ajena a este test
-    // (aislamiento), no por una fuga real.
-    await markOrderPaidForTest(garumOrderId);
-    await markOrderPaidForTest(manuelaOrderId);
 
     // Cobertura de "marcar hecho" en ambos tenants antes de limpiar.
     await cardFor(garumPage, garumOrderId)

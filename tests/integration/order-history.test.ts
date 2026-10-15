@@ -11,10 +11,10 @@ import {
 /**
  * HISTÓRICO DE PEDIDOS DEL PANEL.
  *
- * El tablero de `/staff` solo enseña lo ACTIVO (`listActiveOrders` filtra servidos, cancelados
- * y reembolsados): en cuanto una comanda se sirve, desaparece y no hay forma de volver a
- * verla. Esto es lo que contesta "¿qué pidió la mesa 4 anoche?" y "¿este cobro de 38 € de qué
- * era?".
+ * El tablero de `/staff` solo enseña lo que hay que preparar (`listActiveOrders` deja fuera lo
+ * no pagado, servido, cancelado o reembolsado): en cuanto una comanda se sirve, desaparece y
+ * no hay forma de volver a verla. Esto es lo que contesta "¿qué pidió la mesa 4 anoche?" y
+ * "¿este cobro de 38 € de qué era?".
  */
 
 const haceHoras = (h: number) => new Date(Date.now() - h * 3600_000).toISOString();

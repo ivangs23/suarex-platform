@@ -47,8 +47,9 @@ export async function POST(request: Request) {
   }
 
   // RATE-LIMIT POR MESA. Sin esto, quien fotografíe un QR puede repetir esta petición sin
-  // límite y saturar la impresora de cocina (que ve la comanda en cuanto existe, pagada o
-  // no). Se limita por `table.id` -- el eje del abuso es la mesa -- y va DESPUÉS de resolver
+  // límite: cada una crea un pedido y un PaymentIntent en Stripe. (Cocina y barra ya no los
+  // ven hasta que se pagan, pero la base y la cuenta de Stripe se llenarían igual.) Se limita
+  // por `table.id` -- el eje del abuso es la mesa -- y va DESPUÉS de resolver
   // la mesa para no gastar cuota con un token inválido, pero ANTES de crear el pedido o
   // tocar Stripe. Falla CERRADO: si el contador no responde, se rechaza en vez de dejar
   // pasar (la disponibilidad del rate-limit no puede convertirse en la vía de saltárselo).

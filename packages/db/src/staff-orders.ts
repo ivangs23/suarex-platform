@@ -47,12 +47,17 @@ function resolveItemName(nameSnapshot: Record<string, string>): string {
 }
 
 /**
- * Pedidos que cocina/barra todavía deben atender: cualquiera que no esté `served` (ambas
- * estaciones ya resueltas, ver `markStationDone`) ni `cancelled`. Deliberadamente NO se
- * filtra por `status = 'paid'`: en este momento del sistema un pedido recién creado por
- * `createPendingOrder` queda en `pending` hasta que el webhook de Stripe lo marca `paid`
- * (ver `packages/db/src/orders.ts`), y cocina/barra deben ver la comanda en cuanto existe
- * -- el pago es un problema de caja, no de si hay que prepararla.
+ * Pedidos que cocina/barra tienen que preparar: los PAGADOS (`paid`) y los que ya están en
+ * marcha (`preparing`). Fuera quedan los servidos (ambas estaciones resueltas, ver
+ * `markStationDone`), los cancelados, los reembolsados (al comensal se le devolvió el dinero:
+ * nadie lo va a cobrar) y los `pending`.
+ *
+ * Los `pending` fuera es deliberado. Los dos canales (`qr-mesa`, `kiosko`) cobran ANTES de
+ * enviar, así que un pedido sin pagar es un cliente que todavía está en la pantalla de pago o
+ * que la abandonó: prepararlo es trabajo que quizá nadie pague. Antes se enseñaban "porque el
+ * pago es un problema de caja", y el tablero acababa pidiendo a barra lo que la impresora,
+ * que solo imprime lo pagado, aún no había sacado. Cuando el webhook lo marca `paid`, el
+ * tablero se recarga (escucha cualquier cambio en `orders`) y aparece.
  *
  * El `tenantId` SIEMPRE viene de `getStaffSession()` en el caller (`app/staff/page.tsx`),
  * nunca de un parámetro que el navegador controle -- `tenantScoped` lo exige como
@@ -64,12 +69,7 @@ export async function listActiveOrders(tenantId: string): Promise<StaffOrder[]> 
       "id, order_number, status, kitchen_status, bar_status, tables(label), " +
         "order_items(name_snapshot, quantity, destination, notes)",
     )
-    .neq("status", "served")
-    .neq("status", "cancelled")
-    // Un pedido reembolsado sale del tablero: si al comensal se le ha devuelto el dinero,
-    // la cocina tiene que dejar de prepararlo. Sin este filtro se quedaría ahí pidiendo
-    // trabajo que ya nadie va a cobrar.
-    .neq("status", "refunded")
+    .in("status", ["paid", "preparing"])
     .order("created_at", { ascending: true });
   if (error) throw error;
 
