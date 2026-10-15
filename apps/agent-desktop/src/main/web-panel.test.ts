@@ -1,13 +1,44 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   esFalloDeCargaRelevante,
   isSameOrigin,
+  olvidarSesionDeGestion,
+  olvidarTodasLasSesiones,
   PARTICION_ANTIGUA,
   PARTICIONES,
   panelDe,
   WEB_SECTIONS,
   type WebSection,
 } from "./web-panel.js";
+
+// Qué particiones se vacían. Lo demás de Electron no lo toca ninguna de estas pruebas.
+const vaciadas = vi.hoisted(() => [] as string[]);
+vi.mock("electron", () => ({
+  session: {
+    fromPartition: (particion: string) => ({
+      clearStorageData: async () => {
+        vaciadas.push(particion);
+      },
+    }),
+  },
+  shell: {},
+  WebContentsView: class {},
+}));
+
+describe("olvidar sesiones", () => {
+  it("cerrar la ventana olvida solo la de gestión: Comandas sigue dentro", async () => {
+    vaciadas.length = 0;
+    await olvidarSesionDeGestion();
+    expect(vaciadas).toEqual([PARTICIONES.gestion]);
+  });
+
+  it("des-emparejar olvida las dos, también la de Comandas que se guarda en disco", async () => {
+    // Quien herede el PC no puede encontrarse dentro del panel con la cuenta de quien lo usaba.
+    vaciadas.length = 0;
+    await olvidarTodasLasSesiones();
+    expect([...vaciadas].sort()).toEqual(Object.values(PARTICIONES).sort());
+  });
+});
 
 /**
  * El PC de cocina lo usa cualquiera que pase por delante. Las Comandas recuerdan su sesión;

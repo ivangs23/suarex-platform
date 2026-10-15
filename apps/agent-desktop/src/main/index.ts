@@ -46,6 +46,7 @@ import {
   destroyWebPanel,
   layoutWebPanel,
   olvidarSesionDeGestion,
+  olvidarTodasLasSesiones,
   setWebPanelReporter,
   vaciarParticionAntigua,
 } from "./web-panel.js";
@@ -214,7 +215,14 @@ if (!gotLock) {
         syncSystemWatchdog(true);
         await maybeStartKiosk();
       },
-      () => syncSystemWatchdog(false),
+      // Des-emparejado: el watchdog deja de vigilarlo y el panel olvida las sesiones de quien lo
+      // usaba, también la de Comandas, que se guarda en disco.
+      () => {
+        syncSystemWatchdog(false);
+        olvidarTodasLasSesiones().catch((err) =>
+          reportMain("[panel] no se pudieron borrar las sesiones al des-emparejar:", err),
+        );
+      },
     );
     onAgentActivity(handleAgentActivity);
     // La versión de la build viaja al heartbeat (para saber qué locales están desactualizados).

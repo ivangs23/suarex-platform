@@ -238,13 +238,27 @@ export function hideWebPanel(): void {
  * reabrir seguiría a la vista el catálogo que quedó cargado.
  */
 export async function olvidarSesionDeGestion(): Promise<void> {
-  const vista = vistas.gestion;
+  await olvidar("gestion");
+}
+
+/**
+ * Cierra TODAS las sesiones del panel, también la de Comandas, que se guarda en disco. Se llama al
+ * des-emparejar: ese PC deja de pertenecer al restaurante, y quien lo herede no puede encontrarse
+ * dentro del panel con la cuenta de quien lo usaba, hasta 400 días después.
+ */
+export async function olvidarTodasLasSesiones(): Promise<void> {
+  for (const panel of Object.keys(PARTICIONES) as Panel[]) await olvidar(panel);
+}
+
+/** Descarga la vista (si no, seguiría a la vista lo que quedó cargado) y borra su sesión. */
+async function olvidar(panel: Panel): Promise<void> {
+  const vista = vistas[panel];
   if (vista) {
     vista.section = null;
     vista.view.setVisible(false);
     vista.view.webContents.loadURL("about:blank");
   }
-  await session.fromPartition(PARTICIONES.gestion).clearStorageData();
+  await session.fromPartition(PARTICIONES[panel]).clearStorageData();
 }
 
 /** Vacía la partición de cuando había una sola sesión (ver `PARTICION_ANTIGUA`). */
