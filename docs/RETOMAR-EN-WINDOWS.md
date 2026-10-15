@@ -193,6 +193,11 @@ Además de los de `CLAUDE.md`:
 - **Tras `pnpm db:reset`, Kong se queda con la IP vieja de Auth.** `/rest/v1` responde 200 pero
   `/auth/v1/*` da 502, y la integración falla con `AuthRetryableFetchError` dentro de
   `createTenantFixture`. **No es tu código**: `docker restart supabase_kong_suarex-platform`.
+- **Tras reiniciar Windows, Supabase puede no arrancar ni con Docker en marcha**: WinNAT se ha
+  quedado los puertos 54320–54329 y todo falla con `fetch failed`. El síntoma, la comprobación y
+  el arreglo de una vez están en `CLAUDE.md` → "En Windows". Docker Desktop tampoco arranca solo:
+  hasta que lo lances, un agente de escritorio de pruebas arrancará sin red (y ahora reintenta
+  solo hasta que la haya).
 - **Un test que deja pedidos sin borrar rompe OTRO fichero.** `listOrderHistory` no filtra por
   estado, así que cualquier pedido que sobre tumba el test del histórico vacío de
   `informes.spec.ts`. Si creas pedidos en un e2e, bórralos en un `finally`
