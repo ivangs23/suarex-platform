@@ -1,4 +1,12 @@
-import { createDeviceClient, type SessionStore, signInAndPersistSession } from "@suarex/agent";
+import {
+  createDeviceClient,
+  DEVICE_SESSION_STORAGE_KEY,
+  esSinConexion,
+  SesionInvalidaError,
+  type SessionStore,
+  SinConexionError,
+  signInAndPersistSession,
+} from "@suarex/agent";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   admin,
@@ -92,9 +100,69 @@ describe("sesión del device por refresh token (#11)", () => {
     expect(delError).toBeNull();
     userIds.splice(userIds.indexOf(userId), 1); // ya borrado; no reintentar en afterAll
 
-    // La restauración debe fallar -> la cáscara lo trata como "hay que re-emparejar".
+    // La restauración debe fallar como sesión INVÁLIDA (hay que re-emparejar), no como un fallo
+    // de red que la cáscara reintentaría para siempre sin arreglar nada.
     await expect(
       createDeviceClient({ supabaseUrl: url, anonKey, sessionStore: store }),
-    ).rejects.toThrow();
+    ).rejects.toBeInstanceOf(SesionInvalidaError);
   });
+
+  it("sin sesión guardada pide re-emparejar", async () => {
+    await expect(
+      createDeviceClient({ supabaseUrl: url, anonKey, sessionStore: memStore() }),
+    ).rejects.toBeInstanceOf(SesionInvalidaError);
+  });
+});
+
+/**
+ * Un PC de cocina arranca muchas veces sin red (la wifi conecta después, o un corte de luz
+ * reinició también el router). Validado en un Windows 11 real: el agente lo tomaba por una sesión
+ * que no valía, pedía re-emparejar y se quedaba parado para siempre aunque la red volviera.
+ */
+describe("sin red, la sesión del device sigue siendo buena", () => {
+  /** Nada escucha en el puerto 1: la conexión se rechaza en el acto, como sin red. */
+  const SIN_RED = "http://127.0.0.1:1";
+
+  it("es un fallo de red (se reintenta), no una sesión inválida, y la sesión guardada no se toca", async () => {
+    const { email, password } = await seedDeviceAccount();
+    const store = memStore();
+    await signInAndPersistSession(url, anonKey, store, email, password);
+    const antes = store.getItem(DEVICE_SESSION_STORAGE_KEY);
+
+    const error = await createDeviceClient({
+      supabaseUrl: SIN_RED,
+      anonKey,
+      sessionStore: store,
+    }).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(SinConexionError);
+    expect(esSinConexion(error)).toBe(true);
+    expect(store.getItem(DEVICE_SESSION_STORAGE_KEY)).toBe(antes);
+
+    // Y en cuanto vuelve la red, esa misma sesión arranca sin re-emparejar.
+    const client = await createDeviceClient({ supabaseUrl: url, anonKey, sessionStore: store });
+    const { data } = await client.auth.getUser();
+    expect(data.user?.email).toBe(email);
+  }, 90_000);
+
+  it("tampoco con el token de acceso ya caducado: no lo confunde con 'no hay sesión'", async () => {
+    // El caso de un PC apagado unos días: el token de acceso caducó y, sin red, supabase-js no
+    // puede renovarlo. `getSession()` devolvía entonces `session: null` y el agente decía "no hay
+    // sesión guardada", con la sesión en disco.
+    const { email, password } = await seedDeviceAccount();
+    const store = memStore();
+    await signInAndPersistSession(url, anonKey, store, email, password);
+    const guardada = JSON.parse(store.getItem(DEVICE_SESSION_STORAGE_KEY) ?? "{}");
+    guardada.expires_at = Math.floor(Date.now() / 1000) - 3600;
+    store.setItem(DEVICE_SESSION_STORAGE_KEY, JSON.stringify(guardada));
+
+    await expect(
+      createDeviceClient({ supabaseUrl: SIN_RED, anonKey, sessionStore: store }),
+    ).rejects.toBeInstanceOf(SinConexionError);
+    expect(store.getItem(DEVICE_SESSION_STORAGE_KEY)).not.toBeNull();
+
+    const client = await createDeviceClient({ supabaseUrl: url, anonKey, sessionStore: store });
+    const { data } = await client.auth.getUser();
+    expect(data.user?.email).toBe(email);
+  }, 90_000);
 });

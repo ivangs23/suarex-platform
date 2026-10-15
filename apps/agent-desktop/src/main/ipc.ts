@@ -3,6 +3,7 @@ import { DEVICE_SESSION_STORAGE_KEY, type NetworkPrinterProbe } from "@suarex/ag
 import { app, type BrowserWindow, dialog, ipcMain } from "electron";
 import {
   establishSessionFromPassword,
+  estaConectando,
   getActivity,
   isAgentRunning,
   probeNetworkPrinters,
@@ -124,6 +125,8 @@ export function registerIpc(
     return {
       paired: creds !== null,
       running: isAgentRunning(),
+      // Arrancando, o esperando a que vuelva la red: que la ventana no diga "agente parado".
+      conectando: estaConectando(),
       deviceId: creds?.deviceId ?? null,
       // La interfaz lo usa para AVISAR de que la impresión USB (winspool) solo existe en
       // Windows, en vez de dejar que el usuario lo descubra al pulsar "Imprimir prueba" y

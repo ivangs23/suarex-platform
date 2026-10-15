@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld("agent", {
   getStatus: (): Promise<{
     paired: boolean;
     running: boolean;
+    conectando: boolean;
     deviceId: string | null;
     platform: string;
     activity: AgentActivity;
@@ -43,5 +44,12 @@ contextBridge.exposeInMainWorld("agent", {
     const handler = (): void => cb();
     ipcRenderer.on("volver-al-menu", handler);
     return () => ipcRenderer.removeListener("volver-al-menu", handler);
+  },
+  /** Aviso del proceso principal cuando cambia el estado del agente fuera de un clic (empieza o
+   *  termina de conectar al arrancar): la ventana vuelve a preguntarlo. */
+  onEstadoCambiado: (cb: () => void): (() => void) => {
+    const handler = (): void => cb();
+    ipcRenderer.on("estado-cambiado", handler);
+    return () => ipcRenderer.removeListener("estado-cambiado", handler);
   },
 });
