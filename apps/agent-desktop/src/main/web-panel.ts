@@ -1,4 +1,4 @@
-import { type BrowserWindow, shell, WebContentsView } from "electron";
+import { type BrowserWindow, session, shell, WebContentsView } from "electron";
 import { PLATFORM_WEB_ORIGIN } from "./baked-config.js";
 
 /**
@@ -23,8 +23,11 @@ import { PLATFORM_WEB_ORIGIN } from "./baked-config.js";
  *    des-emparejar el dispositivo o disparar impresiones. No necesita nada de eso: habla
  *    con su servidor por HTTP.
  * 2. **`sandbox: true`**, además de `contextIsolation` y `nodeIntegration: false`.
- * 3. **Partición propia y persistente** (`persist:admin`): mantiene la sesión iniciada
- *    entre arranques con un tarro de cookies separado del resto de la app.
+ * 3. **Dos particiones, dos sesiones** (ver `PARTICIONES`). Este PC es el de cocina y lo usa
+ *    cualquiera que pase por delante, así que no todo se recuerda igual: las Comandas guardan
+ *    su sesión en disco, porque es el trabajo de todo el día; Productos y Cierre (cambiar
+ *    precios, cerrar caja) van en otra que vive solo en memoria y se borra al cerrar la
+ *    ventana, así que piden la cuenta de quien gestiona cada vez que se abre el agente.
  * 4. **La navegación no sale del origen de la plataforma.** Sin esa guarda, un enlace
  *    externo convertiría este panel en un navegador SIN barra de direcciones: el usuario no
  *    podría saber qué sitio mira mientras teclea su contraseña, que es justo la condición
@@ -55,6 +58,29 @@ export type WebSection = keyof typeof WEB_SECTIONS;
 
 export function isWebSection(value: string): value is WebSection {
   return value in WEB_SECTIONS;
+}
+
+/** Cada sesión del panel. Ver el punto 3 del docstring de arriba. */
+export type Panel = "comandas" | "gestion";
+
+/**
+ * Partición de cada panel. `persist:` delante es lo que hace que Chromium la guarde en disco:
+ * la de gestión no lo lleva, y con eso su sesión no sobrevive a cerrar la app.
+ */
+export const PARTICIONES: Record<Panel, string> = {
+  comandas: "persist:comandas",
+  gestion: "gestion",
+};
+
+/**
+ * Donde vivía la sesión cuando el panel tenía una sola. Puede guardar en disco una sesión de
+ * owner (con la que se cambian precios) que ya no usa nadie, así que se vacía al arrancar.
+ */
+export const PARTICION_ANTIGUA = "persist:admin";
+
+/** Qué sesión usa cada sección: las Comandas, la suya; lo que gestiona el negocio, la otra. */
+export function panelDe(section: WebSection): Panel {
+  return section === "pedidos" ? "comandas" : "gestion";
 }
 
 /**
@@ -96,28 +122,30 @@ export function setWebPanelReporter(fn: PanelReporter): void {
   reportar = fn;
 }
 
-let view: WebContentsView | null = null;
-let currentSection: WebSection | null = null;
+/** Una vista por sesión: la partición se fija al crear la vista y no se puede cambiar después. */
+type Vista = { view: WebContentsView; section: WebSection | null };
+const vistas: Partial<Record<Panel, Vista>> = {};
 
 export type ShowWebPanelResult = { ok: true } | { ok: false; reason: "sin-origen-configurado" };
 
-function ensureView(window: BrowserWindow): WebContentsView {
-  if (view) return view;
+function ensureView(window: BrowserWindow, panel: Panel): Vista {
+  const existente = vistas[panel];
+  if (existente) return existente;
 
-  view = new WebContentsView({
+  const view = new WebContentsView({
     webPreferences: {
       // Sin preload a propósito: ver el punto 1 del docstring de arriba.
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
-      partition: "persist:admin",
+      partition: PARTICIONES[panel],
     },
   });
 
   // `window.open` y `target="_blank"` van al navegador del sistema, nunca a una ventana
   // hija de Electron (que heredaría estas preferencias y perdería la guarda de navegación).
   view.webContents.setWindowOpenHandler(({ url }) => {
-    if (isSameOrigin(url, PLATFORM_WEB_ORIGIN)) view?.webContents.loadURL(url);
+    if (isSameOrigin(url, PLATFORM_WEB_ORIGIN)) view.webContents.loadURL(url);
     else shell.openExternal(url);
     return { action: "deny" };
   });
@@ -150,33 +178,42 @@ function ensureView(window: BrowserWindow): WebContentsView {
   });
 
   window.contentView.addChildView(view);
-  return view;
+  const vista: Vista = { view, section: null };
+  vistas[panel] = vista;
+  return vista;
 }
 
-/** Coloca la vista justo debajo de la cabecera, ocupando el resto de la ventana. */
+/** Coloca las vistas justo debajo de la cabecera, ocupando el resto de la ventana. */
 export function layoutWebPanel(window: BrowserWindow): void {
-  if (!view || currentSection === null) return;
   const { width, height } = window.getContentBounds();
-  view.setBounds({
-    x: 0,
-    y: HEADER_HEIGHT,
-    width,
-    height: Math.max(0, height - HEADER_HEIGHT),
-  });
+  for (const vista of Object.values(vistas)) {
+    if (vista.section === null) continue;
+    vista.view.setBounds({
+      x: 0,
+      y: HEADER_HEIGHT,
+      width,
+      height: Math.max(0, height - HEADER_HEIGHT),
+    });
+  }
 }
 
-/** Muestra una sección de la plataforma. Recarga solo si cambia de sección. */
+/** Muestra una sección de la plataforma en la vista de su sesión. Recarga solo si cambia. */
 export function showWebPanel(window: BrowserWindow, section: WebSection): ShowWebPanelResult {
   // Sin origen horneado no hay a dónde ir. Se falla explícito en vez de dejar un panel en
   // blanco que el usuario interpretaría como un error de la plataforma.
   if (!PLATFORM_WEB_ORIGIN) return { ok: false, reason: "sin-origen-configurado" };
 
-  const v = ensureView(window);
-  v.setVisible(true);
+  const panel = panelDe(section);
+  // La otra sesión se aparta: las dos vistas ocupan el mismo sitio.
+  for (const [otro, vista] of Object.entries(vistas)) {
+    if (otro !== panel) vista.view.setVisible(false);
+  }
 
-  if (currentSection !== section) {
-    currentSection = section;
-    v.webContents.loadURL(`${PLATFORM_WEB_ORIGIN}${WEB_SECTIONS[section]}`);
+  const vista = ensureView(window, panel);
+  vista.view.setVisible(true);
+  if (vista.section !== section) {
+    vista.section = section;
+    vista.view.webContents.loadURL(`${PLATFORM_WEB_ORIGIN}${WEB_SECTIONS[section]}`);
   }
 
   layoutWebPanel(window);
@@ -188,15 +225,51 @@ export function showWebPanel(window: BrowserWindow, section: WebSection): ShowWe
  *
  * Se OCULTA, no se destruye: la vista se superpone al renderer, así que dejarla visible
  * taparía la sección local. Conservarla mantiene la sesión y el estado de la página, de
- * modo que volver a Productos no obliga a recargar ni a iniciar sesión otra vez.
+ * modo que volver a Comandas no obliga a recargar ni a iniciar sesión otra vez.
  */
 export function hideWebPanel(): void {
-  view?.setVisible(false);
+  for (const vista of Object.values(vistas)) vista.view.setVisible(false);
 }
 
-/** Libera la vista al cerrar la app. */
+/**
+ * Cierra la sesión de gestión. Se llama al cerrar la ventana: desde ese momento, quien abra el
+ * agente tiene que volver a identificarse para tocar precios o cerrar caja, aunque el proceso
+ * lleve días vivo en la bandeja. La página se descarga además de borrar la sesión: si no, al
+ * reabrir seguiría a la vista el catálogo que quedó cargado.
+ */
+export async function olvidarSesionDeGestion(): Promise<void> {
+  await olvidar("gestion");
+}
+
+/**
+ * Cierra TODAS las sesiones del panel, también la de Comandas, que se guarda en disco. Se llama al
+ * des-emparejar: ese PC deja de pertenecer al restaurante, y quien lo herede no puede encontrarse
+ * dentro del panel con la cuenta de quien lo usaba, hasta 400 días después.
+ */
+export async function olvidarTodasLasSesiones(): Promise<void> {
+  for (const panel of Object.keys(PARTICIONES) as Panel[]) await olvidar(panel);
+}
+
+/** Descarga la vista (si no, seguiría a la vista lo que quedó cargado) y borra su sesión. */
+async function olvidar(panel: Panel): Promise<void> {
+  const vista = vistas[panel];
+  if (vista) {
+    vista.section = null;
+    vista.view.setVisible(false);
+    vista.view.webContents.loadURL("about:blank");
+  }
+  await session.fromPartition(PARTICIONES[panel]).clearStorageData();
+}
+
+/** Vacía la partición de cuando había una sola sesión (ver `PARTICION_ANTIGUA`). */
+export async function vaciarParticionAntigua(): Promise<void> {
+  await session.fromPartition(PARTICION_ANTIGUA).clearStorageData();
+}
+
+/** Libera las vistas al cerrar la app. */
 export function destroyWebPanel(): void {
-  if (view) view.webContents.close();
-  view = null;
-  currentSection = null;
+  for (const panel of Object.keys(vistas) as Panel[]) {
+    vistas[panel]?.view.webContents.close();
+    delete vistas[panel];
+  }
 }

@@ -39,6 +39,12 @@ contextBridge.exposeInMainWorld("agent", {
     ipcRenderer.on("agent-activity", handler);
     return () => ipcRenderer.removeListener("agent-activity", handler);
   },
+  /** Aviso del proceso principal al cerrar la ventana: la próxima vez se abre en el menú. */
+  onVolverAlMenu: (cb: () => void): (() => void) => {
+    const handler = (): void => cb();
+    ipcRenderer.on("volver-al-menu", handler);
+    return () => ipcRenderer.removeListener("volver-al-menu", handler);
+  },
   /** Aviso del proceso principal cuando cambia el estado del agente fuera de un clic (empieza o
    *  termina de conectar al arrancar): la ventana vuelve a preguntarlo. */
   onEstadoCambiado: (cb: () => void): (() => void) => {

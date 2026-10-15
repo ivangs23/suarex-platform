@@ -1,5 +1,74 @@
-import { describe, expect, it } from "vitest";
-import { esFalloDeCargaRelevante, isSameOrigin } from "./web-panel.js";
+import { describe, expect, it, vi } from "vitest";
+import {
+  esFalloDeCargaRelevante,
+  isSameOrigin,
+  olvidarSesionDeGestion,
+  olvidarTodasLasSesiones,
+  PARTICION_ANTIGUA,
+  PARTICIONES,
+  panelDe,
+  WEB_SECTIONS,
+  type WebSection,
+} from "./web-panel.js";
+
+// Qué particiones se vacían. Lo demás de Electron no lo toca ninguna de estas pruebas.
+const vaciadas = vi.hoisted(() => [] as string[]);
+vi.mock("electron", () => ({
+  session: {
+    fromPartition: (particion: string) => ({
+      clearStorageData: async () => {
+        vaciadas.push(particion);
+      },
+    }),
+  },
+  shell: {},
+  WebContentsView: class {},
+}));
+
+describe("olvidar sesiones", () => {
+  it("cerrar la ventana olvida solo la de gestión: Comandas sigue dentro", async () => {
+    vaciadas.length = 0;
+    await olvidarSesionDeGestion();
+    expect(vaciadas).toEqual([PARTICIONES.gestion]);
+  });
+
+  it("des-emparejar olvida las dos, también la de Comandas que se guarda en disco", async () => {
+    // Quien herede el PC no puede encontrarse dentro del panel con la cuenta de quien lo usaba.
+    vaciadas.length = 0;
+    await olvidarTodasLasSesiones();
+    expect([...vaciadas].sort()).toEqual(Object.values(PARTICIONES).sort());
+  });
+});
+
+/**
+ * El PC de cocina lo usa cualquiera que pase por delante. Las Comandas recuerdan su sesión;
+ * cambiar precios o cerrar caja no: si eso se guardara, una sola vez que entrase el dueño dejaría
+ * esos permisos en el PC durante los 400 días que dura la cookie.
+ */
+describe("sesiones del panel", () => {
+  it("las Comandas van en su sesión, y Productos y Cierre en la de gestión", () => {
+    expect(panelDe("pedidos")).toBe("comandas");
+    expect(panelDe("productos")).toBe("gestion");
+    expect(panelDe("cierre")).toBe("gestion");
+  });
+
+  it("toda sección de /admin va a gestión, también las que se añadan", () => {
+    for (const [section, ruta] of Object.entries(WEB_SECTIONS)) {
+      if (ruta.startsWith("/admin")) expect(panelDe(section as WebSection)).toBe("gestion");
+    }
+  });
+
+  it("solo la sesión de Comandas se guarda en disco", () => {
+    // Chromium guarda en disco las particiones que empiezan por `persist:` y nada más.
+    expect(PARTICIONES.comandas.startsWith("persist:")).toBe(true);
+    expect(PARTICIONES.gestion.startsWith("persist:")).toBe(false);
+  });
+
+  it("ninguna reutiliza la partición de cuando había una sola sesión, que se vacía al arrancar", () => {
+    expect(PARTICIONES.comandas).not.toBe(PARTICIONES.gestion);
+    expect(Object.values(PARTICIONES)).not.toContain(PARTICION_ANTIGUA);
+  });
+});
 
 /**
  * `isSameOrigin` es la guarda que impide que el panel incrustado se convierta en un

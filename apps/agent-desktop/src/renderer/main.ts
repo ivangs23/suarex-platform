@@ -32,6 +32,7 @@ type AgentApi = {
   showSection(section: string): Promise<ShowWebPanelResult>;
   readLog(maxLines?: number): Promise<string[]>;
   onActivity(cb: (activity: AgentActivity) => void): () => void;
+  onVolverAlMenu(cb: () => void): () => void;
   onEstadoCambiado(cb: () => void): () => void;
 };
 
@@ -191,6 +192,9 @@ const { irA } = setupNavigation(document, agent ? (s) => agent.showSection(s) : 
 // Se arranca en el MENÚ, no en una sección: quien abre la app no siempre viene a lo mismo, y
 // aterrizar en Configuración hacía que pareciera lo principal cuando es lo que menos se toca.
 void irA("menu");
+// Y se vuelve a él al cerrar la ventana: el proceso principal acaba de cerrar la sesión de
+// gestión, y reabrir en Productos enseñaría una página vacía en vez del menú.
+agent?.onVolverAlMenu(() => void irA("menu"));
 
 /* El registro se lee al entrar y con el botón, no en bucle: se viene aquí a mirar algo concreto
    que ya ha pasado, y un refresco automático moviendo las líneas bajo el cursor estorba más que
