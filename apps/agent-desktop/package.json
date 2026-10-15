@@ -14,12 +14,12 @@
   "dependencies": {
     "electron-updater": "^6.8.9",
     "koffi": "^2.9.0",
-    "ws": "^8.18.0",
-    "@suarex/payments": "workspace:*"
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "@suarex/agent": "workspace:*",
     "@suarex/db": "workspace:*",
+    "@suarex/payments": "workspace:*",
     "@suarex/printing": "workspace:*",
     "@types/node": "^26.1.1",
     "electron": "^33.0.0",

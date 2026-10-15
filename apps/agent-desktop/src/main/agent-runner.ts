@@ -49,6 +49,19 @@ export function getActivity(): AgentActivity {
   return activity;
 }
 
+/** El arranque está intentando conectar, y reintentando si no hay red (ver
+ *  `arranque-con-reintentos.ts`). La ventana lo enseña en vez de "agente parado", que mandaría a
+ *  re-emparejar sin motivo. */
+let conectando = false;
+
+export function setConectando(valor: boolean): void {
+  conectando = valor;
+}
+
+export function estaConectando(): boolean {
+  return conectando;
+}
+
 /**
  * Login ÚNICO con contraseña que deja la sesión persistida en `store` (con su refresh token) y
  * descarta la contraseña. Lo llama la cáscara al EMPAREJAR (contraseña que devuelve el pairing) y
@@ -67,8 +80,8 @@ export async function establishSessionFromPassword(
  * nunca con la contraseña, que ya no vive en disco (#11). Registra el sink USB real (solo en
  * Windows; en otra plataforma el sink por defecto de `@suarex/printing` ya falla limpio y el
  * agente solo podría imprimir por red) y llama a `runAgent`. Guarda la función de parada.
- * Lanza si la sesión no se puede restaurar/renovar (token revocado o caducado) -> la cáscara lo
- * trata como "hay que re-emparejar". */
+ * Si no puede, lanza `SinConexionError` (sin red: la cáscara reintenta) o `SesionInvalidaError`
+ * (token revocado o caducado: hay que re-emparejar). */
 export async function startAgent(store: SessionStore, tenantId: string): Promise<void> {
   // Para un agente ya en marcha antes de arrancar otro (p. ej. re-emparejar sin
   // des-emparejar): sin esto, la función de parada anterior se perdería y quedaría un

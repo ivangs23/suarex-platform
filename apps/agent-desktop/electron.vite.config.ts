@@ -47,7 +47,12 @@ export default defineConfig({
          intente cargar un `.ts` en tiempo de ejecución y la app muera al arrancar con
          ERR_UNKNOWN_FILE_EXTENSION. Cada paquete nuevo que use el proceso principal hay que
          añadirlo aquí -- y no lo atrapa ningún test, porque las suites corren con vitest y no por
-         este build. */
+         este build.
+
+         Y se declaran en `devDependencies`, NUNCA en `dependencies`: electron-builder empaqueta
+         `dependencies` en el asar, sigue el symlink de pnpm hasta `packages/*` y aborta con
+         "must be under apps/agent-desktop". Ya pasó con `@suarex/payments`: el instalador estuvo
+         sin poder construirse desde el 27/07 hasta que se intentó empaquetar en Windows. */
       externalizeDepsPlugin({
         exclude: ["@suarex/agent", "@suarex/printing", "@suarex/db", "@suarex/payments"],
       }),

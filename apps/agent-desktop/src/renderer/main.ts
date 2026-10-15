@@ -11,6 +11,8 @@ import { setupNavigation } from "./navigation.js";
 type AgentStatus = {
   paired: boolean;
   running: boolean;
+  /** Arrancando, o esperando a que vuelva la red. */
+  conectando?: boolean;
   deviceId: string | null;
   platform: string;
   /** Variables que faltaban al generar este ejecutable. Vacío en un build sano. */
@@ -30,6 +32,7 @@ type AgentApi = {
   showSection(section: string): Promise<ShowWebPanelResult>;
   readLog(maxLines?: number): Promise<string[]>;
   onActivity(cb: (activity: AgentActivity) => void): () => void;
+  onEstadoCambiado(cb: () => void): () => void;
 };
 
 /**
@@ -71,21 +74,28 @@ function renderStatus(status: AgentStatus): void {
   }
 
   const state = status.running ? "running" : status.paired ? "paired" : "idle";
+  // Conectando se pinta como "parado" (color de aviso) pero con otro texto: sin red al arrancar,
+  // decir "agente parado" mandaba a re-emparejar a quien solo tenía que esperar.
+  const conectando = state === "paired" && status.conectando === true;
   $("status").dataset.state = state;
 
   const titulo =
     state === "running"
       ? "Imprimiendo pedidos"
-      : state === "paired"
-        ? "Emparejado, agente parado"
-        : "Sin emparejar";
+      : conectando
+        ? "Conectando con la plataforma…"
+        : state === "paired"
+          ? "Emparejado, agente parado"
+          : "Sin emparejar";
 
   const detalle =
     state === "running"
       ? `Dispositivo ${status.deviceId}. Puedes cerrar esta ventana: sigue funcionando en segundo plano.`
-      : state === "paired"
-        ? `Dispositivo ${status.deviceId}. Reinicia la aplicación si no vuelve a arrancar solo.`
-        : "Introduce el código de emparejamiento que genera el panel de administración.";
+      : conectando
+        ? `Dispositivo ${status.deviceId}. Si no hay conexión, se reintenta solo: no hace falta re-emparejar ni reiniciar.`
+        : state === "paired"
+          ? `Dispositivo ${status.deviceId}. La sesión de este equipo ya no vale: genera un código nuevo en el panel y vuelve a emparejar.`
+          : "Introduce el código de emparejamiento que genera el panel de administración.";
 
   $("status-title").textContent = titulo;
   $("status-detail").textContent = detalle;
@@ -296,6 +306,8 @@ if (!agent) {
 
   // Empuje en vivo: cada tick del agente repinta el estado de impresión sin sondear.
   agent.onActivity(renderActivity);
+  // Y cuando el estado cambia solo (empieza o termina de conectar al arrancar), se vuelve a pedir.
+  agent.onEstadoCambiado(() => void refreshStatus());
 
   void refreshStatus();
   void refreshPrinters();

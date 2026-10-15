@@ -61,14 +61,39 @@ Esto NO se puede probar fuera de Windows, así que es obligatorio hacerlo aquí.
 verifica es que el agente vuelve solo cuando alguien mata el proceso — no cuando se reinicia
 el PC, que ya lo cubre el auto-arranque en el login.
 
-**1. ¿Existe la tarea?** Tras abrir la app por primera vez, en PowerShell:
+La tarea solo existe mientras el equipo está **emparejado**: un PC sin emparejar no pertenece a
+ningún restaurante y no debe reabrir la app.
+
+**0. Sin emparejar, no hay tarea.** Con la app recién instalada y abierta, sin emparejar, la
+consulta del paso 1 tiene que decir que la tarea no existe.
+
+**1. ¿Existe la tarea?** Tras emparejar, en PowerShell:
 
 ```powershell
 schtasks /query /tn "SuarEx Agente Watchdog" /v /fo list
 ```
 
-Tiene que aparecer, apuntando al `.exe` instalado y con repetición cada 5 minutos. Si dice
-que no existe, mira el panel de registro de la app: se avisa del fallo al registrarla.
+Tiene que aparecer con repetición cada 5 minutos, y la tarea que ejecuta tiene que ser el propio
+`SuarEx Agente.exe` con `--en-segundo-plano`, **no** `powershell.exe`. Si dice que no existe,
+mira el panel de registro de la app: se avisa del fallo al registrarla.
+
+El agente que resucita la tarea ES la instancia en marcha de la tarea, así que sus ajustes
+importan tanto como que exista:
+
+```powershell
+([xml](schtasks /query /tn "SuarEx Agente Watchdog" /xml)).Task.Settings
+```
+
+`ExecutionTimeLimit` tiene que ser `PT0S`, y `StopIfGoingOnBatteries` y
+`DisallowStartIfOnBatteries`, `false`. Con los valores por defecto, Windows mataría al agente a
+las 72 horas y al desenchufar un portátil. `Priority` 5: con la de por defecto (7) correría por
+debajo de lo normal.
+
+**1b. Sin ventanas.** Cada vez que salta la tarea no debe aparecer nada en pantalla: ni una
+consola, ni la ventana del agente. La primera versión del watchdog pasaba por PowerShell y, con
+Windows Terminal como terminal por defecto, dejaba una ventana negra abierta tras resucitar al
+agente; cerrarla mataba al agente sin dejar rastro. Si ves cualquier ventana al pasar el minuto
+múltiplo de 5, es un fallo.
 
 **2. La prueba de verdad.** Con el agente emparejado y funcionando:
 
@@ -76,7 +101,8 @@ que no existe, mira el panel de registro de la app: se avisa del fallo al regist
 2. Abre el Administrador de tareas y **finaliza el proceso** del agente (no lo cierres desde
    la bandeja: eso es una salida ordenada, no una caída).
 3. Comprueba que el icono de la bandeja desaparece.
-4. **Espera hasta 5 minutos.** El icono tiene que volver solo.
+4. **Espera hasta 5 minutos.** El icono tiene que volver solo, **sin abrir ninguna ventana**:
+   un agente resucitado vuelve a la bandeja, igual que en el arranque de Windows.
 5. Manda otro pedido: tiene que imprimir sin que nadie haya tocado el PC.
 
 El paso 4 es el que importa. Si no vuelve, el watchdog no está haciendo su trabajo y la
@@ -84,9 +110,16 @@ cocina se quedaría sin comandas hasta que alguien pasara por el ordenador.
 
 **3. Que no se duplique.** Con el agente ya funcionando, espera a que pase el ciclo de 5
 minutos y comprueba en el Administrador de tareas que **sigue habiendo un solo proceso**. La
-tarea lanza la app cada cinco minutos pase lo que pase; es el bloqueo de instancia única el
-que hace que la segunda salga sola. Si vieras dos procesos, los tickets se imprimirían por
-duplicado.
+tarea lanza la app cada cinco minutos; si ya corre, el bloqueo de instancia única hace que ese
+segundo lanzamiento salga en el acto, y como llega con `--en-segundo-plano` tampoco saca la
+ventana del que ya corre. Si el agente que corre lo resucitó la propia tarea, ni siquiera lanza:
+la tarea figura "En ejecución" mientras él viva, y es lo correcto. Si vieras dos procesos, los
+tickets se imprimirían por duplicado; si viste aparecer la ventana del agente, el flag no está
+llegando.
+
+**3b. "Salir" desde la bandeja.** Es una salida ordenada, pero el watchdog no la distingue de
+una caída: a los cinco minutos, como mucho, la app vuelve. Es el comportamiento actual; anótalo
+si en el local resulta un problema.
 
 **4. Al des-emparejar se limpia.** Des-empareja el dispositivo desde la app y repite la
 consulta del paso 1: la tarea ya no debe existir. Si se quedara, el PC seguiría reabriendo
@@ -96,8 +129,9 @@ cada cinco minutos una app que ya no pertenece a ningún restaurante.
 
 No se puede probar fuera de Windows empaquetado, así que va aquí con el resto.
 
-1. En **Ayuda**, pulsa **Guardar diagnóstico**. Debe abrirse el diálogo nativo con el
-   Escritorio y un nombre tipo `suarex-diagnostico-2026-09-24-1830.txt`.
+1. En **Ayuda**, pulsa **Guardar diagnóstico**. Debe abrirse el diálogo nativo con un nombre
+   tipo `suarex-diagnostico-2026-09-24T16-30-12-345Z.txt`. La hora va en UTC, como todas las
+   de dentro del fichero: a las 18:30 de Madrid en verano pone `16-30`, y no es un error.
 2. Guarda y ábrelo. Arriba tiene que estar la versión, el sistema, si está emparejado y en
    marcha, y el id del dispositivo.
 3. **Busca dentro la palabra `password` y el correo `@devices.local`.** No deben aparecer: este
@@ -105,7 +139,7 @@ No se puede probar fuera de Windows empaquetado, así que va aquí con el resto.
    directorio. Si salieran, es un fallo grave, no una errata.
 4. Debajo de `--- Registro ---` tiene que haber líneas con fecha ISO y nivel. Si pone
    `(sin entradas)` en una instalación que lleva días funcionando, el log no se está
-   escribiendo: comprueba `%APPDATA%/suarex-agente/agente.log`.
+   escribiendo: comprueba `%APPDATA%\@suarex\agent-desktop\logs\agent.log`.
 5. Pulsa el botón y **cancela** el diálogo: el panel de registro no debe decir nada (cancelar
    no es un error).
 

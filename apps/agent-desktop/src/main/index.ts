@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { app, BrowserWindow, Menu, Notification, nativeImage, Tray } from "electron";
 import { WebSocket as WsWebSocket } from "ws";
 import { type ActivityAlerts, type AgentActivity, INITIAL_ACTIVITY } from "./agent-activity.js";
+import { esArranqueDesatendido, opcionesDeInicioConWindows } from "./arranque-desatendido.js";
 
 // Electron 33 corre sobre Node 20, que NO expone `WebSocket` global (estable desde Node 22).
 // Supabase Realtime (`@suarex/realtime` -> subscribeToOrders, la vía rápida del agente ante un
@@ -12,16 +13,20 @@ if (typeof (globalThis as { WebSocket?: unknown }).WebSocket === "undefined") {
   (globalThis as { WebSocket?: unknown }).WebSocket = WsWebSocket;
 }
 
+import { esSinConexion, SesionInvalidaError } from "@suarex/agent";
 import {
   establishSessionFromPassword,
   getDeviceClient,
+  isAgentRunning,
   onAgentActivity,
   receiptPrinterStatus,
   setAppVersion,
+  setConectando,
   setPrintersProvider,
   startAgent,
   stopAgent,
 } from "./agent-runner.js";
+import { arrancarConReintentos, type ResultadoArranque } from "./arranque-con-reintentos.js";
 import { PLATFORM_WEB_ORIGIN, SUPABASE_ANON_KEY, SUPABASE_URL } from "./baked-config.js";
 import { type ChargeJournal, createChargeJournal } from "./charge-journal.js";
 import { runChargeRecovery } from "./charge-recovery-runner.js";
@@ -36,7 +41,7 @@ import { realSessionStore } from "./real-session-store.js";
 import { openKioskWindow, registerTotemIpc } from "./totem-window.js";
 import { TRAY_ICON_DATA_URL } from "./tray-icon.js";
 import { startAutoUpdate } from "./updater.js";
-import { ensureWatchdogTask } from "./watchdog.js";
+import { ensureWatchdogTask, removeWatchdogTask } from "./watchdog.js";
 import { destroyWebPanel, layoutWebPanel, setWebPanelReporter } from "./web-panel.js";
 
 let mainWindow: BrowserWindow | null = null;
@@ -144,7 +149,10 @@ const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
 } else {
-  app.on("second-instance", () => {
+  app.on("second-instance", (_e, argv) => {
+    // El watchdog lanza el exe cada 5 min aunque el agente esté vivo: ese lanzamiento solo
+    // comprueba que sigue ahí. Sacar la ventana por él la pondría encima de todo cada 5 min.
+    if (esArranqueDesatendido(argv)) return;
     if (mainWindow) {
       mainWindow.show();
       mainWindow.focus();
@@ -181,23 +189,22 @@ if (!gotLock) {
     // enchufe a mitad de un pago. Se crea aquí para que exista ANTES de que se pueda cobrar.
     chargeJournal = createChargeJournal(app.getPath("userData"));
 
-    // Auto-arranque en el login de Windows (desatendido, oculto en bandeja).
-    app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true });
-
-    // Watchdog del SISTEMA: una tarea programada resucita el proceso si muere del TODO (crash
-    // duro/kill) -- el watchdog interno solo cubre errores del proceso vivo. Solo en un build
-    // empaquetado de Windows: en dev el exe es electron.exe y registraría una tarea basura.
-    if (process.platform === "win32" && app.isPackaged) {
-      ensureWatchdogTask(app.getPath("userData"), app.getPath("exe"), reportMain);
-    }
+    // Auto-arranque en el login de Windows (desatendido, oculto en bandeja). Solo empaquetado:
+    // en dev registraría el `electron.exe` de node_modules para arrancar con cada sesión.
+    if (app.isPackaged) app.setLoginItemSettings(opcionesDeInicioConWindows());
 
     createWindow();
     createTray();
     registerIpc(
       () => mainWindow,
       () => logSink.read(),
-      // Un totem recién emparejado entra en modo kiosko sin reiniciar.
-      () => maybeStartKiosk(),
+      // Recién emparejado: el watchdog del sistema pasa a vigilarlo y, si es un totem, entra en
+      // modo kiosko sin reiniciar.
+      async () => {
+        syncSystemWatchdog(true);
+        await maybeStartKiosk();
+      },
+      () => syncSystemWatchdog(false),
     );
     onAgentActivity(handleAgentActivity);
     // La versión de la build viaja al heartbeat (para saber qué locales están desactualizados).
@@ -215,30 +222,15 @@ if (!gotLock) {
 
     // Si ya está emparejado, arranca el agente al iniciar (imprime sin abrir la ventana).
     const creds = loadCredentials(realConfigBackend());
+    // En cada arranque, y no solo al emparejar: re-registrarla la deja apuntando al exe actual
+    // tras una actualización, y borrarla limpia la que dejaron versiones que la registraban
+    // estuviera o no emparejado el equipo.
+    syncSystemWatchdog(creds !== null);
     if (creds) {
-      const store = realSessionStore();
-      try {
-        if (creds.legacyPassword) {
-          // Migración #11: este device se emparejó con una versión que guardaba la contraseña.
-          // Un login único deja la sesión (refresh token) en el almacén cifrado, y reescribimos
-          // la metadata SIN la contraseña. Transparente: el owner no re-empareja.
-          logger.info(`Migrando dispositivo ${creds.deviceId} a sesión por refresh token…`);
-          await establishSessionFromPassword(store, creds.email, creds.legacyPassword);
-          saveCredentials(realConfigBackend(), {
-            deviceId: creds.deviceId,
-            email: creds.email,
-            tenantId: creds.tenantId,
-          });
-        }
-        logger.info(`Emparejado (dispositivo ${creds.deviceId}). Arrancando el agente…`);
-        await startAgent(store, creds.tenantId);
+      logger.info(`Emparejado (dispositivo ${creds.deviceId}). Arrancando el agente…`);
+      if ((await arrancarAgenteAlInicio()) === "arrancado") {
         await recuperarCobrosPendientes();
         await maybeStartKiosk();
-      } catch (e) {
-        // La sesión no se pudo restaurar/renovar (token revocado o caducado), o falló la
-        // migración. No se borra la metadata: la ventana muestra "Emparejado, agente parado" y el
-        // owner puede re-emparejar con un código nuevo.
-        reportMain("[agent-desktop] no se pudo arrancar el agente (¿re-emparejar?):", e);
       }
     } else {
       logger.info("Sin emparejar. El agente no arranca hasta introducir un código.");
@@ -249,6 +241,72 @@ if (!gotLock) {
     quitting = true;
     stopAgent();
     destroyWebPanel();
+  });
+}
+
+/**
+ * Watchdog del SISTEMA: una tarea programada resucita el proceso si muere del TODO (crash duro o
+ * kill); el watchdog interno solo cubre errores del proceso vivo. Existe mientras el equipo está
+ * emparejado y se borra en cuanto deja de estarlo. Solo en un build empaquetado de Windows: en
+ * dev el exe es electron.exe y registraría una tarea basura.
+ */
+function syncSystemWatchdog(paired: boolean): void {
+  if (process.platform !== "win32" || !app.isPackaged) return;
+  const log = {
+    info: (msg: string) => logger?.info(msg),
+    error: (msg: string, err?: unknown) => reportMain(msg, err),
+  };
+  if (paired) ensureWatchdogTask(app.getPath("userData"), app.getPath("exe"), log);
+  else removeWatchdogTask(log);
+}
+
+/**
+ * Arranca el agente al iniciar la app aguantando la falta de red (ver
+ * `arranque-con-reintentos.ts`). Cada intento relee las credenciales y el bucle se retira si,
+ * mientras espera a la red, alguien des-empareja o vuelve a emparejar (que ya arranca el agente).
+ */
+async function arrancarAgenteAlInicio(): Promise<ResultadoArranque> {
+  const store = realSessionStore();
+  return arrancarConReintentos({
+    arrancar: async () => {
+      const creds = loadCredentials(realConfigBackend());
+      if (!creds) throw new SesionInvalidaError("El equipo ya no está emparejado.");
+      if (creds.legacyPassword) {
+        // Migración #11: este device se emparejó con una versión que guardaba la contraseña.
+        // Un login único deja la sesión (refresh token) en el almacén cifrado, y reescribimos
+        // la metadata SIN la contraseña. Transparente: el owner no re-empareja.
+        logger?.info(`Migrando dispositivo ${creds.deviceId} a sesión por refresh token…`);
+        await establishSessionFromPassword(store, creds.email, creds.legacyPassword);
+        saveCredentials(realConfigBackend(), {
+          deviceId: creds.deviceId,
+          email: creds.email,
+          tenantId: creds.tenantId,
+        });
+      }
+      await startAgent(store, creds.tenantId);
+    },
+    esSinConexion,
+    esperar: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+    seguir: () => !quitting && !isAgentRunning() && loadCredentials(realConfigBackend()) !== null,
+    alCambiarConectando: (conectando) => {
+      setConectando(conectando);
+      mainWindow?.webContents.send("estado-cambiado");
+    },
+    avisos: {
+      sinConexion: (e) =>
+        logger?.warn(
+          `Sin conexión con la plataforma al arrancar (${e instanceof Error ? e.message : String(e)}). Se reintenta solo; no hace falta re-emparejar.`,
+        ),
+      recuperado: (n) =>
+        logger?.info(`Conexión recuperada tras ${n} intento(s): agente en marcha.`),
+      // No se borra la metadata: la ventana muestra "Emparejado, agente parado" y el owner puede
+      // re-emparejar con un código nuevo.
+      sesionInvalida: (e) =>
+        reportMain(
+          "[agent-desktop] la sesión de este equipo ya no vale: hay que re-emparejar con un código nuevo.",
+          e,
+        ),
+    },
   });
 }
 
@@ -331,10 +389,10 @@ function createWindow(): void {
     },
   });
 
-  // Solo se muestra si el usuario lanzó la app a mano; si fue el auto-arranque de Windows
-  // en el login, se queda oculta en la bandeja (paso 8 de la checklist de validación).
+  // Solo se muestra si el usuario lanzó la app a mano; si la lanzó Windows (inicio de sesión o
+  // watchdog), se queda oculta en la bandeja (paso 8 de la checklist de validación).
   mainWindow.once("ready-to-show", () => {
-    if (!app.getLoginItemSettings().wasOpenedAtLogin) {
+    if (!esArranqueDesatendido(process.argv)) {
       mainWindow?.show();
     }
   });

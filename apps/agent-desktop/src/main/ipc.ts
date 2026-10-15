@@ -3,6 +3,7 @@ import { DEVICE_SESSION_STORAGE_KEY, type NetworkPrinterProbe } from "@suarex/ag
 import { app, type BrowserWindow, dialog, ipcMain } from "electron";
 import {
   establishSessionFromPassword,
+  estaConectando,
   getActivity,
   isAgentRunning,
   probeNetworkPrinters,
@@ -38,11 +39,13 @@ function isPairError(e: unknown): e is PairError {
 
 /** Registra los canales IPC. El renderer nunca toca Node/Electron directo: todo pasa por
  * estos handlers vía el puente contextBridge del preload. `readLog` vuelca el registro en disco
- * (inyectado desde el sink real) para el diagnóstico exportable. */
+ * (inyectado desde el sink real) para el diagnóstico exportable. `afterPair` y `afterUnpair` son
+ * lo que cambia fuera de la IPC al emparejar y des-emparejar (watchdog del sistema, kiosko). */
 export function registerIpc(
   getWindow: () => BrowserWindow | null,
   readLog: () => string,
   afterPair: () => void | Promise<void> = () => {},
+  afterUnpair: () => void = () => {},
 ): void {
   // Navegación de la barra lateral. El renderer manda solo un NOMBRE de sección; la ruta y
   // el origen salen de `WEB_SECTIONS` y del origen horneado en el build, nunca de una
@@ -91,8 +94,9 @@ export function registerIpc(
       tenantId: creds.tenantId,
     });
     await startAgent(store, creds.tenantId);
-    // Si el device recién emparejado es un totem (rol kiosko), entra en modo kiosko en el acto,
-    // sin reiniciar. Un fallo aquí no debe tumbar el emparejamiento (ya está hecho y guardado).
+    // El watchdog del sistema empieza a vigilarlo y, si el device es un totem (rol kiosko), entra
+    // en modo kiosko en el acto, sin reiniciar. Un fallo aquí no debe tumbar el emparejamiento (ya
+    // está hecho y guardado).
     try {
       await afterPair();
     } catch {
@@ -121,6 +125,8 @@ export function registerIpc(
     return {
       paired: creds !== null,
       running: isAgentRunning(),
+      // Arrancando, o esperando a que vuelva la red: que la ventana no diga "agente parado".
+      conectando: estaConectando(),
       deviceId: creds?.deviceId ?? null,
       // La interfaz lo usa para AVISAR de que la impresión USB (winspool) solo existe en
       // Windows, en vez de dejar que el usuario lo descubra al pulsar "Imprimir prueba" y
@@ -168,6 +174,9 @@ export function registerIpc(
     // Borra también la sesión persistida (refresh token): sin esto quedaría en disco una sesión
     // válida de un device supuestamente des-emparejado.
     realSessionStore().removeItem(DEVICE_SESSION_STORAGE_KEY);
+    // Sin esto, el watchdog seguiría reabriendo cada cinco minutos una app que ya no pertenece a
+    // ningún restaurante.
+    afterUnpair();
     return { ok: true };
   });
 

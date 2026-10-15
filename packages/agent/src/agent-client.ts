@@ -1,4 +1,36 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import {
+  createClient,
+  isAuthRetryableFetchError,
+  type SupabaseClient,
+} from "@supabase/supabase-js";
+
+/**
+ * No se pudo hablar con la plataforma: sin red, router reiniciándose, servidor caído. La sesión
+ * guardada sigue siendo buena, así que esto se arregla REINTENTANDO, nunca re-emparejando.
+ */
+export class SinConexionError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = "SinConexionError";
+  }
+}
+
+/** La sesión guardada ya no vale (revocada con `resetDevice`, caducada) o no hay ninguna: solo
+ *  se arregla re-emparejando con un código nuevo. */
+export class SesionInvalidaError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = "SesionInvalidaError";
+  }
+}
+
+/**
+ * ¿Es un fallo de red, que se arregla esperando? Reconoce el error propio y el de supabase-js tal
+ * cual (el login con contraseña al emparejar o migrar lo lanza sin envolver).
+ */
+export function esSinConexion(e: unknown): boolean {
+  return e instanceof SinConexionError || isAuthRetryableFetchError(e);
+}
 
 /**
  * Almacén de la sesión de Supabase (interfaz `storage` de supabase-js). En producción lo
@@ -43,12 +75,20 @@ export type AgentCredentials = {
  *
  * Dos rutas de autenticación (ver `AgentCredentials`):
  *  - Con `sessionStore`: restaura la sesión guardada y la REFRESCA para validar el refresh token
- *    en el acto (si está revocado/caducado, lanza -> la cáscara pide re-emparejar). El token
- *    rotado lo re-persiste supabase-js solo.
+ *    en el acto. Si está revocado/caducado lanza `SesionInvalidaError` (hay que re-emparejar); si
+ *    no hay red, `SinConexionError` (hay que reintentar). El token rotado lo re-persiste
+ *    supabase-js solo.
  *  - Con `email`+`password`: `signInWithPassword` clásico.
  */
 export async function createDeviceClient(creds: AgentCredentials): Promise<SupabaseClient> {
   if (creds.sessionStore) {
+    // Que haya sesión se mira en el ALMACÉN, no con `getSession()`: con el token de acceso
+    // caducado, `getSession()` intenta renovarlo por dentro y, sin red, devuelve `session: null`
+    // aunque la sesión siga en disco. Leerlo así confundía "sin red" con "no hay sesión": un PC
+    // apagado unos días que arrancaba sin red mandaba re-emparejar.
+    if (creds.sessionStore.getItem(DEVICE_SESSION_STORAGE_KEY) === null) {
+      throw new SesionInvalidaError("No hay sesión de dispositivo guardada: hay que re-emparejar.");
+    }
     const client = createClient(creds.supabaseUrl, creds.anonKey, {
       auth: {
         persistSession: true,
@@ -57,17 +97,23 @@ export async function createDeviceClient(creds: AgentCredentials): Promise<Supab
         storageKey: DEVICE_SESSION_STORAGE_KEY,
       },
     });
-    // `getSession` fuerza la carga desde el almacén; `refreshSession` valida el refresh token
-    // contra el servidor (falla si se revocó con `resetDevice`/`deleteUser`) y rota+persiste uno
-    // nuevo. Ambas cosas antes de dar el cliente por bueno.
-    const {
-      data: { session: stored },
-    } = await client.auth.getSession();
-    if (!stored) throw new Error("No hay sesión de dispositivo guardada: hay que re-emparejar.");
+    // `refreshSession` valida el refresh token contra el servidor (falla si se revocó con
+    // `resetDevice`/`deleteUser`) y rota+persiste uno nuevo, antes de dar el cliente por bueno.
     const { data, error } = await client.auth.refreshSession();
     if (error || !data.session) {
-      throw new Error(
-        `La sesión del dispositivo no se pudo renovar (hay que re-emparejar): ${error?.message ?? "sin sesión"}`,
+      // Un cliente que se descarta no puede seguir renovando por su cuenta: en Node su
+      // temporizador corre siempre, y con la red de vuelta renovaría el MISMO refresh token que el
+      // cliente del siguiente intento. Dos renovaciones a la vez y Supabase da el token por
+      // reutilizado: la sesión del dispositivo se pierde de verdad.
+      await client.auth.stopAutoRefresh();
+      if (isAuthRetryableFetchError(error)) {
+        throw new SinConexionError(`Sin conexión con la plataforma: ${error.message}`, {
+          cause: error,
+        });
+      }
+      throw new SesionInvalidaError(
+        `La sesión del dispositivo ya no vale (hay que re-emparejar): ${error?.message ?? "sin sesión"}`,
+        { cause: error },
       );
     }
     return client;
