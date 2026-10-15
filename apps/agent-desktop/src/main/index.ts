@@ -13,16 +13,20 @@ if (typeof (globalThis as { WebSocket?: unknown }).WebSocket === "undefined") {
   (globalThis as { WebSocket?: unknown }).WebSocket = WsWebSocket;
 }
 
+import { esSinConexion, SesionInvalidaError } from "@suarex/agent";
 import {
   establishSessionFromPassword,
   getDeviceClient,
+  isAgentRunning,
   onAgentActivity,
   receiptPrinterStatus,
   setAppVersion,
+  setConectando,
   setPrintersProvider,
   startAgent,
   stopAgent,
 } from "./agent-runner.js";
+import { arrancarConReintentos, type ResultadoArranque } from "./arranque-con-reintentos.js";
 import { PLATFORM_WEB_ORIGIN, SUPABASE_ANON_KEY, SUPABASE_URL } from "./baked-config.js";
 import { type ChargeJournal, createChargeJournal } from "./charge-journal.js";
 import { runChargeRecovery } from "./charge-recovery-runner.js";
@@ -223,29 +227,10 @@ if (!gotLock) {
     // estuviera o no emparejado el equipo.
     syncSystemWatchdog(creds !== null);
     if (creds) {
-      const store = realSessionStore();
-      try {
-        if (creds.legacyPassword) {
-          // Migración #11: este device se emparejó con una versión que guardaba la contraseña.
-          // Un login único deja la sesión (refresh token) en el almacén cifrado, y reescribimos
-          // la metadata SIN la contraseña. Transparente: el owner no re-empareja.
-          logger.info(`Migrando dispositivo ${creds.deviceId} a sesión por refresh token…`);
-          await establishSessionFromPassword(store, creds.email, creds.legacyPassword);
-          saveCredentials(realConfigBackend(), {
-            deviceId: creds.deviceId,
-            email: creds.email,
-            tenantId: creds.tenantId,
-          });
-        }
-        logger.info(`Emparejado (dispositivo ${creds.deviceId}). Arrancando el agente…`);
-        await startAgent(store, creds.tenantId);
+      logger.info(`Emparejado (dispositivo ${creds.deviceId}). Arrancando el agente…`);
+      if ((await arrancarAgenteAlInicio()) === "arrancado") {
         await recuperarCobrosPendientes();
         await maybeStartKiosk();
-      } catch (e) {
-        // La sesión no se pudo restaurar/renovar (token revocado o caducado), o falló la
-        // migración. No se borra la metadata: la ventana muestra "Emparejado, agente parado" y el
-        // owner puede re-emparejar con un código nuevo.
-        reportMain("[agent-desktop] no se pudo arrancar el agente (¿re-emparejar?):", e);
       }
     } else {
       logger.info("Sin emparejar. El agente no arranca hasta introducir un código.");
@@ -273,6 +258,56 @@ function syncSystemWatchdog(paired: boolean): void {
   };
   if (paired) ensureWatchdogTask(app.getPath("userData"), app.getPath("exe"), log);
   else removeWatchdogTask(log);
+}
+
+/**
+ * Arranca el agente al iniciar la app aguantando la falta de red (ver
+ * `arranque-con-reintentos.ts`). Cada intento relee las credenciales y el bucle se retira si,
+ * mientras espera a la red, alguien des-empareja o vuelve a emparejar (que ya arranca el agente).
+ */
+async function arrancarAgenteAlInicio(): Promise<ResultadoArranque> {
+  const store = realSessionStore();
+  return arrancarConReintentos({
+    arrancar: async () => {
+      const creds = loadCredentials(realConfigBackend());
+      if (!creds) throw new SesionInvalidaError("El equipo ya no está emparejado.");
+      if (creds.legacyPassword) {
+        // Migración #11: este device se emparejó con una versión que guardaba la contraseña.
+        // Un login único deja la sesión (refresh token) en el almacén cifrado, y reescribimos
+        // la metadata SIN la contraseña. Transparente: el owner no re-empareja.
+        logger?.info(`Migrando dispositivo ${creds.deviceId} a sesión por refresh token…`);
+        await establishSessionFromPassword(store, creds.email, creds.legacyPassword);
+        saveCredentials(realConfigBackend(), {
+          deviceId: creds.deviceId,
+          email: creds.email,
+          tenantId: creds.tenantId,
+        });
+      }
+      await startAgent(store, creds.tenantId);
+    },
+    esSinConexion,
+    esperar: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+    seguir: () => !quitting && !isAgentRunning() && loadCredentials(realConfigBackend()) !== null,
+    alCambiarConectando: (conectando) => {
+      setConectando(conectando);
+      mainWindow?.webContents.send("estado-cambiado");
+    },
+    avisos: {
+      sinConexion: (e) =>
+        logger?.warn(
+          `Sin conexión con la plataforma al arrancar (${e instanceof Error ? e.message : String(e)}). Se reintenta solo; no hace falta re-emparejar.`,
+        ),
+      recuperado: (n) =>
+        logger?.info(`Conexión recuperada tras ${n} intento(s): agente en marcha.`),
+      // No se borra la metadata: la ventana muestra "Emparejado, agente parado" y el owner puede
+      // re-emparejar con un código nuevo.
+      sesionInvalida: (e) =>
+        reportMain(
+          "[agent-desktop] la sesión de este equipo ya no vale: hay que re-emparejar con un código nuevo.",
+          e,
+        ),
+    },
+  });
 }
 
 /**
