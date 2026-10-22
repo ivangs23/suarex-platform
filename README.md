@@ -94,6 +94,11 @@ carta pública (`/m/{token}`). Igual que con `STAFF_SEED_PASSWORD`, si falta
 pnpm lint && pnpm typecheck && pnpm test && pnpm --filter @suarex/config test && pnpm test:integration && pnpm test:e2e
 ```
 
+**En CI** (`.github/workflows/ci.yml`, job `verificar`, en cada PR y en cada push a `main`):
+`pnpm lint`, `pnpm typecheck` y `pnpm test`, con el Node de `.nvmrc`. **Sigue siendo local**,
+hasta que entre en CI: `pnpm test:integration` y `pnpm test:e2e`, que necesitan Supabase local.
+Un PR no está listo con CI en verde si no han pasado también esos dos en local.
+
 `pnpm test` (vía Turbo) y `pnpm --filter @suarex/config test` ejecutan hoy los mismos 25
 tests unitarios de `packages/config` (es el único paquete con script `test`; Turbo solo
 corre el suyo) — están ambos porque ambos forman parte del comando de verificación de
