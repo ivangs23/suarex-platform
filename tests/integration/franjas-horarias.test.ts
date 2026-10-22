@@ -1,4 +1,4 @@
-import { getCategories } from "@suarex/db";
+import { getCategories, minutosEnZona } from "@suarex/db";
 import { describe, expect, it } from "vitest";
 import {
   admin,
@@ -14,6 +14,11 @@ import {
  * Las horas frontera y la franja que cruza medianoche van en `packages/db/src/franjas.test.ts`,
  * donde se pueden probar sin esperar a que den las 20:00.
  */
+
+// La de la sede del fixture (default de `venues.timezone`). No la del proceso: en CI es UTC, y la
+// carta decide en la zona de la sede.
+const ZONA = "Europe/Madrid";
+
 describe("getCategories con franjas", () => {
   it("oculta la categoría fuera de su franja", async () => {
     const f = await createTenantFixture(`franja-${nonce()}`);
@@ -27,8 +32,7 @@ describe("getCategories con franjas", () => {
 
       const ids = (await getCategories(f.tenantId)).map((c) => c.id);
       // Solo se comprueba si AHORA no son las 03:00-03:01; en ese minuto el test no aplica.
-      const ahora = new Date();
-      if (!(ahora.getHours() === 3 && ahora.getMinutes() === 0)) {
+      if (minutosEnZona(new Date(), ZONA) !== 3 * 60) {
         expect(ids).not.toContain(seed.categoryId);
       }
     } finally {
@@ -94,7 +98,7 @@ describe("pedir fuera de la franja", () => {
       expect(dentro.orderId).toBeTruthy();
 
       // Una franja de una hora que empieza dentro de dos: nunca es ahora, den las horas que den.
-      const hora = new Date().getHours();
+      const hora = Math.floor(minutosEnZona(new Date(), ZONA) / 60);
       const dosDigitos = (h: number) => String(h % 24).padStart(2, "0");
       await admin
         .from("categories")

@@ -36,3 +36,43 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
+
+  integracion:
+    needs: verificar
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    # No bloquea hasta que lleve 10 ejecuciones verdes seguidas (plan, tarea 0.2).
+    continue-on-error: true
+    env:
+      # La integración no importa Electron: aquí sí se salta la descarga.
+      ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # La misma versión de CLI que en local: fija las imágenes del stack.
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.109.1
+      - run: supabase start
+      - run: pnpm db:env
+      - run: pnpm seed:staff
+      - run: pnpm test:integration
+
+      # Si falla, los logs del stack (Kong, Auth, Realtime…) separan "entorno" de "código".
+      - if: failure()
+        run: |
+          mkdir -p test-results
+          for c in $(docker ps -a --format '{{.Names}}' | grep '^supabase_'); do
+            docker logs "$c" > "test-results/$c.log" 2>&1
+          done
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integracion-logs
+          path: test-results/
