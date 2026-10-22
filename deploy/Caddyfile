@@ -37,10 +37,16 @@
 	# Cabeceras de seguridad para toda la plataforma. HSTS incluye subdominios porque cada
 	# cliente vive en uno: sin `includeSubDomains` un `garum.suarex.app` en claro seguiría
 	# siendo un objetivo de downgrade.
+	#
+	# Nadie enmarca la web (clickjacking sobre el panel o el pago). El panel del agente y el
+	# tótem no son iframes: cargan la URL en su propia ventana. La CSP es el estándar;
+	# X-Frame-Options, para navegadores viejos.
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		X-Content-Type-Options "nosniff"
 		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Frame-Options "DENY"
+		Content-Security-Policy "frame-ancestors 'none'"
 		-Server
 	}
 
@@ -84,6 +90,8 @@
 		Strict-Transport-Security "max-age=31536000"
 		X-Content-Type-Options "nosniff"
 		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Frame-Options "DENY"
+		Content-Security-Policy "frame-ancestors 'none'"
 		-Server
 	}
 

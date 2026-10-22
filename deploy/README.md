@@ -233,6 +233,13 @@ La primera vez, Caddy tarda ~1 minuto en emitir el certificado comodín. Sigue e
 docker compose -f deploy/docker-compose.app.yml logs -f caddy
 ```
 
+Tras cambiar el `Caddyfile` (un `git pull` que lo toque), reinicia Caddy. `restart` y no
+`caddy reload`: el fichero va montado, y el contenedor no ve el nuevo hasta volver a arrancar.
+
+```bash
+docker compose -f deploy/docker-compose.app.yml restart caddy
+```
+
 ---
 
 ## 7. Verificar

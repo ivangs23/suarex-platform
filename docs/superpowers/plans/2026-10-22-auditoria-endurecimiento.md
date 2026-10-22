@@ -93,20 +93,20 @@ termina en < 10 min.
 
 ### Tarea 0.3 — Cabeceras anti-clickjacking y CSP en Caddy
 
-- [ ] `deploy/Caddyfile`: en los DOS bloques `header { ... }` añadir
+- [x] `deploy/Caddyfile`: en los DOS bloques `header { ... }` añadir
   `X-Frame-Options "DENY"` y
   `Content-Security-Policy "frame-ancestors 'none'"`.
   El panel incrustado del agente usa `WebContentsView` (ver
   `apps/agent-desktop/src/main/web-panel.ts`), que NO es un iframe: no se rompe. El
   `TotemFlow` tampoco se incrusta. Verificar ambos leyendo el código antes de tocar nada.
-- [ ] No añadir una CSP completa (`script-src`, etc.) en esta tarea: Next 16 con webpack
+- [x] No añadir una CSP completa (`script-src`, etc.) en esta tarea: Next 16 con webpack
   inyecta scripts inline y exigiría nonces; es trabajo de otra fase y no es el riesgo
   señalado.
-- [ ] Añadir a `tests/integration/custom-domain.test.ts` o a un test nuevo
+- [x] Añadir a `tests/integration/custom-domain.test.ts` o a un test nuevo
   `tests/integration/security-headers.test.ts` una comprobación que lea `deploy/Caddyfile` y
   exija las dos cabeceras en los dos bloques (test estructural, sin levantar Caddy; sigue el
   patrón de `apps/web/lib/deploy-env.test.ts`).
-- [ ] `deploy/README.md`: una línea en la sección de despliegue: "tras cambiar el Caddyfile,
+- [x] `deploy/README.md`: una línea en la sección de despliegue: "tras cambiar el Caddyfile,
   `docker compose -f docker-compose.app.yml restart caddy`".
 
 **Aceptación:** `curl -I https://<tenant>.<dominio>/admin` devuelve ambas cabeceras (lo
