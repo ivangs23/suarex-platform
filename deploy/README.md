@@ -305,6 +305,10 @@ crontab -e
 30 3 * * * /opt/suarex/deploy/scripts/backup-db.sh >> /var/log/suarex-backup.log 2>&1
 ```
 
+Cada copia son tres ficheros: datos (`.sql.gz`), roles (`.roles.sql.gz`) y fotos
+(`.storage.tgz`, el volumen de Storage; si tu layout no es el de §4, fija `STORAGE_DIR`). Si
+las fotos fallan, la copia de la base sigue adelante y el log dice `AVISO: … SIN fotos`.
+
 Configura `RCLONE_REMOTE` para que el volcado salga del servidor. Una copia que vive en el
 mismo disco que la base no protege del fallo más probable, que es perder ese disco.
 
@@ -359,8 +363,8 @@ descubren el día del desastre:
 1. **El volcado NO incluye los roles.** `pg_dump` vuelca una base; los roles son del cluster.
    La imagen de Supabase trae 4 de los 13 que este esquema usa, así que sin ellos la
    restauración muere en `role "supabase_realtime_admin" does not exist`. Por eso
-   `backup-db.sh` genera **dos** ficheros: `suarex-FECHA.sql.gz` y
-   `suarex-FECHA.roles.sql.gz`. Cópialos los dos fuera del servidor.
+   `backup-db.sh` genera `suarex-FECHA.sql.gz` y `suarex-FECHA.roles.sql.gz` aparte (y un
+   tercero con las fotos, ver abajo). Cópialos todos fuera del servidor.
 
 2. **El destino NO puede estar vacío.** El volcado lleva `--clean --if-exists` porque el
    destino real nunca está limpio: la imagen de Supabase precrea `auth` y `storage`, y sin ese
@@ -372,6 +376,13 @@ descubren el día del desastre:
    `postgres` no es superusuario y la restauración falla con
    `must be able to SET ROLE "supabase_admin"`.
 
+Y aparte: **las fotos no están en la base.** El esquema `storage` del volcado son solo los
+metadatos; los ficheros viven en el volumen de Storage. `backup-db.sh` los empaqueta en
+`suarex-FECHA.storage.tgz` **con sus xattr**, y `restore-db.sh` los mete en el contenedor de
+Storage con `docker cp`, con una confirmación aparte. Los xattr no son un detalle: Storage
+guarda ahí el tipo y la caché de cada foto, y sin ellos responde 500 aunque el fichero esté. Un
+`tar` a mano sin `--xattrs` restaura fotos que no se ven.
+
 ### El procedimiento
 
 ```bash
@@ -379,24 +390,62 @@ descubren el día del desastre:
 # 2. Aplica las migraciones (crea el esquema public).
 ./deploy/scripts/apply-migrations.sh
 
-# 3. Restaura. El script carga los roles solo si encuentra el .roles.sql.gz al lado.
-DB_CONTAINER=supabase-db ./deploy/scripts/restore-db.sh /var/backups/suarex/suarex-FECHA.sql.gz
+# 3. Restaura. Carga los roles si encuentra el .roles.sql.gz al lado y, si escribes 'fotos',
+#    las fotos del .storage.tgz.
+DB_CONTAINER=supabase-db STORAGE_CONTAINER=supabase-storage \
+  ./deploy/scripts/restore-db.sh /var/backups/suarex/suarex-FECHA.sql.gz
+
+# 4. Abre la carta restaurada de un cliente y comprueba que se VE una foto.
 ```
 
-Termina imprimiendo un recuento de tenants, productos, pedidos, usuarios y dispositivos.
-**Compáralo con lo que esperabas tener.** Una restauración que acaba sin error pero deja las
-tablas vacías es el peor resultado posible, porque parece que funcionó.
+Termina imprimiendo un recuento de tenants, productos, pedidos, usuarios, dispositivos y fotos
+(`storage.objects`), y tras las fotos, cuántos ficheros hay en Storage: al menos tantos como
+`storage.objects`. **Compáralo con lo que esperabas tener.** Una restauración que acaba sin
+error pero deja las tablas vacías es el peor resultado posible, porque parece que funcionó.
 
 ### Para ensayar sin tocar producción
 
-Levanta un Postgres desechable con la misma imagen, cárgale los roles, aplícale las
-migraciones y restaura ahí. Los números tienen que cuadrar con los de producción:
+Un Postgres desechable con la misma imagen **y un Storage desechable a su lado**. Postgres solo
+no basta: las migraciones tocan `storage.buckets`, y esas tablas las crea Storage al arrancar,
+no la imagen de Postgres. El Storage recibe además las fotos y deja comprobar que se sirven.
+Los números tienen que cuadrar con los de producción y la foto tiene que dar `200`:
 
 ```bash
-docker run -d --name drill -e POSTGRES_PASSWORD=x public.ecr.aws/supabase/postgres:17.6.1.106
-# ... roles + migraciones ...
-DB_CONTAINER=drill ./deploy/scripts/restore-db.sh <volcado>
-docker rm -f drill
+cd /opt/suarex
+V=/var/backups/suarex/suarex-FECHA.sql.gz
+docker network create drill-net
+docker run -d --name drill --network drill-net -e POSTGRES_PASSWORD=x \
+  public.ecr.aws/supabase/postgres:17.6.1.106
+# (espera a que `docker logs drill` diga "PostgreSQL init process complete")
+docker exec drill psql -U supabase_admin -d postgres \
+  -c "alter role supabase_storage_admin with login password 'x'"
+
+# Storage con la imagen y el entorno del de producción, apuntando a la base desechable.
+# El .env lleva las claves de Supabase: 600, y se borra al acabar.
+(umask 077; docker inspect supabase-storage --format '{{range .Config.Env}}{{println .}}{{end}}' |
+  grep -vE '^(PATH|NODE_VERSION|YARN_VERSION|DATABASE_URL|FILE_STORAGE_BACKEND_PATH|IMGPROXY_URL)=|^$' \
+  >/tmp/drill-storage.env)
+docker run -d --name drill-fotos --network drill-net --env-file /tmp/drill-storage.env \
+  -e DATABASE_URL=postgresql://supabase_storage_admin:x@drill:5432/postgres \
+  -e FILE_STORAGE_BACKEND_PATH=/var/lib/storage -v drill-storage:/var/lib/storage \
+  "$(docker inspect supabase-storage --format '{{.Config.Image}}')"
+
+# Roles y migraciones (los "ERROR ... already exists" de los roles son normales).
+gunzip -c "${V%.sql.gz}.roles.sql.gz" | docker exec -i drill psql -U supabase_admin -d postgres -q
+for f in supabase/migrations/*.sql; do
+  docker exec -i drill psql -U postgres -d postgres -v ON_ERROR_STOP=1 -q --single-transaction <"$f"
+done
+
+# Restaura base y fotos (escribe 'restaurar' y luego 'fotos').
+DB_CONTAINER=drill STORAGE_CONTAINER=drill-fotos ./deploy/scripts/restore-db.sh "$V"
+
+# Una foto de producto, servida: tiene que dar 200 y content-type image/webp.
+F="$(docker exec drill psql -U postgres -tAc \
+  "select name from storage.objects where bucket_id = 'catalog' and name like '%/products/%' limit 1")"
+docker exec drill-fotos wget -S -O /dev/null "http://127.0.0.1:5000/object/public/catalog/$F"
+
+docker rm -f drill drill-fotos && docker volume rm drill-storage && docker network rm drill-net
+rm /tmp/drill-storage.env
 ```
 
 No lo ensayes restaurando en una base con OTRO NOMBRE dentro del mismo Postgres: `pg_cron`
@@ -406,8 +455,8 @@ solo puede existir en la base llamada `postgres` y la restauración se para ahí
 
 | | |
 |---|---|
-| **RPO** (datos que se pierden) | Hasta **24 h** — `backup-db.sh` corre a las 3:30. Con más volumen, baja el cron a cada 6 h. |
-| **RTO** (tiempo hasta volver) | **~40 min** en servidor nuevo: instalar el stack (20) + migraciones (2) + restaurar (5) + DNS y certificados (10). |
+| **RPO** (datos que se pierden) | Hasta **24 h**, datos y fotos — `backup-db.sh` corre a las 3:30. Con más volumen, baja el cron a cada 6 h. |
+| **RTO** (tiempo hasta volver) | **~45 min** en servidor nuevo: instalar el stack (20) + migraciones (2) + restaurar (5) + fotos (~5, según lo que pesen) + DNS y certificados (10). |
 
 Si esos números no te valen para un cliente, la respuesta no es hacer más backups: es una
 réplica de Postgres, y eso es otra fase.
