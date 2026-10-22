@@ -147,7 +147,9 @@ stack de Supabase (`/opt/suarex-supabase/volumes/storage` según el layout de
   conviven `^25` y `^26`): elegir `^26` (la del root) y correr `pnpm install`.
 - [x] Documentar en `README.md` que Renovate abre PRs y que CI (Tarea 0.1) es quien los valida.
 
-**Aceptación:** Renovate abre su PR de "Configure Renovate" y CI lo pasa.
+**Aceptación:** Renovate abre el issue "Dependency Dashboard" y sus PRs pasan el CI. (Con
+`renovate.json` ya en `main`, Renovate se salta el PR de "Configure Renovate": acordado con
+Iván.)
 
 ---
 
