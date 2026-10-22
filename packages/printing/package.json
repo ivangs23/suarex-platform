@@ -16,7 +16,7 @@
     "node-thermal-printer": "^4.6.0"
   },
   "devDependencies": {
-    "@types/node": "^25.6.0",
+    "@types/node": "^26.1.1",
     "typescript": "^5.9.3",
     "vitest": "^4.1.5"
   }
