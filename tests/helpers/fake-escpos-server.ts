@@ -26,7 +26,9 @@ export function startFakePrinter(): Promise<FakedPrinter> {
     connections += 1;
     if (failAlways || failOnce) {
       failOnce = false;
-      socket.destroy();
+      // RST y no FIN: con `destroy()` Linux cierra limpio y el cliente no lo ve como fallo
+      // (Windows ya mandaba RST). Así "acepta y tira" se comporta igual en local y en CI.
+      socket.resetAndDestroy();
       return;
     }
     socket.on("data", (d: Buffer) => chunks.push(d));
