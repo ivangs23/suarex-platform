@@ -1,5 +1,13 @@
 import { eurosToCents } from "@suarex/domain";
 import { tenantScoped } from "./client.js";
+import type { Json } from "./database.types.js";
+import { textosJson } from "./json.js";
+
+/** Nombre de una línea desde su snapshot: `es` primero, si no el primero que haya. */
+function nombreDeLinea(nameSnapshot: Json): string {
+  const textos = textosJson(nameSnapshot);
+  return textos.es ?? Object.values(textos)[0] ?? "—";
+}
 
 export type ProductoVendido = {
   nombre: string;
@@ -33,13 +41,6 @@ export type VentasDelDia = {
  */
 const ESTADOS_COBRADOS = ["paid", "preparing", "served", "refunded"] as const;
 
-type FilaPedido = {
-  paid_at: string | null;
-  total: number;
-  refunded_cents: number | null;
-  order_items: { name_snapshot: Record<string, string>; quantity: number; line_total: number }[];
-};
-
 /**
  * Ventas del día para un restaurante. Solo lectura: no cierra turno ni congela nada (decisión
  * D1 del spec de la Fase 3).
@@ -61,7 +62,7 @@ export async function ventasDelDia(
     .lte("paid_at", hasta.toISOString());
   if (error) throw error;
 
-  const filas = (data ?? []) as unknown as FilaPedido[];
+  const filas = data;
 
   let totalCents = 0;
   const porProducto = new Map<string, ProductoVendido>();
@@ -81,7 +82,7 @@ export async function ventasDelDia(
     for (const linea of fila.order_items ?? []) {
       // `name_snapshot` y no el catálogo de hoy: el informe refleja lo que se vendió, aunque
       // el plato se haya renombrado o borrado después.
-      const nombre = linea.name_snapshot?.es ?? Object.values(linea.name_snapshot ?? {})[0] ?? "—";
+      const nombre = nombreDeLinea(linea.name_snapshot);
       const previo = porProducto.get(nombre) ?? { nombre, unidades: 0, importeCents: 0 };
       previo.unidades += linea.quantity;
       previo.importeCents += eurosToCents(Number(linea.line_total));
@@ -139,18 +140,6 @@ export type PedidoHistorial = {
   lineas: LineaHistorial[];
 };
 
-type FilaHistorial = {
-  id: string;
-  order_number: number;
-  status: string;
-  created_at: string;
-  paid_at: string | null;
-  total: number;
-  refunded_cents: number | null;
-  tables: { label?: string } | null;
-  order_items: { name_snapshot: Record<string, string>; quantity: number; line_total: number }[];
-};
-
 /** Tope por defecto. Un restaurante con un año de servicio tiene decenas de miles de pedidos:
  *  traerlos todos tumbaría la página y no le sirve a nadie. */
 const LIMITE_POR_DEFECTO = 50;
@@ -174,9 +163,9 @@ export async function listOrderHistory(
   opciones: { limite?: number; desde?: Date; hasta?: Date } = {},
 ): Promise<PedidoHistorial[]> {
   let consulta = tenantScoped("orders", tenantId)
+    // Un solo literal: concatenado con `+` sería un `string` y postgrest-js no podría tiparlo.
     .select(
-      "id, order_number, status, created_at, paid_at, total, refunded_cents, tables(label), " +
-        "order_items(name_snapshot, quantity, line_total)",
+      "id, order_number, status, created_at, paid_at, total, refunded_cents, tables(label), order_items(name_snapshot, quantity, line_total)",
     )
     .order("created_at", { ascending: false })
     .limit(Math.min(opciones.limite ?? LIMITE_POR_DEFECTO, 500));
@@ -187,7 +176,7 @@ export async function listOrderHistory(
   const { data, error } = await consulta;
   if (error) throw error;
 
-  return ((data ?? []) as unknown as FilaHistorial[]).map((fila) => ({
+  return data.map((fila) => ({
     id: fila.id,
     orderNumber: fila.order_number,
     tableLabel: fila.tables?.label ?? null,
@@ -199,7 +188,7 @@ export async function listOrderHistory(
     // Del snapshot congelado, no del catálogo de hoy: se consulta para saber qué se pidió
     // entonces, aunque el plato se haya renombrado o borrado después.
     lineas: (fila.order_items ?? []).map((linea) => ({
-      nombre: linea.name_snapshot?.es ?? Object.values(linea.name_snapshot ?? {})[0] ?? "—",
+      nombre: nombreDeLinea(linea.name_snapshot),
       cantidad: linea.quantity,
       importeCents: eurosToCents(Number(linea.line_total)),
     })),

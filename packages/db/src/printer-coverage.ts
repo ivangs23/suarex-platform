@@ -1,8 +1,6 @@
 import { tenantScoped } from "./client.js";
+import { objetoJson } from "./json.js";
 import { listVenues } from "./venues.js";
-
-type CategoryDestinationRow = { destination: "cocina" | "barra" | null };
-type EnabledPrinterDestRow = { venue_id: string; destination: "cocina" | "barra" | "all" };
 
 export type VenuePrinterGap = {
   venueId: string;
@@ -34,14 +32,14 @@ export async function destinationsMissingPrinter(tenantId: string): Promise<Venu
       .select("destination")
       .then(({ data, error }) => {
         if (error) throw error;
-        return data as unknown as CategoryDestinationRow[];
+        return data;
       }),
     tenantScoped("printers", tenantId)
       .select("venue_id, destination")
       .eq("enabled", true)
       .then(({ data, error }) => {
         if (error) throw error;
-        return data as unknown as EnabledPrinterDestRow[];
+        return data;
       }),
   ]);
 
@@ -66,13 +64,6 @@ export async function destinationsMissingPrinter(tenantId: string): Promise<Venu
   return gaps;
 }
 
-type UsbPrinterRow = {
-  id: string;
-  name: string;
-  device_id: string | null;
-  connection: { type?: string };
-};
-
 /**
  * Impresoras USB HABILITADAS sin `device_id` asignado: como el agente solo reclama una USB
  * atada a su propio dispositivo (`packages/agent/src/run-agent.ts`), una USB sin `device_id`
@@ -88,17 +79,10 @@ export async function usbPrintersWithoutDevice(
     .eq("enabled", true);
   if (error) throw error;
 
-  return (data as unknown as UsbPrinterRow[])
-    .filter((p) => p.connection?.type === "usb" && p.device_id === null)
+  return data
+    .filter((p) => objetoJson(p.connection).type === "usb" && p.device_id === null)
     .map((p) => ({ id: p.id, name: p.name }));
 }
-
-type UsbPrinterConDispositivoRow = {
-  id: string;
-  name: string;
-  device_id: string | null;
-  connection: { type?: string; printerName?: string };
-};
 
 export type UsbPrinterNoReportada = {
   id: string;
@@ -147,28 +131,22 @@ export async function usbPrintersNotReported(tenantId: string): Promise<UsbPrint
 
   // `devices.printers` es NOT NULL con default `{}` (ver 20260724000001): "todavía no ha
   // reportado" es una lista VACÍA, no un null.
-  type DeviceRow = { id: string; name: string; printers: string[] };
-  const porDispositivo = new Map(
-    (devices.data as unknown as DeviceRow[]).map((d) => [d.id, d] as const),
-  );
+  const porDispositivo = new Map(devices.data.map((d) => [d.id, d] as const));
 
   const avisos: UsbPrinterNoReportada[] = [];
-  for (const p of printers.data as unknown as UsbPrinterConDispositivoRow[]) {
-    if (p.connection?.type !== "usb" || p.device_id === null) continue;
+  for (const p of printers.data) {
+    const conexion = objetoJson(p.connection);
+    if (conexion.type !== "usb" || p.device_id === null) continue;
 
     const dispositivo = porDispositivo.get(p.device_id);
     const reportadas = dispositivo?.printers;
     if (!dispositivo || !reportadas || reportadas.length === 0) continue;
 
-    const configurada = (p.connection.printerName ?? "").toLowerCase();
+    const printerName = typeof conexion.printerName === "string" ? conexion.printerName : "";
+    const configurada = printerName.toLowerCase();
     if (reportadas.some((r) => r.toLowerCase() === configurada)) continue;
 
-    avisos.push({
-      id: p.id,
-      name: p.name,
-      printerName: p.connection.printerName ?? "",
-      deviceName: dispositivo.name,
-    });
+    avisos.push({ id: p.id, name: p.name, printerName, deviceName: dispositivo.name });
   }
   return avisos;
 }
@@ -201,19 +179,15 @@ export async function venuesWithTotemWithoutReceiptPrinter(
   if (devices.error) throw devices.error;
   if (printers.error) throw printers.error;
 
-  type DeviceRolRow = { venue_id: string; roles: string[] | null };
   const conTotem = new Set(
-    (devices.data as unknown as DeviceRolRow[])
-      .filter((d) => (d.roles ?? []).includes("kiosko"))
-      .map((d) => d.venue_id),
+    devices.data.filter((d) => (d.roles ?? []).includes("kiosko")).map((d) => d.venue_id),
   );
   if (conTotem.size === 0) return [];
 
-  type PrinterDestRow = { venue_id: string; destination: string };
   // `all` cubre el recibo, misma regla que `targetPrinterIds`. Si aquí no contara, el aviso
   // saldría en locales que sí lo sacan.
   const conRecibo = new Set(
-    (printers.data as unknown as PrinterDestRow[])
+    printers.data
       .filter((p) => p.destination === "recibo" || p.destination === "all")
       .map((p) => p.venue_id),
   );

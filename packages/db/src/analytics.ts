@@ -1,4 +1,5 @@
 import { registrarEscaneoRpc, tenantScoped } from "./client.js";
+import { textosJson } from "./json.js";
 
 /**
  * ANALÍTICA DE CARTA.
@@ -89,36 +90,30 @@ export async function analiticaDeCarta(tenantId: string, dias = 30): Promise<Ana
   if (pedidos.error) throw pedidos.error;
   if (catalogo.error) throw catalogo.error;
 
-  const escaneos = (scans.data ?? []).reduce((acc, fila) => acc + (fila.escaneos as number), 0);
+  const escaneos = scans.data.reduce((acc, fila) => acc + fila.escaneos, 0);
 
   // SOLO el canal del QR cuenta para la conversión. El totem entra por `/totem/<token>`, no por
   // `/m/<token>`, así que nunca incrementa `menu_scans`: contar sus pedidos en el numerador
   // inflaría el ratio y en un local que vende sobre todo por totem pasaría del 100 %, un número
   // que no significa nada y sobre el que alguien podría rehacer su carta. Su venta sigue
   // entera en el informe de ventas, que no filtra canal a propósito.
-  const numPedidos = (pedidos.data ?? []).filter((p) => p.channel !== "kiosko").length;
+  const numPedidos = pedidos.data.filter((p) => p.channel !== "kiosko").length;
 
   // Los platos que no vende nadie, en cambio, SÍ miran todos los canales: un plato que el totem
   // vende no es un plato que sobra en la carta.
   const vendidos = new Set<string>();
-  for (const pedido of pedidos.data ?? []) {
-    const lineas = (pedido.order_items ?? []) as unknown as { product_id: string | null }[];
-    for (const linea of lineas) {
+  for (const pedido of pedidos.data) {
+    for (const linea of pedido.order_items) {
       if (linea.product_id) vendidos.add(linea.product_id);
     }
   }
 
-  type FilaProducto = {
-    id: string;
-    name_i18n: Record<string, string>;
-    categories: { name_i18n: Record<string, string> } | null;
-  };
-  const sinVender = (catalogo.data as unknown as FilaProducto[])
+  const sinVender = catalogo.data
     .filter((p) => !vendidos.has(p.id))
     .map((p) => ({
       id: p.id,
-      nombre: p.name_i18n.es ?? "",
-      categoria: p.categories?.name_i18n.es ?? "",
+      nombre: textosJson(p.name_i18n).es ?? "",
+      categoria: textosJson(p.categories?.name_i18n).es ?? "",
     }))
     // Por categoría y luego por nombre: así se lee como la carta y no como un volcado.
     .sort((a, b) => a.categoria.localeCompare(b.categoria) || a.nombre.localeCompare(b.nombre));

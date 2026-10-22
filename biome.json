@@ -37,6 +37,10 @@
   },
   "overrides": [
     {
+      "includes": ["packages/db/src/database.types.ts"],
+      "formatter": { "enabled": false }
+    },
+    {
       "includes": ["packages/db/src/**", "tests/integration/helpers/**", "tests/e2e/helpers/**"],
       "linter": { "rules": { "style": { "noRestrictedImports": "off" } } }
     },

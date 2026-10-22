@@ -16,20 +16,16 @@ import {
   recordOrderRefundRpc,
   tenantScoped,
 } from "./client.js";
+import type { Json, Tables } from "./database.types.js";
+import { textosJson } from "./json.js";
 import { getTenantSettings } from "./tenants.js";
 import type { CartLineInput, OrderReceipt, OrderStatus, ReceiptLine } from "./types.js";
 
-type ProductRow = {
-  id: string;
-  category_id: string;
-  name_i18n: Record<string, string>;
-  price: string | number;
-  is_available: boolean;
-  /** `tax_rate` nulo = hereda (ver `resolveTaxRate`). */
-  tax_rate: string | number | null;
-  unavailable_until: string | null;
-  categories: { destination: string; tax_rate: string | number | null } | null;
-};
+/** `tax_rate` nulo = hereda (ver `resolveTaxRate`). */
+type ProductRow = Pick<
+  Tables<"products">,
+  "id" | "category_id" | "name_i18n" | "price" | "is_available" | "tax_rate" | "unavailable_until"
+> & { categories: Pick<Tables<"categories">, "destination" | "tax_rate"> | null };
 
 /**
  * Tipo de IVA de una línea, del escalón más concreto al más general: el del propio artículo, si
@@ -43,21 +39,15 @@ function resolveTaxRate(product: ProductRow, tenantDefault: number): number {
   return tenantDefault;
 }
 
-type ExtraRow = {
-  id: string;
-  product_id: string;
-  name_i18n: Record<string, string>;
-  price: string | number;
-  group_id: string | null;
-};
+type ExtraRow = Pick<
+  Tables<"product_extras">,
+  "id" | "product_id" | "name_i18n" | "price" | "group_id"
+>;
 
-type OptionGroupRow = {
-  id: string;
-  product_id: string;
-  name_i18n: Record<string, string>;
-  min_select: number;
-  max_select: number;
-};
+type OptionGroupRow = Pick<
+  Tables<"product_option_groups">,
+  "id" | "product_id" | "name_i18n" | "min_select" | "max_select"
+>;
 
 /**
  * Fallos que describen algo sobre EL CARRITO del comensal (línea con cantidad
@@ -123,9 +113,9 @@ export async function createPendingOrder(input: {
   // discrepando -- platos a la vista que no se pueden pedir, o al revés.
   const [{ data: products, error }, categoriasVisibles] = await Promise.all([
     tenantScoped("products", input.tenantId)
+      // Un solo literal: concatenado con `+` sería un `string` y postgrest-js no podría tiparlo.
       .select(
-        "id, category_id, name_i18n, price, is_available, unavailable_until, tax_rate, " +
-          "categories(destination, tax_rate)",
+        "id, category_id, name_i18n, price, is_available, unavailable_until, tax_rate, categories(destination, tax_rate)",
       )
       .in("id", productIds),
     getCategories(input.tenantId),
@@ -134,7 +124,7 @@ export async function createPendingOrder(input: {
 
   const categoriasEnHorario = new Set(categoriasVisibles.map((c) => c.id));
 
-  const byId = new Map((products as unknown as ProductRow[]).map((p) => [p.id, p]));
+  const byId = new Map<string, ProductRow>(products.map((p) => [p.id, p]));
 
   // Igual que con los productos: el filtro por tenant lo aplica tenantScoped, así que un
   // extraId de otro tenant sencillamente no aparece en `extrasById` -- y por tanto cae en
@@ -149,7 +139,7 @@ export async function createPendingOrder(input: {
       .select("id, product_id, name_i18n, price, group_id")
       .in("id", allExtraIds);
     if (extrasError) throw extrasError;
-    for (const extraRow of extraRows as unknown as ExtraRow[]) {
+    for (const extraRow of extraRows) {
       extrasById.set(extraRow.id, extraRow);
     }
   }
@@ -166,7 +156,7 @@ export async function createPendingOrder(input: {
     .select("id, product_id, name_i18n, min_select, max_select")
     .in("product_id", productIds);
   if (groupsError) throw groupsError;
-  for (const groupRow of (groupRows ?? []) as unknown as OptionGroupRow[]) {
+  for (const groupRow of groupRows) {
     const lista = groupsByProduct.get(groupRow.product_id) ?? [];
     lista.push(groupRow);
     groupsByProduct.set(groupRow.product_id, lista);
@@ -175,7 +165,7 @@ export async function createPendingOrder(input: {
   const priced: PricedLine[] = [];
   const rows: {
     product_id: string;
-    name_snapshot: Record<string, string>;
+    name_snapshot: Json;
     unit_price: number;
     quantity: number;
     line_total: number;
@@ -188,7 +178,7 @@ export async function createPendingOrder(input: {
   // pendientes todavía del `order_item_id` que solo existe tras insertar `order_items`.
   const extrasForRows: {
     extra_id: string;
-    name_snapshot: Record<string, string>;
+    name_snapshot: Json;
     price: number;
   }[][] = [];
 
@@ -214,7 +204,7 @@ export async function createPendingOrder(input: {
     const uniqueExtraIds = [...new Set(line.extraIds)];
     const lineExtraRows: {
       extra_id: string;
-      name_snapshot: Record<string, string>;
+      name_snapshot: Json;
       price: number;
     }[] = [];
     const extrasCents: number[] = [];
@@ -248,7 +238,7 @@ export async function createPendingOrder(input: {
     if (gruposDelProducto.length > 0) {
       const grupos: OptionGroup[] = gruposDelProducto.map((group) => ({
         id: group.id,
-        name: group.name_i18n.es ?? Object.values(group.name_i18n)[0] ?? "",
+        name: nombreSnapshot(group.name_i18n, "es"),
         minSelect: group.min_select,
         maxSelect: group.max_select,
         optionIds: uniqueExtraIds.filter((id) => extrasById.get(id)?.group_id === group.id),
@@ -302,7 +292,7 @@ export async function createPendingOrder(input: {
     input.venueId,
   );
   if (numberError) throw numberError;
-  const orderNumber = numberData as number;
+  const orderNumber = numberData;
 
   /**
    * La etiqueta de la mesa se COPIA en el pedido, no se lee al imprimir.
@@ -330,7 +320,7 @@ export async function createPendingOrder(input: {
       .eq("id", input.tableId)
       .maybeSingle();
     if (tableError) throw tableError;
-    tableLabel = (tableRow?.label as string | undefined) ?? null;
+    tableLabel = tableRow?.label ?? null;
   }
 
   const { data: order, error: orderError } = await tenantScoped("orders", input.tenantId)
@@ -363,7 +353,7 @@ export async function createPendingOrder(input: {
       .select("id")
       .single();
     if (itemError) throw itemError;
-    insertedItemIds.push(itemRow.id as string);
+    insertedItemIds.push(itemRow.id);
   }
 
   const extraInsertRows = insertedItemIds.flatMap((orderItemId, index) =>
@@ -378,10 +368,10 @@ export async function createPendingOrder(input: {
   }
 
   return {
-    orderId: order.id as string,
-    publicToken: order.public_token as string,
+    orderId: order.id,
+    publicToken: order.public_token,
     totalCents: totals.total,
-    currency: order.currency as string,
+    currency: order.currency,
   };
 }
 
@@ -540,8 +530,9 @@ export async function expirePendingOrders(timeoutMinutes = 30): Promise<number> 
 }
 
 /** Resuelve un `name_snapshot` (jsonb por idioma) al idioma dado, con es de respaldo. */
-function nombreSnapshot(snapshot: Record<string, string>, lang: string): string {
-  return snapshot[lang] ?? snapshot.es ?? Object.values(snapshot)[0] ?? "";
+function nombreSnapshot(snapshot: Json, lang: string): string {
+  const textos = textosJson(snapshot);
+  return textos[lang] ?? textos.es ?? Object.values(textos)[0] ?? "";
 }
 
 /**
@@ -556,43 +547,25 @@ export async function getOrderReceipt(
   lang = "es",
 ): Promise<OrderReceipt | null> {
   const { data, error } = await ordersTableForPaymentResolution()
+    // Literal de plantilla y no `+`: concatenado, el SDK no puede tipar el embed.
     .select(
-      "order_number, created_at, subtotal, tax_amount, total, currency, tables(label), " +
-        "order_items(id, name_snapshot, quantity, line_total, notes, " +
-        "order_item_extras(name_snapshot, price))",
+      `order_number, created_at, subtotal, tax_amount, total, currency, tables(label),
+      order_items(id, name_snapshot, quantity, line_total, notes,
+      order_item_extras(name_snapshot, price))`,
     )
     .eq("public_token", publicToken)
     .maybeSingle();
   if (error) throw error;
   if (!data) return null;
+  const row = data;
 
-  // El embed de PostgREST no lo tipa bien el SDK (lo colapsa a un error genérico), así que se
-  // castea la fila entera a la forma que la propia `select` garantiza.
-  const row = data as unknown as {
-    order_number: number;
-    created_at: string;
-    subtotal: number;
-    tax_amount: number;
-    total: number;
-    currency: string;
-    tables: { label?: string } | null;
-    order_items: {
-      id: string;
-      name_snapshot: Record<string, string>;
-      quantity: number;
-      line_total: number;
-      notes: string | null;
-      order_item_extras: { name_snapshot: Record<string, string>; price: number }[];
-    }[];
-  };
-
-  const lines: ReceiptLine[] = (row.order_items ?? []).map((item) => ({
+  const lines: ReceiptLine[] = row.order_items.map((item) => ({
     id: item.id,
     name: nombreSnapshot(item.name_snapshot, lang),
     quantity: item.quantity,
     lineTotalCents: eurosToCents(Number(item.line_total)),
     notes: item.notes,
-    extras: (item.order_item_extras ?? []).map((extra) => ({
+    extras: item.order_item_extras.map((extra) => ({
       name: nombreSnapshot(extra.name_snapshot, lang),
       priceCents: eurosToCents(Number(extra.price)),
     })),

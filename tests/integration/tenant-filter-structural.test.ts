@@ -79,11 +79,10 @@ describe("tenantScoped.insert", () => {
     const a = await createTenantFixture(`ins-a-${Date.now()}`);
     const b = await createTenantFixture(`ins-b-${Date.now()}`);
 
-    await tenantScoped("categories", a.tenantId).insert({
-      tenant_id: b.tenantId,
-      slug: "intento",
-      name_i18n: { es: "Intento" },
-    });
+    // Fuera del literal: en un literal el compilador ya rechaza `tenant_id`. Esto prueba la
+    // defensa en ejecución, para cuando llega dentro de un objeto construido en otra parte.
+    const fila = { tenant_id: b.tenantId, slug: "intento", name_i18n: { es: "Intento" } };
+    await tenantScoped("categories", a.tenantId).insert(fila);
 
     const { data } = await admin.from("categories").select("tenant_id").eq("slug", "intento");
 
@@ -115,10 +114,10 @@ describe("tenantScoped.update", () => {
       .single();
     if (rowBError) throw rowBError;
 
-    // 1. Un `tenant_id` ajeno en los valores no reasigna la fila propia a otro tenant.
-    await tenantScoped("categories", a.tenantId)
-      .update({ tenant_id: b.tenantId, name_i18n: { es: "Renombrada A" } })
-      .eq("id", rowA.id);
+    // 1. Un `tenant_id` ajeno en los valores no reasigna la fila propia a otro tenant (fuera del
+    // literal, por lo mismo que en el test de `insert`).
+    const valores = { tenant_id: b.tenantId, name_i18n: { es: "Renombrada A" } };
+    await tenantScoped("categories", a.tenantId).update(valores).eq("id", rowA.id);
 
     const { data: afterOwnUpdate } = await admin
       .from("categories")
