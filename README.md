@@ -32,6 +32,17 @@ Añadir productos al carrito y pulsar "Pagar" crea el pedido (`POST /api/orders`
 precios recalculados en servidor) y redirige a `/pedido/{publicToken}`, que muestra su
 estado sin autenticación.
 
+### Tras añadir una migración
+
+```bash
+pnpm db:reset && pnpm db:types
+```
+
+`pnpm db:types` regenera `packages/db/src/database.types.ts` desde la base local, y va en el
+mismo commit que la migración: el cliente de `packages/db` está tipado contra ese fichero, y
+`tests/integration/db-types-sync.test.ts` falla si no coincide con las migraciones. Como tras
+cualquier reset, después `pnpm db:env && pnpm seed:staff`.
+
 ### Acceso del personal
 
 El personal de cocina/sala inicia sesión en `/staff/login` (por ejemplo

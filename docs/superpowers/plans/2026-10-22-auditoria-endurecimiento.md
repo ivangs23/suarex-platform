@@ -162,27 +162,27 @@ genérico `Database`; de ahí los `as unknown as Row[]` repartidos por `packages
 (`printer-coverage.ts`, `orders.ts`, `admin-catalog.ts`, `staff-orders.ts`, `reports.ts`,
 `print-jobs.ts`, `catalog.ts`, `analytics.ts`).
 
-- [ ] Script `pnpm db:types` en el `package.json` raíz: `supabase gen types typescript --local
+- [x] Script `pnpm db:types` en el `package.json` raíz: `supabase gen types typescript --local
   --schema public > packages/db/src/database.types.ts`. Commitear el fichero generado (va en
   git: CI no debe depender de generar).
-- [ ] `packages/db/src/client.ts`: `createClient<Database>(...)` en `serviceClient()`. Ajustar
+- [x] `packages/db/src/client.ts`: `createClient<Database>(...)` en `serviceClient()`. Ajustar
   los tipos de `tenantScoped` para que `table: TenantScopedTable` se tipe contra
   `Database["public"]["Tables"]` (mantener la unión explícita como `satisfies` sobre
   `keyof Database["public"]["Tables"]` para que una tabla nueva con `tenant_id` siga
   obligando a tocar la lista a propósito).
-- [ ] Eliminar los `as unknown as` de `packages/db/src/*.ts` uno a uno, sustituyéndolos por
+- [x] Eliminar los `as unknown as` de `packages/db/src/*.ts` uno a uno, sustituyéndolos por
   tipos derivados de `Database` (`Tables<"orders">`, etc.). Donde postgrest-js no pueda
   inferir un `select` con relaciones anidadas, dejar un cast **estrecho** (`as Row[]`, nunca
   `unknown`) con una línea de comentario.
-- [ ] Mantener `packages/db/src/types.ts` como capa de **dominio** (camelCase, lo que consume
+- [x] Mantener `packages/db/src/types.ts` como capa de **dominio** (camelCase, lo que consume
   `apps/web`); solo las filas crudas pasan a `database.types.ts`. No exportar
   `database.types.ts` desde `index.ts`.
-- [ ] Test estructural `tests/integration/db-types-sync.test.ts`: regenera los tipos a un
+- [x] Test estructural `tests/integration/db-types-sync.test.ts`: regenera los tipos a un
   fichero temporal con el mismo comando y falla si difiere del commiteado (mensaje: "corre
   `pnpm db:types`"). Sigue el patrón de `tenant-filter-structural.test.ts`, que ya lanza
   procesos con `process.execPath` para que funcione en Windows.
-- [ ] `biome.json`: excluir `packages/db/src/database.types.ts` del formateador.
-- [ ] Añadir `pnpm db:types` al flujo de migraciones en `README.md` y `CLAUDE.md` ("tras
+- [x] `biome.json`: excluir `packages/db/src/database.types.ts` del formateador.
+- [x] Añadir `pnpm db:types` al flujo de migraciones en `README.md` y `CLAUDE.md` ("tras
   añadir una migración, `pnpm db:reset && pnpm db:types`").
 
 **Aceptación:** `grep -rn "as unknown as" packages/db/src` devuelve 0 (o cada resto está
