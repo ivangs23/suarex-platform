@@ -63,3 +63,16 @@ jobs:
       - run: pnpm db:env
       - run: pnpm seed:staff
       - run: pnpm test:integration
+
+      # Si falla, los logs del stack (Kong, Auth, Realtime…) separan "entorno" de "código".
+      - if: failure()
+        run: |
+          mkdir -p test-results
+          for c in $(docker ps -a --format '{{.Names}}' | grep '^supabase_'); do
+            docker logs "$c" > "test-results/$c.log" 2>&1
+          done
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integracion-logs
+          path: test-results/

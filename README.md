@@ -95,9 +95,10 @@ pnpm lint && pnpm typecheck && pnpm test && pnpm --filter @suarex/config test &&
 ```
 
 **En CI** (`.github/workflows/ci.yml`, job `verificar`, en cada PR y en cada push a `main`):
-`pnpm lint`, `pnpm typecheck` y `pnpm test`, con el Node de `.nvmrc`. **Sigue siendo local**,
-hasta que entre en CI: `pnpm test:integration` y `pnpm test:e2e`, que necesitan Supabase local.
-Un PR no está listo con CI en verde si no han pasado también esos dos en local.
+`pnpm lint`, `pnpm typecheck` y `pnpm test`, con el Node de `.nvmrc`. Tras él, el job
+`integracion` levanta Supabase en el runner y corre `pnpm test:integration`; de momento no
+bloquea el merge (si falla, sube los logs del stack como artefacto). **Sigue siendo local**:
+`pnpm test:e2e`. Un PR no está listo con CI en verde si no ha pasado también el e2e en local.
 
 `pnpm test` (vía Turbo) y `pnpm --filter @suarex/config test` ejecutan hoy los mismos 25
 tests unitarios de `packages/config` (es el único paquete con script `test`; Turbo solo

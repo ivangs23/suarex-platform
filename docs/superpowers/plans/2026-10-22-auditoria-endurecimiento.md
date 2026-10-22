@@ -77,15 +77,17 @@ termina en < 10 min.
 
 ### Tarea 0.2 — CI: integración contra Supabase en el runner (job aparte, no bloqueante al inicio)
 
-- [ ] Job `integracion` en el mismo workflow, `needs: verificar`, `continue-on-error: true`
+- [x] Job `integracion` en el mismo workflow, `needs: verificar`, `continue-on-error: true`
   durante las dos primeras semanas (se quita cuando lleve 10 ejecuciones verdes seguidas).
-- [ ] Pasos: `supabase/setup-cli@v1` (fijar `version` a la que use Iván, ver
+- [x] Pasos: `supabase/setup-cli@v1` (fijar `version` a la que use Iván, ver
   `docs/HANDOFF.md` → "Portado a Windows": 2.109.1 o superior), `supabase start`,
   `pnpm db:env`, `pnpm seed:staff`, `pnpm test:integration`.
-- [ ] Subir `test-results/` como artefacto solo si falla (`if: failure()`).
-- [ ] Si `AuthRetryableFetchError` aparece en el runner igual que en local tras el reset
+- [x] Subir `test-results/` como artefacto solo si falla (`if: failure()`). Vitest no escribe
+  ahí: se vuelcan los `docker logs` del stack (acordado con Iván).
+- [x] Si `AuthRetryableFetchError` aparece en el runner igual que en local tras el reset
   (gotcha de Kong en `CLAUDE.md`), añadir un paso `docker restart supabase_kong_*` entre
-  `supabase start` y los tests, y dejarlo comentado con el porqué en una línea.
+  `supabase start` y los tests, y dejarlo comentado con el porqué en una línea. No aparece:
+  en CI no hay `db reset`, así que Kong no se queda con la IP vieja de Auth.
 
 **Aceptación:** la suite de integración (66 ficheros) pasa en CI en < 25 min.
 
