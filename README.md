@@ -105,6 +105,14 @@ tests unitarios de `packages/config` (es el único paquete con script `test`; Tu
 corre el suyo) — están ambos porque ambos forman parte del comando de verificación de
 este repo, no por redundancia accidental.
 
+## Dependencias
+
+Renovate (`renovate.json`) abre los PRs de actualización los lunes de madrugada (hora de
+Madrid), con los `@types/*` y Vitest agrupados. `stripe` y `@supabase/*` esperan una semana
+desde que se publican; `electron` y `electron-builder` no se suben solos (es la Fase 4 del plan
+de endurecimiento). **Quien valida esos PRs es el CI** de la sección anterior: se tratan como
+cualquier otro PR, también en lo de pasar el e2e en local antes de mergear.
+
 ## Reglas del repo
 
 - Solo `packages/db` importa `@supabase/supabase-js`. El resto usa funciones repositorio.
