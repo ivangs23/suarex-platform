@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 #
-# Copia de seguridad de Postgres. 100 GB de NVMe no son una copia de seguridad: si el disco
-# del VPS se corrompe o alguien ejecuta un DELETE sin WHERE, un volcado que viva en ese
-# mismo disco se pierde con él. Este script hace el volcado y RECUERDA sacarlo del servidor;
-# configura RCLONE_REMOTE para que lo haga solo.
+# Copia de seguridad de Postgres y de las fotos de Storage. 100 GB de NVMe no son una copia
+# de seguridad: si el disco del VPS se corrompe o alguien ejecuta un DELETE sin WHERE, un
+# volcado que viva en ese mismo disco se pierde con él. Este script hace el volcado y RECUERDA
+# sacarlo del servidor; configura RCLONE_REMOTE para que lo haga solo.
 #
 # Cron sugerido (cada noche a las 3:30, hora del servidor):
 #   30 3 * * * /opt/suarex/deploy/scripts/backup-db.sh >> /var/log/suarex-backup.log 2>&1
@@ -16,6 +16,9 @@ BACKUP_DIR="${BACKUP_DIR:-/var/backups/suarex}"
 RETENTION_DAYS="${RETENTION_DAYS:-14}"
 # Destino remoto opcional de rclone, p. ej. "b2:suarex-backups". Vacío = solo local.
 RCLONE_REMOTE="${RCLONE_REMOTE:-}"
+# Ficheros de Storage (las fotos): volumen `./volumes/storage` del servicio `storage` en el
+# docker-compose.yml oficial de Supabase, relativo a /opt/suarex-supabase (deploy/README.md §4).
+STORAGE_DIR="${STORAGE_DIR:-/opt/suarex-supabase/volumes/storage}"
 
 timestamp="$(date +%Y%m%d-%H%M%S)"
 outfile="${BACKUP_DIR}/suarex-${timestamp}.sql.gz"
@@ -64,19 +67,45 @@ chmod 600 "${outfile}"
 size="$(du -h "${outfile}" | cut -f1)"
 echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Copia terminada (${size})"
 
+# Y LAS FOTOS. El esquema `storage` del volcado son solo metadatos; los ficheros viven en el
+# volumen de Storage, y sin ellos una restauración deja la carta sin imágenes. Si fallan, se
+# avisa y se sigue: perder la copia de la base por culpa de las fotos sería peor.
+storagefile="${outfile%.sql.gz}.storage.tgz"
+if [[ -d "${STORAGE_DIR}" ]]; then
+	# `--xattrs`: Storage guarda el tipo y la caché de cada foto en xattr `user.*`; sin ellos,
+	# la foto restaurada da 500. Código 1 = algún fichero cambió mientras se leía (una subida a
+	# esta hora): el resto vale.
+	rc=0
+	tar --xattrs --xattrs-include='user.*' -czf "${storagefile}.tmp" -C "${STORAGE_DIR}" . || rc=$?
+	if [[ ${rc} -le 1 ]]; then
+		mv "${storagefile}.tmp" "${storagefile}"
+		chmod 600 "${storagefile}"
+		echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Fotos copiadas ($(du -h "${storagefile}" | cut -f1))"
+	else
+		rm -f "${storagefile}.tmp"
+		echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] AVISO: tar de ${STORAGE_DIR} falló (código ${rc}); esta copia va SIN fotos."
+	fi
+else
+	echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] AVISO: STORAGE_DIR=${STORAGE_DIR} no existe; esta copia va SIN fotos."
+fi
+
 if [[ -n "${RCLONE_REMOTE}" ]]; then
 	echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Subiendo a ${RCLONE_REMOTE}"
-	# LOS DOS FICHEROS, no solo el de datos. El de roles es imprescindible para restaurar
-	# (pg_dump no los incluye, ver arriba), y la copia remota es la unica que sirve el dia que
-	# se pierde el VPS -- justo el escenario donde no tienes el otro fichero al lado. Subir
-	# solo uno deja una copia off-site que NO se puede restaurar.
+	# TODOS LOS FICHEROS, no solo el de datos. El de roles es imprescindible para restaurar
+	# (pg_dump no los incluye, ver arriba) y el de fotos es la carta con imágenes; la copia
+	# remota es la unica que sirve el dia que se pierde el VPS -- justo el escenario donde no
+	# tienes los otros ficheros al lado.
 	rclone copy "${outfile}" "${RCLONE_REMOTE}"
 	rclone copy "${outfile%.sql.gz}.roles.sql.gz" "${RCLONE_REMOTE}"
+	if [[ -f "${storagefile}" ]]; then
+		rclone copy "${storagefile}" "${RCLONE_REMOTE}"
+	fi
 else
 	echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] AVISO: RCLONE_REMOTE sin configurar; la copia vive solo en este disco."
 fi
 
 # La purga va DESPUÉS de la subida: si el remoto falla, el script aborta (set -e) antes de
 # borrar nada y conservas las copias viejas.
-deleted="$(find "${BACKUP_DIR}" -name 'suarex-*.sql.gz' -mtime "+${RETENTION_DAYS}" -print -delete | wc -l)"
-echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Purgadas ${deleted} copias de más de ${RETENTION_DAYS} días"
+deleted="$(find "${BACKUP_DIR}" \( -name 'suarex-*.sql.gz' -o -name 'suarex-*.storage.tgz' \) \
+	-mtime "+${RETENTION_DAYS}" -print -delete | wc -l)"
+echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Purgados ${deleted} ficheros de más de ${RETENTION_DAYS} días"

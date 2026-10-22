@@ -16,18 +16,22 @@
 #   1. Levantar el stack de Supabase (crea esquemas y roles base).
 #   2. Cargar los roles del volcado `.roles.sql.gz` (pg_dump NO los incluye: son del cluster).
 #   3. Aplicar las migraciones (crea el esquema `public`).
-#   4. Ejecutar este script.
+#   4. Ejecutar este script. Si encuentra el `.storage.tgz` al lado, ofrece restaurar las fotos.
 set -euo pipefail
 
 DB_CONTAINER="${DB_CONTAINER:-supabase-db}"
+# Contenedor de Storage (nombre fijo en el compose oficial). Las fotos entran en él con
+# `docker cp`: su volumen es de root, y `docker cp` sí conserva los xattr (ver abajo).
+STORAGE_CONTAINER="${STORAGE_CONTAINER:-supabase-storage}"
 VOLCADO="${1:-}"
 
 if [ -z "$VOLCADO" ] || [ ! -f "$VOLCADO" ]; then
-	echo "Uso: DB_CONTAINER=<contenedor> $0 <volcado.sql.gz>" >&2
+	echo "Uso: DB_CONTAINER=<contenedor> STORAGE_CONTAINER=<contenedor> $0 <volcado.sql.gz>" >&2
 	exit 1
 fi
 
 ROLES="${VOLCADO%.sql.gz}.roles.sql.gz"
+FOTOS="${VOLCADO%.sql.gz}.storage.tgz"
 
 echo "ATENCIÓN: esto SOBRESCRIBE la base de '${DB_CONTAINER}'."
 echo "Si es el contenedor de producción, para la web antes:"
@@ -35,6 +39,7 @@ echo "  docker compose -f docker-compose.app.yml --env-file .env.app stop web"
 echo
 echo "Volcado: ${VOLCADO}"
 [ -f "$ROLES" ] && echo "Roles:   ${ROLES}" || echo "Roles:   (no encontrado — si faltan roles, la restauración fallará)"
+[ -f "$FOTOS" ] && echo "Fotos:   ${FOTOS} (se confirman aparte, al final)" || echo "Fotos:   (no encontrado — la carta quedará sin imágenes)"
 echo
 echo "Escribe 'restaurar' para continuar:"
 read -r confirmacion
@@ -71,4 +76,26 @@ docker exec "$DB_CONTAINER" bash -c 'PGPASSWORD="$POSTGRES_PASSWORD" psql -U sup
   union all select '"'"'productos'"'"', count(*) from public.products
   union all select '"'"'pedidos'"'"', count(*) from public.orders
   union all select '"'"'usuarios'"'"', count(*) from auth.users
-  union all select '"'"'dispositivos'"'"', count(*) from public.devices;"'
+  union all select '"'"'dispositivos'"'"', count(*) from public.devices
+  union all select '"'"'fotos (storage.objects)'"'"', count(*) from storage.objects;"'
+
+# Las fotos, con su propia confirmación. Storage guarda el tipo y la caché de cada foto en
+# xattr del fichero: sin ellos la API responde 500 aunque los bytes estén. El `tar` del
+# contenedor (BusyBox) no los escribe; `docker cp` sí. Se extraen encima de lo que haya, sin
+# borrar: un fichero sin fila en `storage.objects` es invisible para la API y solo ocupa disco.
+if [ -f "$FOTOS" ]; then
+	echo
+	echo "Fotos: ${FOTOS} -> ${STORAGE_CONTAINER}"
+	echo "Escribe 'fotos' para restaurarlas:"
+	read -r confirmacion
+	if [ "$confirmacion" = "fotos" ]; then
+		# La ruta la dice el propio contenedor, no se supone.
+		ruta="$(docker exec "$STORAGE_CONTAINER" printenv FILE_STORAGE_BACKEND_PATH)" ||
+			{ echo "${STORAGE_CONTAINER} no define FILE_STORAGE_BACKEND_PATH." >&2; exit 1; }
+		gunzip -c "$FOTOS" | docker cp - "${STORAGE_CONTAINER}:${ruta}"
+		echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Fotos restauradas. Ficheros en Storage (compáralo con storage.objects):"
+		docker exec "$STORAGE_CONTAINER" sh -c 'find "$FILE_STORAGE_BACKEND_PATH" -type f | wc -l'
+	else
+		echo "Fotos omitidas."
+	fi
+fi

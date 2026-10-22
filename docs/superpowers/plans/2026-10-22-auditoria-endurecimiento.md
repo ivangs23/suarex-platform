@@ -119,16 +119,19 @@ Hoy `deploy/scripts/backup-db.sh` vuelca `public/auth/storage` de Postgres, pero
 stack de Supabase (`/opt/suarex-supabase/volumes/storage` según el layout de
 `deploy/README.md` §"Supabase"). Un restore hoy deja una carta sin fotos.
 
-- [ ] Localizar el volumen real leyendo `deploy/supabase-override.yml` y el `docker-compose.yml`
+- [x] Localizar el volumen real leyendo `deploy/supabase-override.yml` y el `docker-compose.yml`
   oficial de `supabase/docker` (clave `storage` → `volumes`). No asumir la ruta: dejarla en
   una variable `STORAGE_DIR` del script con valor por defecto y comentario de dónde sale.
-- [ ] `backup-db.sh`: tras el volcado de la BD, `tar -czf "${outfile%.sql.gz}.storage.tgz" -C
+- [x] `backup-db.sh`: tras el volcado de la BD, `tar -czf "${outfile%.sql.gz}.storage.tgz" -C
   "$STORAGE_DIR" .` con el mismo `chmod 600`, misma retención (`RETENTION_DAYS`) y mismo
   `rclone copy` si `RCLONE_REMOTE` está definido. Tres ficheros por copia: datos, roles,
-  storage.
-- [ ] `restore-db.sh`: paso opcional que, si existe el `.storage.tgz` junto al `.sql.gz`,
+  storage. Con `--xattrs`: Storage guarda el tipo de cada foto en xattr y sin ellos responde
+  500 (acordado con Iván tras el simulacro).
+- [x] `restore-db.sh`: paso opcional que, si existe el `.storage.tgz` junto al `.sql.gz`,
   lo extrae en `STORAGE_DIR` (con confirmación explícita, igual que el resto del script).
-- [ ] `deploy/README.md` → "Backups": actualizar la tabla RPO/RTO y el simulacro de restore
+  Se extrae con `docker cp` al contenedor de Storage: el volumen es de root y el `tar` del
+  contenedor no escribe xattr (acordado con Iván).
+- [x] `deploy/README.md` → "Backups": actualizar la tabla RPO/RTO y el simulacro de restore
   para que incluya las fotos; añadir la comprobación "abre la carta restaurada y ve una foto".
 
 **Aceptación:** el simulacro de restore documentado produce una carta con fotos.
