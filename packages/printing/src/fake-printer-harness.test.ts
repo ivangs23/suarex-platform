@@ -56,14 +56,13 @@ describe("startFakePrinter (harness)", () => {
     printer = await startFakePrinter();
     printer.failNextConnection();
 
-    const failedSocket = await connectRaw(printer.port);
-    // `destroy()` sin motivo produce un cierre "limpio" (hadError: false) del
-    // lado del cliente; lo que prueba la simulación de fallo es que el socket
-    // se cierra de inmediato, sin datos ni posibilidad de intercambio, en vez
-    // de comportarse como una impresora sana que permanece conectada.
+    // La falsa tira la conexión con RST: en Linux llega en el propio `connect`, en Windows
+    // justo después. Lo que se prueba es que se cierra de inmediato, sin datos, en vez de
+    // comportarse como una impresora sana que permanece conectada.
     const closed = await new Promise<boolean>((resolve) => {
+      const failedSocket = net.connect({ host: "127.0.0.1", port: printer.port });
       failedSocket.on("error", () => {
-        /* un RST también es una manifestación válida del fallo */
+        /* el RST es la manifestación del fallo */
       });
       failedSocket.on("close", () => resolve(true));
     });
