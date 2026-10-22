@@ -13,8 +13,9 @@ const url: string = rawUrl;
 const serviceKey: string = rawServiceKey;
 
 /**
- * Cliente de servicio EXCLUSIVO de `tests/e2e/admin-catalogo.spec.ts`, con un único
- * trabajo: borrar, por su propio id, exactamente la categoría que ESE test creó -- mismo
+ * Cliente de servicio EXCLUSIVO de los specs del panel de catálogo (`admin-catalogo*.spec.ts`),
+ * para dejar el catálogo sembrado como estaba: borrar, por su propio id, exactamente la
+ * categoría que un test creó, o devolver a su sitio un producto que movió -- mismo
  * patrón que `tests/e2e/helpers/orders-db.ts` usa para `staff-board.spec.ts`.
  *
  * Por qué hace falta esto en vez de confiar en el borrado inline al final del test: si
@@ -44,5 +45,32 @@ const admin: SupabaseClient = createClient(url, serviceKey, {
  */
 export async function deleteCategoryForTest(categoryId: string): Promise<void> {
   const { error } = await admin.from("categories").delete().eq("id", categoryId);
+  if (error) throw error;
+}
+
+/** Devuelve un producto sembrado a su categoría, pase lo que pase en el test que lo movió. */
+export async function moverProductoParaTest(
+  tenantSlug: string,
+  productoEs: string,
+  categoriaSlug: string,
+): Promise<void> {
+  const { data: tenant, error: te } = await admin
+    .from("tenants")
+    .select("id")
+    .eq("slug", tenantSlug)
+    .single();
+  if (te) throw te;
+  const { data: categoria, error: ce } = await admin
+    .from("categories")
+    .select("id")
+    .eq("tenant_id", tenant.id)
+    .eq("slug", categoriaSlug)
+    .single();
+  if (ce) throw ce;
+  const { error } = await admin
+    .from("products")
+    .update({ category_id: categoria.id })
+    .eq("tenant_id", tenant.id)
+    .eq("name_i18n->>es", productoEs);
   if (error) throw error;
 }

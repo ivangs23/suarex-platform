@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page, test } from "@playwright/test";
+import { moverProductoParaTest } from "./helpers/catalog-db";
 
 /**
  * Edición de catálogo desde el panel.
@@ -296,6 +297,8 @@ test.describe("mover por el árbol", () => {
   // El seed compartido se restaura SIEMPRE: mover deja el catálogo distinto para el resto
   // de la suite si una aserción revienta a mitad.
   test.afterEach(async ({ page }) => {
+    // El producto también: si no, un fallo lo deja en Blancos y tumba a quien lo busca en Tintos.
+    await moverProductoParaTest("garum", "Ribera del Duero", "tintos");
     await page.goto("http://garum.localhost:3000/admin/catalogo?cat=blancos");
     const bloque = page.getByTestId("admin-category");
     if ((await bloque.count()) === 0) return;
@@ -315,6 +318,9 @@ test.describe("mover por el árbol", () => {
     const formulario = fila.getByTestId("move-product-form");
     await elegirCategoria(formulario.getByLabel("Categoría"), "Blancos");
     await formulario.getByRole("button", { name: "Mover producto" }).click();
+    // Se espera a que el servidor confirme (al revalidar, la fila sale de Tintos): navegar con la
+    // acción en vuelo pinta Blancos antes de que llegue el producto.
+    await expect(filaProducto(page, "Ribera del Duero")).toHaveCount(0, { timeout: 15_000 });
 
     // Aparece en la categoría de destino…
     await page.goto("http://garum.localhost:3000/admin/catalogo?cat=blancos");
@@ -331,6 +337,7 @@ test.describe("mover por el árbol", () => {
     const f2 = vuelta.getByTestId("move-product-form");
     await elegirCategoria(f2.getByLabel("Categoría"), "Tintos");
     await f2.getByRole("button", { name: "Mover producto" }).click();
+    await expect(filaProducto(page, "Ribera del Duero")).toHaveCount(0, { timeout: 15_000 });
     await page.goto("http://garum.localhost:3000/admin/catalogo?cat=tintos");
     await expect(filaProducto(page, "Ribera del Duero")).toBeVisible({ timeout: 15_000 });
   });
