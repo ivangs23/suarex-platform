@@ -303,7 +303,16 @@ crontab -e
 
 ```
 30 3 * * * /opt/suarex/deploy/scripts/backup-db.sh >> /var/log/suarex-backup.log 2>&1
+0 8 * * * AVISO_A=tu@correo /opt/suarex/deploy/scripts/alertas-log.sh >> /var/log/suarex-alertas.log 2>&1
 ```
+
+La segunda línea es el **resumen diario de errores** de la web: agrupa los `log.error` de las
+últimas 24 h por evento y te lo manda si hay alguno, con los que cuestan dinero o dejan a un
+cliente sin imprimir arriba (`stripe.cobro_sin_pedido`, `stripe.importe_no_coincide`,
+`stripe.disputa_abierta`, `dispositivo.caido`). Sin errores no escribe nada; si no puede leer
+el contenedor, avisa de eso. Usa `mail` como `uptime-check.sh` (sin él, solo al log). El correo
+lleva nombres de evento y conteos, ningún dato del log. Para probarlo sin Docker:
+`LOG_FICHERO=muestra.log ./alertas-log.sh`.
 
 Cada copia son tres ficheros: datos (`.sql.gz`), roles (`.roles.sql.gz`) y fotos
 (`.storage.tgz`, el volumen de Storage; si tu layout no es el de §4, fija `STORAGE_DIR`). Si

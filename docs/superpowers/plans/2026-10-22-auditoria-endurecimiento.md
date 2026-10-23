@@ -363,14 +363,19 @@ mesa). Lo que escribe la base sin la app (import, SQL, helpers e2e) invalida con
 Decisión D2 de la Fase 2 (no añadir Sentry ni SaaS) se respeta: los `log.error` JSON de la
 web son la única observabilidad.
 
-- [ ] `deploy/scripts/alertas-log.sh`: lee `docker logs suarex-web-1 --since 24h`, filtra
+- [x] `deploy/scripts/alertas-log.sh`: lee `docker logs suarex-web-1 --since 24h`, filtra
   líneas con `"level":"error"`, agrupa por campo `msg` con conteo, y si hay alguna manda un
   correo con `mail` (misma convención que `uptime-check.sh`: `AVISO_A`, degrada a stdout si
   no hay `mail`). Prioridad alta visible arriba: `stripe.cobro_sin_pedido`,
   `stripe.importe_no_coincide`, `stripe.disputa_abierta`, `dispositivo.caido`.
-- [ ] Cron diario en `deploy/README.md` junto al de backup.
-- [ ] Test del parseo con un fixture de log en `deploy/scripts/` si el script crece; si cabe
+- [x] Cron diario en `deploy/README.md` junto al de backup.
+- [x] Test del parseo con un fixture de log en `deploy/scripts/` si el script crece; si cabe
   en 40 líneas de shell, basta con probarlo a mano y documentarlo.
+
+**Hecho (2026-10-23):** agrupa por `event`, no por `msg` (el campo de `log.ts` se llama así;
+decidido con Iván). 31 líneas de shell: probado a mano con un log de muestra y con líneas del
+`lineaDeLog` real (prioritarios arriba, `warn` y ruido de Next fuera, sin errores no avisa,
+sin poder leer el contenedor avisa y sale con 1). `LOG_FICHERO` permite repetirlo sin Docker.
 
 ### Tarea 3.3 — Medir la flakiness que absorbe `retry: 2`
 
