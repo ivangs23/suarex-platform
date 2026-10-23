@@ -102,7 +102,7 @@ carta pública (`/m/{token}`). Igual que con `STAFF_SEED_PASSWORD`, si falta
 ## Verificación
 
 ```bash
-pnpm lint && pnpm typecheck && pnpm test && pnpm --filter @suarex/config test && pnpm test:integration && pnpm test:e2e
+pnpm lint && pnpm typecheck && pnpm test && pnpm test:integration && pnpm test:e2e
 ```
 
 **En CI** (`.github/workflows/ci.yml`, job `verificar`, en cada PR y en cada push a `main`):
@@ -122,10 +122,7 @@ para tapar bugs. Por eso se cuentan:
 
 **Un test que aparece 3 veces en esas listas se abre como issue**: ya no es el entorno.
 
-`pnpm test` (vía Turbo) y `pnpm --filter @suarex/config test` ejecutan hoy los mismos 25
-tests unitarios de `packages/config` (es el único paquete con script `test`; Turbo solo
-corre el suyo) — están ambos porque ambos forman parte del comando de verificación de
-este repo, no por redundancia accidental.
+`pnpm test` corre, vía Turbo, los tests unitarios de los 9 paquetes que tienen script `test`.
 
 ## Dependencias
 
