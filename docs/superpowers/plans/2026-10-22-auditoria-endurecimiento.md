@@ -402,25 +402,35 @@ se revisan a la vez.
 
 ### Tarea 4.1 — Preparación
 
-- [ ] Leer las notas de ruptura de Electron 34→38 (buscar en la doc oficial, no de memoria)
+- [x] Leer las notas de ruptura de Electron 34→38 (buscar en la doc oficial, no de memoria)
   y listar en un issue las que tocan al proyecto. Candidatos conocidos: cambios en
   `WebContentsView`/`BaseWindow`, `utilityProcess`, deprecaciones de `systemPreferences`, y
   el requisito de Node ABI para `koffi` (comprobar que la versión de `koffi` publica binario
   para el Node que embebe Electron 38).
-- [ ] Comprobar `apps/agent-desktop/src/main/usb-sink-winspool.ts` (koffi + winspool) y
+- [x] Comprobar `apps/agent-desktop/src/main/usb-sink-winspool.ts` (koffi + winspool) y
   `tray-icon.ts`, `watchdog.ts`, `web-panel.ts`, `totem-window.ts`, `updater.ts`
   (`electron-updater` 6.x compatible).
 
 ### Tarea 4.2 — Subida
 
-- [ ] Rama `chore/electron-38`. Subir `electron`, `electron-builder`, `electron-vite`, `vite`
+- [x] Rama `chore/electron-38`. Subir `electron`, `electron-builder`, `electron-vite`, `vite`
   en `apps/agent-desktop/package.json`; `pnpm install`; `pnpm --filter @suarex/agent-desktop
   typecheck test build`.
-- [ ] Corregir lo que rompa manteniendo el comportamiento cubierto por los tests de
+- [x] Corregir lo que rompa manteniendo el comportamiento cubierto por los tests de
   `apps/agent-desktop/src/main/*.test.ts` (son unit con backends falsos: deben pasar sin
   Windows).
-- [ ] Reactivar el grupo `electron` en `renovate.json` (Tarea 0.5) con `minimumReleaseAge:
+- [x] Reactivar el grupo `electron` en `renovate.json` (Tarea 0.5) con `minimumReleaseAge:
   "14 days"`.
+
+**Hecho 4.1 y 4.2 (2026-10-23), con lo que difería (decidido con Iván):** el objetivo es
+**Electron 44.9.x**, no 38: hoy solo tienen soporte 45, 44 y 43, y la 45.0.0 tenía 2 días. Notas
+34→44 en el issue #72. Rama `chore/electron-44`. `koffi` se queda en 2.16.3 (N-API 8, vale para
+cualquier Electron moderno; la 3 cambia la API) y `vite` en 7.3.x (electron-vite 6 admite 6-8).
+Roturas: `console-message` pasa al objeto del evento (`level` es string); electron-builder 26
+aborta sin `UPDATE_FEED_URL`, así que su config pasa a `electron-builder.cjs` con `publish`
+opcional; el CI deja `ELECTRON_SKIP_BINARY_DOWNLOAD` (no existe desde la 42). El instalador se
+construye en Windows con los mismos 18 módulos que el de Electron 33. Renovate agrupa también
+`electron-vite`.
 
 ### Tarea 4.3 — Validación en Windows (Iván)
 

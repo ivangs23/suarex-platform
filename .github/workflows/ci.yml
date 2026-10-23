@@ -24,8 +24,9 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
 
-      # El binario de Electron no va en el store de pnpm. Se descarga (no se salta): sin él,
-      # `import "electron"` lanza y cae totem-window.test.ts.
+      # El binario de Electron no va en el store de pnpm. Desde Electron 42 no se descarga al
+      # instalar sino la primera vez que algo hace `import "electron"` (totem-window.test.ts):
+      # esta caché evita bajarlo en cada ejecución.
       - uses: actions/cache@v4
         with:
           path: ~/.cache/electron
@@ -43,9 +44,8 @@ jobs:
     timeout-minutes: 25
     # No bloquea hasta que lleve 10 ejecuciones verdes seguidas (plan, tarea 0.2).
     continue-on-error: true
-    env:
-      # La integración no importa Electron: aquí sí se salta la descarga.
-      ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+    # La integración no importa Electron, así que no descarga su binario (desde Electron 42 solo
+    # se baja al usarlo; `ELECTRON_SKIP_BINARY_DOWNLOAD` ya no existe).
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
