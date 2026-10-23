@@ -51,6 +51,16 @@ describe("cronRoute", () => {
     vi.unstubAllEnvs();
   });
 
+  it("el trabajo recibe la petición y puede responder él mismo (un 400)", async () => {
+    vi.stubEnv("CRON_SECRET", "secreto-real");
+    const res = await cronRoute("x", async (request) =>
+      request.headers.get("authorization") ? new Response(null, { status: 400 }) : { ok: true },
+    )(peticion("Bearer secreto-real"));
+
+    expect(res.status).toBe(400);
+    vi.unstubAllEnvs();
+  });
+
   it("un fallo del trabajo devuelve 500 genérico sin filtrar el error", async () => {
     vi.stubEnv("CRON_SECRET", "secreto-real");
     const res = await cronRoute("x", async () => {

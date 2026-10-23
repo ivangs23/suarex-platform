@@ -20,11 +20,14 @@ import { timingSafeEqualStr } from "./timing-safe-equal";
  *
  * `evento` es el identificador estable que se registra si el trabajo lanza
  * (`cron.purge_orders_fallo`), no una frase: ver `log.ts` sobre por qué eso importa.
+ *
+ * El trabajo recibe la petición (ya autenticada) por si lleva cuerpo, y puede devolver su
+ * propia `Response` (un 400 de entrada inválida); si no, su resultado va como JSON 200.
  */
 export function cronRoute(
   evento: string,
-  trabajo: () => Promise<Record<string, unknown>>,
-): (request: Request) => Promise<NextResponse> {
+  trabajo: (request: Request) => Promise<Record<string, unknown> | Response>,
+): (request: Request) => Promise<Response> {
   return async (request: Request) => {
     const secret = process.env.CRON_SECRET;
     if (!secret) {
@@ -38,7 +41,8 @@ export function cronRoute(
     }
 
     try {
-      return NextResponse.json(await trabajo());
+      const resultado = await trabajo(request);
+      return resultado instanceof Response ? resultado : NextResponse.json(resultado);
     } catch (error) {
       log.error(evento, { error });
       return NextResponse.json({ error: "Error interno" }, { status: 500 });

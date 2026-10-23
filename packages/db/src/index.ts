@@ -70,6 +70,7 @@ export type { CreateStaffInput, CreateStaffResult, StaffMember } from "./admin-s
 export { createStaff, listStaff } from "./admin-staff.js";
 export type { CreateTableInput, UpdateTableInput } from "./admin-tables.js";
 export { createTable, deleteTable, listTables, updateTable } from "./admin-tables.js";
+export { filtrarAgotados } from "./agotado.js";
 export type { AnaliticaDeCarta, ProductoSinVender } from "./analytics.js";
 export { analiticaDeCarta, registrarEscaneo } from "./analytics.js";
 export type { ApplyOutcome, DecisionServicio } from "./billing.js";
@@ -79,7 +80,12 @@ export {
   decidirEstado,
   suspendExpiredGrace,
 } from "./billing.js";
-export { getCategories, getProducts } from "./catalog.js";
+export {
+  getCategories,
+  getCategoriesSinFiltroHorario,
+  getProducts,
+  getProductsSinFiltroHorario,
+} from "./catalog.js";
 export type { DispositivoCaido, ResultadoSalud } from "./device-health.js";
 export { sweepDeviceHealth } from "./device-health.js";
 export type { PairDeviceResult } from "./devices.js";
@@ -185,6 +191,7 @@ export type {
   Product,
   ProductExtra,
   ProductOptionGroup,
+  ProductoCarta,
   ReceiptLine,
   TableRow,
   Tenant,

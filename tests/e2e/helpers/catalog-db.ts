@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { revalidarCarta } from "./carta-cache.js";
 
 const rawUrl = process.env.SUPABASE_URL;
 const rawServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -44,8 +45,14 @@ const admin: SupabaseClient = createClient(url, serviceKey, {
  * distinguir ese caso a mano.
  */
 export async function deleteCategoryForTest(categoryId: string): Promise<void> {
+  const { data } = await admin
+    .from("categories")
+    .select("tenant_id")
+    .eq("id", categoryId)
+    .maybeSingle();
   const { error } = await admin.from("categories").delete().eq("id", categoryId);
   if (error) throw error;
+  if (data) await revalidarCarta(data.tenant_id as string);
 }
 
 /** Devuelve un producto sembrado a su categoría, pase lo que pase en el test que lo movió. */
@@ -73,4 +80,5 @@ export async function moverProductoParaTest(
     .eq("tenant_id", tenant.id)
     .eq("name_i18n->>es", productoEs);
   if (error) throw error;
+  await revalidarCarta(tenant.id as string);
 }

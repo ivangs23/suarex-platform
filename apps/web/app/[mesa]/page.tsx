@@ -1,12 +1,7 @@
 import { hasChannel, parseBranding } from "@suarex/config";
-import {
-  findTableByToken,
-  getCategories,
-  getProducts,
-  getTenantSettings,
-  listAssignableAllergens,
-} from "@suarex/db";
+import { findTableByToken } from "@suarex/db";
 import { notFound } from "next/navigation";
+import { leerCarta, settingsDeLaCarta } from "@/lib/carta-cache";
 import { availableLangs, LANG_LABELS, resolveLang, strings } from "@/lib/i18n";
 import { readMesaToken } from "@/lib/mesa-cookie";
 import { requireTenant } from "@/lib/tenant-context";
@@ -65,14 +60,12 @@ export default async function MenuPage({
     notFound();
   }
 
-  const [categories, products, settings, allergens] = await Promise.all([
-    getCategories(tenant.id),
-    getProducts(tenant.id),
-    getTenantSettings(tenant.id).catch(() => null),
-    // Los 14 de la UE más los propios del cliente. Si esta lectura fallara, la ficha diría
-    // que no hay ninguno declarado, que es MENTIRA y no un fallo cosmético: mejor que
-    // reviente la carta a que un celíaco lea "sin alérgenos" sobre un plato con gluten.
-    listAssignableAllergens(tenant.id),
+  // Cacheados por tenant (`lib/carta-cache.ts`); las franjas y el agotado se aplican aquí, a
+  // la hora de esta petición. Si los alérgenos fallaran, la carta revienta en vez de decir
+  // "sin alérgenos" sobre un plato con gluten.
+  const [{ categories, products, allergens }, settings] = await Promise.all([
+    leerCarta(tenant.id),
+    settingsDeLaCarta(tenant.id).catch(() => null),
   ]);
 
   // Mismo criterio que el totem: sin el canal encendido, este cliente no sirve carta por QR.

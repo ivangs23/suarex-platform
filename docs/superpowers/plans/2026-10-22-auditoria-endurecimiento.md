@@ -330,22 +330,33 @@ propio es rellenar el formulario de ajustes.
 productos, settings, alérgenos) porque lee la cookie y es dinámica. Con 1 vCPU asignada a la
 web (`deploy/docker-compose.app.yml`), un sábado de 40 mesas lo nota.
 
-- [ ] Envolver las cuatro lecturas en `unstable_cache` (o `"use cache"` si Next 16.3 lo
+- [x] Envolver las cuatro lecturas en `unstable_cache` (o `"use cache"` si Next 16.3 lo
   tiene estable en webpack; comprobar en la doc instalada, no de memoria) con clave por
   `tenant.id` y tag `carta:<tenantId>`. TTL 60 s como red de seguridad.
-- [ ] En todas las server actions que hoy llaman `revalidatePath("/", "layout")`
+- [x] En todas las server actions que hoy llaman `revalidatePath("/", "layout")`
   (`apps/web/app/admin/catalogo/actions.ts`, `apps/web/app/admin/ajustes/actions.ts`, y las de
   "agotado hoy" y franjas si las tienen), sustituir/añadir `revalidateTag("carta:<tenantId>")`.
   El cron de reposición de "agotado hoy" y las franjas horarias también deben invalidar:
   localizar dónde cambian y añadir la invalidación.
-- [ ] La cookie de mesa y `canOrder` quedan FUERA de la caché (siguen por petición).
-- [ ] Test e2e en `tests/e2e/admin-catalogo.spec.ts`: crear producto en el panel → aparece en
+- [x] La cookie de mesa y `canOrder` quedan FUERA de la caché (siguen por petición).
+- [x] Test e2e en `tests/e2e/admin-catalogo.spec.ts`: crear producto en el panel → aparece en
   la carta en la siguiente carga (ya existe un caso así; asegurarse de que sigue pasando con
   caché, es la prueba de que la invalidación funciona).
 
 **Aceptación:** con `DEBUG` de postgrest o contando peticiones en el log, dos cargas
 seguidas de la carta hacen 4 lecturas la primera y 0 la segunda; editar el catálogo
 invalida.
+
+**Hecho (2026-10-23), con lo que el código decía distinto (opción A, decidida con Iván):**
+eran 6 peticiones en la página + 1 de ajustes en el layout; el "cron de reposición" no existe
+(agotado y franjas cambian con el reloj, sin escritura). Se cachea solo lo que no depende de
+la hora (`apps/web/lib/carta-cache.ts`, `unstable_cache`: `"use cache"` exige
+`cacheComponents` en toda la app) y las franjas y el agotado se filtran por petición. Invalida
+`revalidateTag(tag, { expire: 0 })` (con `"max"` la siguiente carga saldría vieja) en las 17
+acciones de catálogo y en ajustes. También el totem. Medido en los logs de Kong: 6 lecturas de
+carta en frío, 0 después; quedan 2 por petición a propósito (tenant del proxy y cookie de
+mesa). Lo que escribe la base sin la app (import, SQL, helpers e2e) invalida con
+`POST /api/internal/revalidar-carta` (`CRON_SECRET`) o espera al TTL.
 
 ### Tarea 3.2 — Alertas por log sin terceros
 

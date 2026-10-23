@@ -58,6 +58,14 @@ importación**: sin él, el catálogo de muestra del seed se mezcla con el real 
 enseña categorías que el cliente no tiene. Sin la bandera, el script es idempotente
 (actualiza en vez de duplicar), que es lo que se quiere para reimportar tras un cambio.
 
+La carta está cacheada por cliente y el script escribe la base sin pasar por la app: el
+catálogo nuevo sale en la carta en **60 s como mucho**. Para verlo ya:
+
+```bash
+curl -X POST https://<host-del-cliente>/api/internal/revalidar-carta \
+  -H "Authorization: Bearer $CRON_SECRET" -d '{"tenantId":"<uuid-del-cliente>"}'
+```
+
 ## Qué se trae y qué no
 
 | Se importa | No se importa |

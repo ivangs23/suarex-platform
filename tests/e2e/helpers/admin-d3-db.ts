@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { revalidarCarta } from "./carta-cache.js";
 
 const rawUrl = process.env.SUPABASE_URL;
 const rawServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -62,6 +63,7 @@ export async function restoreDemoSettings(snap: SettingsSnapshot): Promise<void>
     })
     .eq("tenant_id", snap.tenantId);
   if (error) throw error;
+  await revalidarCarta(snap.tenantId);
 }
 
 /** Borra el camarero de prueba por email (la membership desaparece en cascada al borrar el

@@ -1,10 +1,23 @@
+import { filtrarAgotados } from "./agotado.js";
 import { tenantScoped } from "./client.js";
 import { filtrarPorFranja, minutosEnZona } from "./franjas.js";
 import { textosJson } from "./json.js";
-import type { Category, Product, ProductExtra } from "./types.js";
+import type { Category, Product, ProductExtra, ProductoCarta } from "./types.js";
 import { zonaHorariaDelTenant } from "./venues.js";
 
+/** Las categorías que toca ver AHORA, con la franja ya aplicada. */
 export async function getCategories(tenantId: string): Promise<Category[]> {
+  const { categories, timezone } = await getCategoriesSinFiltroHorario(tenantId);
+  return filtrarPorFranja(categories, minutosEnZona(new Date(), timezone));
+}
+
+/**
+ * Todas las categorías, SIN aplicar la franja, con la zona de la sede para aplicarla después.
+ * Es la parte que no depende del reloj: la que puede cachearse (`apps/web/lib/carta-cache.ts`).
+ */
+export async function getCategoriesSinFiltroHorario(
+  tenantId: string,
+): Promise<{ categories: Category[]; timezone: string }> {
   // La zona va EN PARALELO con el catálogo, no antes: encadenarlas añadiría un viaje a la
   // latencia de la carta, que es lo primero que ve el comensal con el móvil en la mano.
   const [{ data, error }, timezone] = await Promise.all([
@@ -35,9 +48,9 @@ export async function getCategories(tenantId: string): Promise<Category[]> {
     visibleHasta: row.visible_hasta,
   }));
 
-  // El filtro va DESPUÉS del mapeo y no en la consulta: una franja que cruza medianoche
-  // (cena de 20:00 a 02:00) no es un `between`, y PostgREST no sabe expresarla.
-  return filtrarPorFranja(categorias, minutosEnZona(new Date(), timezone));
+  // La franja se aplica fuera y no en la consulta: una que cruza medianoche (cena de 20:00 a
+  // 02:00) no es un `between`, y PostgREST no sabe expresarla.
+  return { categories: categorias, timezone };
 }
 
 /**
@@ -48,19 +61,23 @@ export async function getCategories(tenantId: string): Promise<Category[]> {
  * ESTE tenant (lo impone el trigger `assert_same_tenant` en la propia tabla).
  */
 export async function getProducts(tenantId: string): Promise<Product[]> {
+  return filtrarAgotados(await getProductsSinFiltroHorario(tenantId), new Date());
+}
+
+/**
+ * Los productos en carta (`is_available`) INCLUIDOS los agotados hoy, con su hora de vuelta.
+ * Como `getCategoriesSinFiltroHorario`: lo que no depende del reloj, para poder cachearlo; el
+ * agotado se filtra fuera (`filtrarAgotados`), porque vuelve solo sin escritura que avise.
+ */
+export async function getProductsSinFiltroHorario(tenantId: string): Promise<ProductoCarta[]> {
   const { data, error } = await tenantScoped("products", tenantId)
     // Una sola cadena LITERAL, sin concatenar: supabase-js deduce el tipo de la fila leyendo
     // este texto en tiempo de compilación, y un `+` por en medio lo deja sin poder hacerlo (la
     // fila pasa a `GenericStringError` y revienta cada acceso a una columna).
     .select(
-      "id, category_id, name_i18n, description_i18n, price, image_url, allergen_ids, is_available, sort_order, product_extras(id, name_i18n, price, group_id), product_option_groups(id, name_i18n, min_select, max_select, sort_order)",
+      "id, category_id, name_i18n, description_i18n, price, image_url, allergen_ids, is_available, unavailable_until, sort_order, product_extras(id, name_i18n, price, group_id), product_option_groups(id, name_i18n, min_select, max_select, sort_order)",
     )
     .eq("is_available", true)
-    // Agotado HOY: oculto hasta su hora de vuelta. Se compara contra el reloj del cliente y
-    // no con `now()` de Postgres porque PostgREST no permite comparar una columna con una
-    // función en el filtro; la diferencia de unos milisegundos es irrelevante para algo que
-    // se restablece a las seis de la mañana.
-    .or(`unavailable_until.is.null,unavailable_until.lt.${new Date().toISOString()}`)
     .order("sort_order", { ascending: true });
 
   if (error) throw error;
@@ -99,6 +116,7 @@ export async function getProducts(tenantId: string): Promise<Product[]> {
       imagePath: row.image_url,
       allergenIds: row.allergen_ids ?? [],
       isAvailable: row.is_available,
+      unavailableUntil: row.unavailable_until,
       sortOrder: row.sort_order,
       extras,
       optionGroups,
