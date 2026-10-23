@@ -105,6 +105,11 @@ carta pública (`/m/{token}`). Igual que con `STAFF_SEED_PASSWORD`, si falta
 pnpm lint && pnpm typecheck && pnpm test && pnpm test:integration && pnpm test:e2e
 ```
 
+**Pre-commit** (`simple-git-hooks` + `lint-staged`, se instala solo con `pnpm install`): pasa
+`biome check --write` por los ficheros del commit, así que el formato se arregla solo y un error
+de lint que no se arregla solo bloquea el commit. El typecheck no va en el hook (es lento): eso es
+el CI.
+
 **En CI** (`.github/workflows/ci.yml`, job `verificar`, en cada PR y en cada push a `main`):
 `pnpm lint`, `pnpm typecheck` y `pnpm test`, con el Node de `.nvmrc`. Tras él, el job
 `integracion` levanta Supabase en el runner y corre `pnpm test:integration`; de momento no

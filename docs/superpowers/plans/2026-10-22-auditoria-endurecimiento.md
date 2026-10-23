@@ -474,8 +474,12 @@ migraciones, inmutables, siguen citando sus rutas antiguas); README → Verifica
 
 ### Tarea 5.3 — Hooks locales (opcional, si Iván quiere)
 
-- [ ] `simple-git-hooks` + `lint-staged` con `biome check --write` en pre-commit. Nada de
+- [x] `simple-git-hooks` + `lint-staged` con `biome check --write` en pre-commit. Nada de
   `typecheck` en el hook (lento); eso es CI.
+
+**Hecho (2026-10-24, con el sí de Iván a las dos dependencias):** `lint-staged` 16.4 y no 17 (la 17
+pide Node >= 22.22.1 y `.nvmrc` es 22.12). Se instala con `prepare`; sin `.git` (el `docker build`)
+se salta solo.
 
 ---
 

@@ -61,7 +61,7 @@ pnpm db:env && pnpm seed:staff            # .env.test + cuentas demo
 node scripts/seed-platform-admin.mjs --email x@y.z   # primer superadmin de plataforma
 pnpm dev  (o preview_start name:"web")   # nunca levantar el dev server con bash
 pnpm typecheck          # turbo typecheck + tests tsconfig
-pnpm lint  /  pnpm lint:fix
+pnpm lint  /  pnpm lint:fix   # el pre-commit ya pasa biome --write por lo staged
 pnpm test               # unit (turbo, por paquete)
 pnpm test:integration   # vitest tests/integration (necesita Supabase local)
 pnpm test:e2e           # Playwright (necesita dev server)
