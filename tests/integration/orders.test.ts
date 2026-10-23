@@ -1,5 +1,11 @@
-import { createPendingOrder, findTableByToken, markOrderPaid } from "@suarex/db";
+import { createPendingOrder, findTableByToken, markOrderPaid, OrderCartError } from "@suarex/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import {
+  MAX_CANTIDAD_LINEA,
+  MAX_EXTRAS_LINEA,
+  MAX_LINEAS_PEDIDO,
+  MAX_NOTAS_LINEA,
+} from "../../packages/domain/src/limites-pedido.js";
 import {
   admin,
   createTenantFixture,
@@ -153,6 +159,25 @@ describe("createPendingOrder", () => {
         taxRate: 0.1,
       }),
     ).rejects.toThrow();
+  });
+
+  it("rechaza lo que pasa de los límites del pedido, los mismos que el borde de la API", async () => {
+    const base = { tenantId: tenant.tenantId, venueId, tableId, taxRate: 0.1 };
+    const linea = {
+      productId,
+      quantity: 1,
+      extraIds: [] as string[],
+      notes: null as string | null,
+    };
+    const fueraDeLimite = [
+      [{ ...linea, quantity: MAX_CANTIDAD_LINEA + 1 }],
+      [{ ...linea, notes: "x".repeat(MAX_NOTAS_LINEA + 1) }],
+      [{ ...linea, extraIds: Array.from({ length: MAX_EXTRAS_LINEA + 1 }, () => productId) }],
+      Array.from({ length: MAX_LINEAS_PEDIDO + 1 }, () => linea),
+    ];
+    for (const lines of fueraDeLimite) {
+      await expect(createPendingOrder({ ...base, lines })).rejects.toBeInstanceOf(OrderCartError);
+    }
   });
 
   it("rechaza un taxRate no finito", async () => {

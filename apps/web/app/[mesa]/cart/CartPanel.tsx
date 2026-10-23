@@ -1,5 +1,6 @@
 "use client";
 
+import { MAX_CANTIDAD_LINEA } from "@suarex/domain";
 import { useId, useRef } from "react";
 import { useCart } from "./CartProvider";
 import styles from "./cart.module.css";
@@ -136,6 +137,7 @@ export function CartPanel({ onClose }: { onClose: () => void }) {
                         className={styles.step}
                         data-testid="cart-line-more"
                         aria-label={`Añadir una unidad de ${line.product.name}`}
+                        disabled={line.quantity >= MAX_CANTIDAD_LINEA}
                         onClick={() => cart.setLineQuantity(line.id, line.quantity + 1)}
                       >
                         +

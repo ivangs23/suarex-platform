@@ -1,5 +1,6 @@
 import { checkPairRateLimit, pairDevice } from "@suarex/db";
 import { NextResponse } from "next/server";
+import { pairDeviceSchema, parseJsonBody } from "@/lib/api-input";
 import { getClientIp } from "@/lib/client-ip";
 import { log } from "@/lib/log";
 
@@ -22,12 +23,10 @@ function tooManyRequests() {
 }
 
 export async function POST(request: Request) {
-  const body = (await request.json().catch(() => null)) as { pairingCode?: unknown } | null;
-  const pairingCode = typeof body?.pairingCode === "string" ? body.pairingCode : null;
-
-  if (!pairingCode) {
-    return notFound();
-  }
+  // Un cuerpo malformado da el MISMO 404 que un código inexistente (ver arriba), no un 400.
+  const body = await parseJsonBody(request, pairDeviceSchema, notFound);
+  if (!body.ok) return body.response;
+  const { pairingCode } = body.data;
 
   // Rate-limit por IP: defensa en profundidad. Un fallo de la comprobación NO abre la
   // puerta (fail-closed) -- se colapsa al 404 uniforme, registrando el fallo real.

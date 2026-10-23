@@ -195,21 +195,25 @@ rojo `typecheck` o `db-types-sync`.
 hacen `request.json()` confían en el cast: `apps/web/app/api/orders/route.ts`,
 `apps/web/app/api/kiosko/orders/route.ts`, `apps/web/app/api/devices/pair/route.ts`.
 
-- [ ] Crear `apps/web/lib/api-input.ts` con los esquemas: `orderLinesSchema` (`lines`:
+- [x] Crear `apps/web/lib/api-input.ts` con los esquemas: `orderLinesSchema` (`lines`:
   array no vacío, máx 100; `productId` uuid; `quantity` entero 1..99; `extraIds` array de
   uuid máx 20; `notes` string máx 280 o null), `kioskoOrderSchema`, `pairDeviceSchema`.
   Reusar las reglas que YA aplica `createPendingOrder` (`packages/db/src/orders.ts` →
   `OrderCartError`) para no tener dos verdades: los límites numéricos van a constantes en
   `@suarex/domain` y los importan ambos.
-- [ ] Helper `parseJsonBody(request, schema)` que devuelve `{ ok, data } | { ok: false,
+- [x] Helper `parseJsonBody(request, schema)` que devuelve `{ ok, data } | { ok: false,
   response: 400 }` con el mismo texto genérico que ya usa la ruta (no filtrar detalles del
   esquema al cliente: el mensaje para el comensal sigue siendo "Petición inválida").
-- [ ] Aplicar en las tres rutas. `createPendingOrder` conserva sus comprobaciones de
+- [x] Aplicar en las tres rutas. `createPendingOrder` conserva sus comprobaciones de
   dominio (producto disponible, opciones obligatorias): zod valida FORMA, el dominio valida
   NEGOCIO.
-- [ ] Tests unitarios `apps/web/lib/api-input.test.ts` (forma válida, cada rechazo) y un
+- [x] Tests unitarios `apps/web/lib/api-input.test.ts` (forma válida, cada rechazo) y un
   caso en `tests/integration/orders.test.ts` con body malformado → 400 sin tocar la BD
   (comprobar que no se creó ninguna `orders` en estado `pending`).
+  Acordado con Iván: el caso del body malformado va como test unitario de las rutas
+  (`apps/web/app/api/cuerpo-invalido.test.ts`, `@suarex/db` simulado: no se llama a nada de
+  la base); el emparejamiento conserva su 404 uniforme; `zod` entra en `apps/web`; el carrito
+  topa la cantidad con la misma constante.
 
 **Aceptación:** un `POST /api/orders` con `quantity: "2"` o `lines: {}` devuelve 400 antes
 de llegar a `findTableByToken`.
