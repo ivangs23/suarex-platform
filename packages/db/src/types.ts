@@ -20,8 +20,7 @@ export type TenantSettingsRow = {
   channels: string[];
   features: Record<string, unknown>;
   /** Slug del tema de la carta pública (`tenant_settings.theme`). Ver
-   * `apps/web/app/[mesa]/themes`: `generic` se pinta con el branding, los temas a medida
-   * son componentes codificados. */
+   * `apps/web/app/[mesa]/themes`: hoy solo `generic`, que se pinta con el branding. */
   theme: string;
 };
 

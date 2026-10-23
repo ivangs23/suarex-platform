@@ -10,25 +10,36 @@ with t as (
   returning id, slug
 )
 -- Marca real de cada cliente, extraída de sus frontends originales (ivangs23/GARUM-new y
--- ivangs23/web-manuela): garum es verde/morado con serif; manuela, crema/dorado. `theme`
--- elige el tema de la carta pública (ver apps/web/app/[mesa]/themes): ambos usan su tema A
--- MEDIDA; un cliente nuevo se queda con el default 'generic', que se pinta solo con estos
--- mismos colores sin necesidad de código.
-insert into public.tenant_settings (tenant_id, branding, locale, currency, channels, theme)
+-- ivangs23/web-manuela): garum es verde/morado con serif; manuela, crema/dorado. Las dos
+-- usan la carta única ('generic', el default de `theme`): su aspecto propio es este branding.
+-- Los mismos valores que escribe la migración 20261022000002_branding_temas_en_datos.
+insert into public.tenant_settings (tenant_id, branding, locale, currency, channels)
 select
   t.id,
   case t.slug
     when 'garum' then '{
       "name": "Garum Vinoteca",
       "colors": {"bg":"#d6e8d2","fg":"#111111","primary":"#7b4f96","accent":"#4a7860","muted":"#eef5ec"},
-      "fonts": {"display":"Playfair Display","body":"Inter"},
-      "logoUrl": null
+      "fonts": {"display":"playfair","body":"inter"},
+      "logoUrl": "/brands/garum-logo.png",
+      "heroUrl": null,
+      "tokens": {"surface":"#ffffff","radius":"lg","controlRadius":"pill","shadow":"soft","border":"thin","spacing":"comfortable","titles":"uppercase","imageFit":"cover","thumb":"md","cartIcon":"none"},
+      "layout": {"welcome":"panel","hero":"card","nav":"back-button","categories":"icon-tiles","products":"list","langs":"code"},
+      "background": {"imageUrl":"/brands/garum-pattern.svg","sizePx":150},
+      "tagline": {"es":"Vinoteca & cocina de producto","en":"Wine bar & produce-led kitchen"},
+      "badge": null
     }'::jsonb
     else '{
       "name": "Manuela Desayuna",
       "colors": {"bg":"#f9f7f2","fg":"#2c1a0f","primary":"#c28744","accent":"#2c1a0f","muted":"#fff8e7"},
-      "fonts": {"display":"Inter","body":"Inter"},
-      "logoUrl": null
+      "fonts": {"display":"playfair","body":"inter"},
+      "logoUrl": "/brands/manuela-logo.png",
+      "heroUrl": "/brands/manuela-fondo.png",
+      "tokens": {"surface":"#ffffff","radius":"lg","controlRadius":"rounded","shadow":"medium","border":"thick","spacing":"compact","titles":"normal","imageFit":"contain","thumb":"sm","cartIcon":"bag"},
+      "layout": {"welcome":"poster","hero":"none","nav":"title-pill","categories":"photo-tiles","products":"cards","langs":"flag"},
+      "background": {"imageUrl":"/brands/manuela-terrazo.png","sizePx":916},
+      "tagline": {},
+      "badge": {"emoji":"☕","color":"#1b4d3e"}
     }'::jsonb
   end,
   'es', 'EUR',
@@ -37,8 +48,7 @@ select
      cierre la puerta se prueba con tenants que los tests crean para eso (ver
      `tenant-channels.test.ts`), no dejando el seed cojo -- eso solo haría que media suite
      probara la configuración del seed en vez de lo que dice probar. */
-  array['qr-mesa', 'kiosko'],
-  case t.slug when 'garum' then 'garum' else 'manuela' end
+  array['qr-mesa', 'kiosko']
 from t;
 
 insert into public.venues (tenant_id, slug, name, is_default)

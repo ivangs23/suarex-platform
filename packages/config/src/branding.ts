@@ -70,8 +70,7 @@ export type Branding = {
    *
    * La bienvenida existe para todos los clientes -- es funcionalidad, no decoración. Lo que
    * cambia de uno a otro es esta foto, que por eso es un ajuste y no un asset escrito en el
-   * código de un tema. Un tema a medida puede caer a su propia imagen cuando no hay ninguna
-   * configurada; el genérico se queda con el color de marca.
+   * código. Sin foto, la bienvenida se queda con el color de marca.
    */
   heroUrl: string | null;
   fonts: { display: FontFamily; body: FontFamily };
@@ -125,7 +124,7 @@ export const DEFAULT_BRANDING: Branding = {
 
 const colorSchema = z.string().regex(HEX);
 const fontSchema = z.enum(FONT_FAMILIES);
-const backgroundSizeSchema = z.number().int().min(40).max(600);
+const backgroundSizeSchema = z.number().int().min(40).max(1200);
 const taglineSchema = z
   .string()
   .transform((value) => value.trim())

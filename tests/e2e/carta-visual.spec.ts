@@ -72,6 +72,10 @@ for (const cliente of CLIENTES) {
             `${origen}${pagina.ruta}`,
             `${cliente.slug}-${pantalla.nombre}-${pagina.nombre}`,
           );
+          // Nada más ancho que la pantalla: un scroll horizontal descoloca las capas fijas
+          // (ficha, carrito, hoja de pago). Es la regla de la barra en móvil, para todos.
+          const ancho = await page.evaluate(() => document.documentElement.scrollWidth);
+          expect(ancho).toBeLessThanOrEqual(pantalla.viewport.width);
         });
       }
     });

@@ -35,7 +35,7 @@ identificado no cumple nada.
 ## 1. El alta
 
 Entra en `https://admin.<tu-dominio>/plataforma` con tu cuenta de superadmin y rellena
-**Nuevo cliente**: slug, nombre, correo del dueño, tema, idioma y moneda.
+**Nuevo cliente**: slug, nombre, correo del dueño, idioma y moneda.
 
 Eso crea, de una vez:
 
@@ -61,7 +61,16 @@ Con ella entra en `https://<slug>.<tu-dominio>/admin`.
 > Si el correo no llega, mira el SMTP antes de volver a invitar. Sin SMTP configurado, Auth no
 > envía nada y no da error visible. Ver la sección de correo del README de deploy.
 
-## 3. Su carta
+## 3. Su aspecto
+
+La carta es la misma para todos los clientes; lo que cambia es su aspecto, y se rellena en
+`/admin/ajustes` (el dueño, o tú por él): colores, fuentes, logo, foto de bienvenida, textura
+de fondo, lema por idioma, insignia, los tokens de estilo (radios, sombra, borde, aire,
+títulos...) y la disposición de cada zona (bienvenida, cabecera, navegación, categorías,
+platos, idiomas). No se escribe código por cliente. Sin rellenar nada, sale el aspecto por
+defecto con su nombre.
+
+## 4. Su carta
 
 ```bash
 node scripts/import-catalog.mjs <volcado> <slug> --reemplazar
@@ -73,12 +82,12 @@ El proceso de sacar el volcado de su sistema anterior está en
 Si su catálogo entra solo en español, el selector de idioma **no aparecerá** — es deliberado:
 ofrecer "EN" para acabar enseñando la carta en español es peor que no ofrecerlo.
 
-## 4. Sus mesas y sus QR
+## 5. Sus mesas y sus QR
 
 En `/admin/mesas`. Cada mesa genera su token y su QR. Ese token es lo que fija la cookie que
 permite pedir: sin escanear, la carta se consulta pero no se pide.
 
-## 5. Si lleva impresora
+## 6. Si lleva impresora
 
 Genera su instalador del agente con `PLATFORM_WEB_ORIGIN=https://<slug>.<tu-dominio>` **antes**
 de enviárselo: el origen va horneado en la build y cambiarlo obliga a regenerarlo.
@@ -86,7 +95,7 @@ de enviárselo: el origen va horneado en la build y cambiarlo obliga a regenerar
 Luego, en `/admin/dispositivos`, genera el código de emparejamiento y dáselo. Aparece una sola
 vez. Detalle en [`agent-desktop-validacion.md`](agent-desktop-validacion.md).
 
-## 6. Cobrarle
+## 7. Cobrarle
 
 El alta deja al cliente en `trialing`. La suscripción se crea a mano en Stripe sobre el
 cliente que la consola ya generó.
@@ -117,6 +126,10 @@ Borra el pedido de prueba cuando termines.
 `scripts/create-tenant.mjs` sigue existiendo, pero **solo para dos casos**: la primera
 instalación (cuando aún no hay ningún superadmin que pueda entrar en la consola) y la
 recuperación ante desastres. Para todo lo demás, la consola.
+
+Para recuperar también el aspecto de un cliente, `--marca <fichero.json>` siembra su branding:
+el mismo JSON que guarda `tenant_settings.branding` (sácalo de un backup). Una clave de primer
+nivel mal escrita se rechaza; el detalle de cada campo lo valida la carta al pintarla.
 
 Y el primer superadmin se crea así, una única vez por instalación:
 

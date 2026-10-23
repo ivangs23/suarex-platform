@@ -70,3 +70,43 @@ export function validarCanales(raw) {
   }
   return canales;
 }
+
+/** Claves de primer nivel del branding (ver `Branding` en `packages/config/src/branding.ts`). */
+const CLAVES_MARCA = new Set([
+  "name",
+  "colors",
+  "logoUrl",
+  "heroUrl",
+  "fonts",
+  "tokens",
+  "layout",
+  "background",
+  "tagline",
+  "badge",
+]);
+
+/**
+ * Branding inicial de `--marca <fichero.json>`: el aspecto propio de un cliente es DATO, el
+ * mismo JSON que guarda el panel de ajustes. Una clave mal escrita se rechaza en vez de
+ * guardarse: la carta la ignoraría y el cliente saldría con el aspecto por defecto sin que nada
+ * lo dijera. El detalle de cada campo lo valida `parseBranding` al pintar. El nombre comercial
+ * es siempre el de `--nombre`.
+ */
+export function validarMarca(texto, nombre) {
+  let marca;
+  try {
+    marca = JSON.parse(texto);
+  } catch (e) {
+    throw new Error(`La marca no es JSON válido: ${e.message}`);
+  }
+  if (typeof marca !== "object" || marca === null || Array.isArray(marca)) {
+    throw new Error("La marca tiene que ser un objeto JSON.");
+  }
+  const desconocidas = Object.keys(marca).filter((k) => !CLAVES_MARCA.has(k));
+  if (desconocidas.length > 0) {
+    throw new Error(
+      `Clave de marca desconocida: ${desconocidas.join(", ")}. Válidas: ${[...CLAVES_MARCA].join(", ")}.`,
+    );
+  }
+  return { ...marca, name: nombre };
+}

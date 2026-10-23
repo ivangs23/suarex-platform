@@ -66,7 +66,7 @@ function requiredOption<T extends string>(
 /** Mismos límites que `parseBranding` (`packages/config/src/branding.ts`). */
 const MAX_TAGLINE_LENGTH = 120;
 const MAX_BADGE_EMOJI_LENGTH = 8;
-const BACKGROUND_SIZE = { min: 40, max: 600 };
+const BACKGROUND_SIZE = { min: 40, max: 1200 };
 
 /** Mismo límite que `nameSchema` en `@suarex/config` (`packages/config/src/branding.ts`):
  * en lectura, un nombre por encima de este límite se degrada en silencio a `null` (y la

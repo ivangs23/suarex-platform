@@ -1,20 +1,57 @@
-/* Tema GENÉRICO: todo se pinta con las variables de marca que inyecta el layout raíz
-   (`--color-*`, ver brandingToCssVars en @suarex/config). Un cliente nuevo solo configura su
-   branding y obtiene esta carta -- cero código. Las fuentes caen a las que carga el layout
-   (`--font-playfair` para títulos, `--font-inter` para texto) si el branding no aporta una
-   familia utilizable. */
+/* LA CARTA, una sola hoja para todos los clientes.
+ *
+ * Tres capas, en este orden:
+ *   1. La base: lo que pinta un cliente que no configura nada (los defaults de `branding`).
+ *   2. Los TOKENS: variables CSS del layout raíz (`brandingToCssVars`) y, cuando un token cambia
+ *      más de una propiedad, un `data-*` en el contenedor (`data-surface`, `data-spacing`...).
+ *   3. Los EJES de layout: `data-layout-<eje>="<valor>"` en el contenedor.
+ *
+ * Nada de esto decide qué pasos tiene el flujo: solo dónde y cómo se pintan. Ver
+ * `docs/superpowers/specs/2026-10-22-temas-data-driven-design.md`. */
 
 .page {
+  /* Líneas de la carta. Los porcentajes de la base son los de siempre del genérico. */
+  --line-bar: color-mix(in srgb, var(--color-primary) 20%, transparent);
+  --line-card: color-mix(in srgb, var(--color-primary) 14%, transparent);
+  --line-item: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  --line-pill: color-mix(in srgb, var(--color-primary) 25%, transparent);
+  --item-bg: color-mix(in srgb, var(--color-muted) 35%, transparent);
+  --text-soft: color-mix(in srgb, var(--color-fg) 65%, transparent);
+  /* Texto sobre el color principal (botones): el fondo de la carta, o la superficie si es propia. */
+  --on-primary: var(--color-bg);
+
   min-height: 100vh;
-  background: var(--color-bg);
+  /* Fuera del alto mínimo: aire bajo la carta aunque sea corta. */
+  padding-bottom: 4rem;
+  background-color: var(--color-bg);
+  background-repeat: repeat;
   color: var(--color-fg);
-  font-family: var(--font-inter), system-ui, sans-serif;
+  font-family: var(--font-body);
 }
 
-/* Cabecera de tres zonas: mesa | marca | idiomas + pedido. En rejilla y no en flex, para que
-   la marca quede centrada respecto a la BARRA y no al hueco de sus vecinos (que la
-   descentraría al cambiar de idioma o al crecer el contador del pedido). Mismo esquema que
-   garum y manuela. */
+/* Superficie propia (blanca, crema...): tarjetas, cabecera y pastillas la usan entera, con una
+   sola línea para todo. Sin ella, la base deriva cada fondo del color tenue. */
+.page[data-surface="custom"] {
+  --line-bar: color-mix(in srgb, var(--color-primary) 18%, transparent);
+  --line-card: var(--line-bar);
+  --line-item: var(--line-bar);
+  --line-pill: var(--line-bar);
+  --item-bg: var(--color-surface);
+  --on-primary: var(--color-surface);
+}
+
+/* Borde grueso: más marcado también de color. */
+.page[data-border="thick"] {
+  --line-bar: color-mix(in srgb, var(--color-primary) 40%, transparent);
+  --line-card: color-mix(in srgb, var(--color-primary) 30%, transparent);
+  --line-item: var(--line-card);
+  --line-pill: var(--line-bar);
+}
+
+/* ---------- Cabecera: mesa | marca | idiomas + pedido ---------- */
+
+/* En rejilla y no en flex: la marca queda centrada respecto a la BARRA y no al hueco de sus
+   vecinos, que la descentraría al cambiar de idioma o al crecer el contador del pedido. */
 .topbar {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
@@ -22,25 +59,45 @@
   gap: 0.75rem;
   padding: 0.7rem 0.85rem;
   background: #ffffff;
-  border-bottom: 1px solid color-mix(in srgb, var(--color-primary) 20%, transparent);
+  border-bottom: 1px solid var(--line-bar);
   position: sticky;
   top: 0;
   z-index: 10;
 }
 
-.topbarLogo {
+/* La marca lleva de vuelta a la bienvenida. */
+.brand {
   justify-self: center;
-  max-height: 2.4rem;
-  width: auto;
+  display: block;
+  min-width: 0;
+  line-height: 0;
+  color: inherit;
+  text-decoration: none;
 }
 
-/* Sin logo, la marca del centro es el nombre en pequeño (el grande vive en el héroe). */
+/* Tope de alto Y de ancho: un logo cuadrado lo limita el alto y una firma alargada el ancho. */
+.topbarLogo {
+  display: block;
+  width: auto;
+  height: auto;
+  max-height: 2.6rem;
+  max-width: 8.65rem;
+}
+
+/* Sin logo, la marca del centro es el nombre en pequeño (el grande vive en la cabecera). Se
+   recorta antes de empujar la barra: una barra más ancha que la pantalla mete scroll
+   horizontal en TODA la página y descoloca las capas fijas (carrito, hoja de pago). */
 .topbarName {
-  justify-self: center;
-  font-family: var(--font-playfair), Georgia, serif;
+  display: block;
+  font-family: var(--font-display);
   font-weight: 700;
   font-size: 1.1rem;
+  line-height: 1.4;
   color: var(--color-primary);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .topbarEnd {
@@ -50,36 +107,197 @@
   gap: 0.6rem;
 }
 
+.mesa {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  margin: 0;
+  padding: 0.4rem 0.85rem;
+  border: 1px solid var(--line-pill);
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--text-soft);
+  white-space: nowrap;
+}
+
+.page[data-surface="custom"] .mesa {
+  background: var(--color-surface);
+}
+
+/* Controles redondeados: la pastilla de la mesa en la barra se lee como un botón más. */
+.page[data-controls="rounded"] .topbar .mesa {
+  padding: 0.45rem 0.9rem;
+  border-radius: var(--radius-control);
+  background: #ffffff;
+  color: var(--color-fg);
+  font-size: 0.9rem;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+/* LA BARRA EN UN MÓVIL, para todos los clientes. Las tres zonas no caben: medido en 390 px,
+ * la barra pedía más de 430 y metía scroll horizontal en toda la página, y las capas fijas
+ * (ficha, carrito, hoja de pago) salían cortadas. Cede la marca, que es lo único de la barra
+ * que no hace nada: quien acaba de escanear el QR ya sabe dónde está. */
+@media (width < 30rem) {
+  .topbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.5rem;
+    padding-left: 0.65rem;
+    padding-right: 0.65rem;
+  }
+
+  .brand {
+    display: none;
+  }
+}
+
+/* ---------- Idiomas ---------- */
+
+/* Enlaces normales, no un desplegable: en una mesa se toca una vez, y un <select> obliga a
+   abrir, elegir y confirmar. */
+.langs {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.lang {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-decoration: none;
+  color: inherit;
+  opacity: 0.6;
+}
+
+.lang[aria-current="true"] {
+  background: var(--color-primary);
+  color: var(--color-bg);
+  opacity: 1;
+}
+
+/* Las banderas solo en `langs=flag`. */
+.langFlag {
+  display: none;
+}
+
+.page[data-layout-langs="flag"] .langFlag {
+  display: inline;
+}
+
+.page[data-layout-langs="flag"] .langs {
+  justify-content: center;
+}
+
+.page[data-layout-langs="flag"] .lang {
+  padding: 0.35rem 0.7rem;
+  background: var(--color-muted);
+}
+
+.page[data-layout-langs="flag"] .lang[aria-current="true"] {
+  background: var(--color-primary);
+}
+
+/* ---------- Botón del pedido ---------- */
+
+.cartButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  white-space: nowrap;
+  padding: 0.55rem 1.1rem;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: var(--color-primary);
+  color: var(--on-primary);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.page[data-spacing="comfortable"] .cartButton {
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+/* Estilo BOLSA: botón oscuro (el color de acento) con la bolsa dibujada como máscara y no como
+   emoji -- el emoji lo pinta cada sistema con SU color --, así que va a juego con la letra. */
+.page[data-cart-icon="bag"] .cartButton {
+  gap: 0.55rem;
+  padding: 0.6rem 1rem;
+  background: var(--color-accent);
+  color: var(--color-muted);
+  font-size: 0.88rem;
+  line-height: 1;
+}
+
+.page[data-cart-icon="bag"] .cartButton::after {
+  content: "";
+  width: 1.15rem;
+  height: 1.15rem;
+  background-color: currentColor;
+  mask:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z'/%3E%3Cpath d='M3 6h18'/%3E%3Cpath d='M16 10a4 4 0 0 1-8 0'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+
+.page[data-cart-icon="bag"] .cartButton span {
+  min-width: 1.4rem;
+  padding: 0.15rem 0.4rem;
+  border-radius: 999px;
+  background: var(--color-muted);
+  color: var(--color-fg);
+  font-size: 0.78rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+/* ---------- Contenedor y cabecera de la carta ---------- */
+
 .inner {
   max-width: 52rem;
   margin: 0 auto;
-  padding: 1.5rem 1.25rem 4rem;
+  padding: 1.5rem 1.25rem 0;
 }
 
-/* Héroe con el nombre grande, bajo la barra. */
+.page[data-spacing="comfortable"] .inner {
+  max-width: 54rem;
+}
+
+.page[data-layout-categories="photo-tiles"] .inner {
+  max-width: 56rem;
+  padding: 0.75rem 0.75rem 2.5rem;
+}
+
+/* hero=plain: el nombre grande bajo la barra. */
 .hero {
   text-align: center;
   padding: 1rem 0 2.5rem;
-  border-bottom: 1px solid color-mix(in srgb, var(--color-primary) 20%, transparent);
+  border-bottom: 1px solid var(--line-bar);
   margin-bottom: 2.5rem;
 }
 
-.header {
-  text-align: center;
-  padding: 1.5rem 0 2.5rem;
-  border-bottom: 1px solid color-mix(in srgb, var(--color-primary) 20%, transparent);
-  margin-bottom: 2.5rem;
-}
-
-.logo {
-  max-height: 4.5rem;
-  width: auto;
-  margin: 0 auto 1rem;
-  display: block;
+/* hero=card: el nombre en una tarjeta. */
+.page[data-layout-hero="card"] .hero {
+  background: var(--color-surface);
+  border: 0;
+  border-radius: 1.25rem;
+  box-shadow: var(--shadow-card);
+  padding: 2rem 1.5rem;
+  margin-bottom: 2rem;
 }
 
 .name {
-  font-family: var(--font-playfair), Georgia, serif;
+  font-family: var(--font-display);
   font-size: clamp(2rem, 6vw, 3rem);
   font-weight: 700;
   line-height: 1.1;
@@ -88,27 +306,37 @@
   letter-spacing: -0.01em;
 }
 
-.mesa {
-  justify-self: start;
-  display: inline-flex;
-  align-items: center;
-  margin: 0;
-  padding: 0.4rem 0.85rem;
-  border: 1px solid color-mix(in srgb, var(--color-primary) 25%, transparent);
-  border-radius: 999px;
-  font-size: 0.68rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  color: color-mix(in srgb, var(--color-fg) 65%, transparent);
-  white-space: nowrap;
+/* Con la cabecera en tarjeta, el nombre va en el color del texto y algo más contenido. */
+.page[data-layout-hero="card"] .name {
+  font-size: clamp(1.9rem, 6vw, 2.6rem);
+  color: var(--color-fg);
+  letter-spacing: normal;
+}
+
+.tagline {
+  margin: 0.75rem 0 0;
+  color: var(--text-soft);
 }
 
 .lead {
   text-align: center;
-  color: color-mix(in srgb, var(--color-fg) 65%, transparent);
+  color: var(--text-soft);
   margin: 0 0 2rem;
 }
+
+/* Solo para lectores de pantalla y el contrato de los tests. */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---------- Navegación por niveles ---------- */
 
 .nav {
   display: flex;
@@ -121,12 +349,21 @@
 .back {
   display: inline-block;
   padding: 0.5rem 1rem;
-  border-radius: 999px;
+  border-radius: var(--radius-control);
   background: var(--color-primary);
-  color: var(--color-bg);
+  color: var(--on-primary);
   text-decoration: none;
   font-size: 0.85rem;
   font-weight: 600;
+}
+
+.page[data-spacing="comfortable"] .nav {
+  margin-bottom: 1.5rem;
+}
+
+.page[data-spacing="comfortable"] .back {
+  padding: 0.7rem 1.4rem;
+  font-size: 0.95rem;
 }
 
 .crumbs {
@@ -139,6 +376,48 @@
   color: inherit;
 }
 
+/* Sobre una textura, el rastro necesita superficie propia o no se lee. */
+.page[data-textured] .crumbs {
+  padding: 0.45rem 1rem;
+  background: var(--color-surface);
+  border: 1px solid var(--line-pill);
+  border-radius: 999px;
+  font-size: 0.8rem;
+}
+
+.page[data-titles="uppercase"] .crumbs {
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.page[data-titles="uppercase"] .crumbs a {
+  text-decoration: none;
+}
+
+/* nav=title-pill: la píldora dice dónde estás ("Menú" o la categoría). */
+.page[data-layout-nav="title-pill"] .back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1.2rem;
+  border-radius: 999px;
+  background: #ffffff;
+  border: 1px solid var(--line-pill);
+  color: var(--color-fg);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+
+.page[data-layout-nav="title-pill"] .crumbs {
+  padding: 0;
+  background: none;
+  border: 0;
+  color: color-mix(in srgb, var(--color-fg) 65%, transparent);
+}
+
+/* ---------- Categorías ---------- */
+
 .grid {
   list-style: none;
   margin: 0 0 2rem;
@@ -146,6 +425,11 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
   gap: 0.9rem;
+}
+
+.page[data-spacing="comfortable"] .grid {
+  grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+  gap: 1rem;
 }
 
 .card {
@@ -159,9 +443,16 @@
   text-align: center;
   text-decoration: none;
   color: inherit;
-  background: color-mix(in srgb, var(--color-muted) 45%, transparent);
-  border: 1px solid color-mix(in srgb, var(--color-primary) 14%, transparent);
-  border-radius: 0.75rem;
+  background: var(--color-surface);
+  border: var(--border-card) solid var(--line-card);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+
+.page[data-spacing="comfortable"] .card {
+  gap: 0.6rem;
+  min-height: 9rem;
+  padding: 1.5rem 1rem;
 }
 
 .cardIcon {
@@ -169,11 +460,23 @@
   line-height: 1;
 }
 
+.page[data-spacing="comfortable"] .cardIcon,
+.page[data-layout-categories="photo-tiles"] .cardIcon {
+  font-size: 2rem;
+}
+
 .cardName {
-  font-family: var(--font-playfair), Georgia, serif;
+  font-family: var(--font-display);
   font-weight: 700;
   font-size: 1.05rem;
   color: var(--color-accent);
+}
+
+.page[data-titles="uppercase"] .cardName {
+  line-height: 1.2;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--color-fg);
 }
 
 .cardCount {
@@ -183,6 +486,63 @@
   color: color-mix(in srgb, var(--color-fg) 55%, transparent);
 }
 
+.page[data-titles="uppercase"] .cardCount {
+  font-weight: 600;
+  color: var(--color-accent);
+}
+
+/* categories=photo-tiles: rejilla fija (2 en móvil, 3 en tableta, 4 en escritorio) para que la
+   carta se vea de un vistazo, con la foto de cada categoría y el icono de respaldo. */
+.page[data-layout-categories="photo-tiles"] .grid {
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+@media (min-width: 40rem) {
+  .page[data-layout-categories="photo-tiles"] .grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 64rem) {
+  .page[data-layout-categories="photo-tiles"] .grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.page[data-layout-categories="photo-tiles"] .card {
+  gap: 0.5rem;
+  min-height: 10rem;
+  padding: 0.5rem;
+}
+
+.page[data-layout-categories="photo-tiles"] .cardName {
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-fg);
+}
+
+.page[data-layout-categories="photo-tiles"] .cardCount {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--color-primary);
+}
+
+/* Fotos de producto recortado sobre fondo claro: enteras, o le cortan la taza por la mitad. */
+.cardPhoto {
+  height: 5rem;
+  width: auto;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+/* ---------- Platos ---------- */
+
 .items {
   list-style: none;
   margin: 0;
@@ -191,19 +551,48 @@
   gap: 0.6rem;
 }
 
+.page[data-spacing="comfortable"] .items {
+  gap: 1rem;
+}
+
+/* products=list: nombre y precio a un lado, foto al otro. */
 .item {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0.85rem 1rem;
-  background: color-mix(in srgb, var(--color-muted) 35%, transparent);
-  border: 1px solid color-mix(in srgb, var(--color-primary) 12%, transparent);
-  border-radius: 0.6rem;
+  padding: var(--space-card);
+  background: var(--item-bg);
+  border: var(--border-card) solid var(--line-item);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+
+.page[data-spacing="comfortable"] .item {
+  align-items: flex-start;
+}
+
+.itemText {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.page[data-spacing="comfortable"] .itemText {
+  gap: 1.75rem;
 }
 
 .itemName {
   font-weight: 500;
+}
+
+.page[data-titles="uppercase"] .itemName {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.15rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 
 .price {
@@ -213,32 +602,137 @@
   white-space: nowrap;
 }
 
+.page[data-titles="uppercase"] .price {
+  font-size: 1.05rem;
+  font-variant-numeric: normal;
+  color: var(--color-fg);
+}
+
+/* La miniatura se acota para que una foto grande no descuadre la fila. */
+.itemPhoto {
+  flex: none;
+  width: var(--thumb-size);
+  height: var(--thumb-size);
+  object-fit: var(--image-fit);
+  border-radius: 0.5rem;
+}
+
+.page[data-spacing="comfortable"] .itemPhoto {
+  border-radius: 14px;
+}
+
+/* products=cards: tarjetas en rejilla (1, 2 o 3 columnas), foto arriba con el precio y los
+   alérgenos encima, y debajo el nombre y el botón a todo el ancho. */
+.page[data-layout-products="cards"] .items {
+  grid-template-columns: repeat(1, 1fr);
+  gap: 0.75rem;
+}
+
+@media (min-width: 30rem) {
+  .page[data-layout-products="cards"] .items {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 48rem) {
+  .page[data-layout-products="cards"] .items {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.page[data-layout-products="cards"] .item {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  background: var(--color-muted);
+}
+
+.itemMedia {
+  position: relative;
+  height: 9rem;
+  background: #ffffff;
+  /* Cinturón: aunque algo se salga, no puede desbordar sobre el nombre y el botón. */
+  overflow: hidden;
+}
+
+/* La foto, ABSOLUTA dentro de la franja: la caja de referencia es la franja, que tiene altura
+   fija. En flujo, una foto vertical crecía hasta su altura natural y tapaba nombre y botón.
+   Atado al marco y no solo a la clase: ninguna imagen puede salirse de esa franja. */
+.itemMedia .itemPhoto,
+.itemMedia img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: var(--image-fit);
+  border-radius: 0;
+}
+
+.itemMedia .price {
+  position: absolute;
+  right: 0.6rem;
+  bottom: 0.6rem;
+  padding: 0.35rem 0.8rem;
+  border-radius: 0.6rem;
+  background: var(--color-fg);
+  color: var(--color-primary);
+  font-size: 1rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.itemAllergens {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 1;
+}
+
+.itemBody {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.9rem;
+  flex: 1;
+}
+
+.itemBody .itemName {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.25;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+/* El botón de pedir, a todo el ancho y en el color del texto. Se ata al `data-testid` del
+   botón concreto: dentro de la tarjeta hay más botones (el contador) que no deben estirarse. */
+.itemBody [data-testid="open-product-sheet"] {
+  width: 100%;
+  justify-content: center;
+  padding: 0.75rem 1rem;
+  border: 0;
+  border-radius: 0.7rem;
+  background: var(--color-fg);
+  color: var(--color-primary);
+  font-weight: 700;
+}
+
+.itemBody > div {
+  align-items: stretch;
+}
+
 .empty {
   text-align: center;
   color: color-mix(in srgb, var(--color-fg) 55%, transparent);
   padding: 3rem 0;
 }
 
-/* Nombre y precio a un lado, foto al otro. La miniatura se acota para que una foto grande
-   no descuadre la fila. */
-.itemText {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  min-width: 0;
-}
+/* ---------- Pantalla de bienvenida ---------- */
 
-.itemPhoto {
-  flex: none;
-  width: 72px;
-  height: 72px;
-  object-fit: cover;
-  border-radius: 0.5rem;
-}
-
-/* PANTALLA DE BIENVENIDA. Es un paso del flujo, así que la tienen todos los clientes,
-   también los que no quieren tema propio. Se pinta entera con sus variables de marca: si no
-   han subido foto, el fondo de marca ya da una pantalla digna. */
 .welcome {
   position: relative;
   display: grid;
@@ -258,6 +752,7 @@
   object-fit: cover;
 }
 
+/* welcome=panel: un recuadro legible tanto sobre la foto como sobre el color de marca. */
 .welcomeContent {
   position: relative;
   display: flex;
@@ -265,15 +760,36 @@
   align-items: center;
   gap: 1.25rem;
   text-align: center;
-  /* Legible tanto sobre la foto del cliente como sobre el color de marca sin ella. */
   background: color-mix(in srgb, var(--color-bg) 82%, transparent);
   border-radius: 1.5rem;
   padding: 2.5rem 2rem;
 }
 
+.page[data-surface="custom"] .welcomeContent {
+  gap: 1.1rem;
+  background: color-mix(in srgb, var(--color-surface) 92%, transparent);
+  border: 1px solid var(--line-card);
+  box-shadow: var(--shadow-card);
+  padding: 2.75rem 2rem;
+}
+
 .welcomeLogo {
-  max-height: 5.5rem;
   width: auto;
+  height: auto;
+  max-height: 5.5rem;
+  max-width: 100%;
+}
+
+.page[data-spacing="comfortable"] .welcomeLogo {
+  max-height: 4.5rem;
+}
+
+.welcome .mesa {
+  justify-self: auto;
+}
+
+.page[data-surface="custom"] .welcome .mesa {
+  background: var(--color-surface);
 }
 
 .enter {
@@ -281,59 +797,70 @@
   padding: 0.7rem 1.6rem;
   border-radius: 999px;
   background: var(--color-primary);
-  color: var(--color-bg);
+  color: var(--on-primary);
   font-size: 0.8rem;
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 
-/* Selector de idioma. Enlaces normales, no un desplegable: en una mesa se toca una vez, y
-   un <select> obliga a abrir, elegir y confirmar. */
-.langs {
-  display: flex;
-  gap: 0.35rem;
+.badge {
+  display: grid;
+  place-items: center;
+  width: 5.5rem;
+  height: 5.5rem;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.25);
+  font-size: 2.6rem;
+  line-height: 1;
 }
 
-.lang {
-  padding: 0.3rem 0.7rem;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-decoration: none;
-  color: inherit;
-  opacity: 0.6;
+/* welcome=poster: a pantalla completa, sin recuadro: la firma grande, la insignia y el saludo
+   enorme en versales sobre la foto. */
+.page[data-layout-welcome="poster"] .welcomePhoto {
+  /* Un punto más clara para que el texto oscuro mantenga contraste sobre una foto oscura. */
+  filter: brightness(1.08);
 }
 
-.lang[aria-current="true"] {
-  background: var(--color-primary, #7b4f96);
-  color: var(--color-bg, #ffffff);
-  opacity: 1;
-}
-
-/* Puerta al pedido. Cada tema la coloca donde encaje -- aquí, en la cabecera. */
-.cartButton {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  white-space: nowrap;
-  padding: 0.55rem 1.1rem;
+.page[data-layout-welcome="poster"] .welcomeContent {
+  gap: 1.5rem;
+  background: none;
   border: 0;
-  border-radius: 999px;
-  background: var(--color-primary, #7b4f96);
-  color: var(--color-bg, #ffffff);
-  font: inherit;
-  font-weight: 700;
-  cursor: pointer;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
 }
 
-/* El nombre del centro puede ser tan largo como quiera el cliente. Que se recorte antes de
-   empujar la barra: una barra más ancha que la pantalla mete scroll horizontal en TODA la
-   página, y de rebote descoloca las capas fijas (carrito, hoja de pago). */
-.topbarName {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.page[data-layout-welcome="poster"] .welcomeLogo {
+  width: min(26rem, 82vw);
+  max-height: none;
+}
+
+.page[data-layout-welcome="poster"] .welcome .name {
+  font-family: var(--font-body);
+  font-size: clamp(2.75rem, 13vw, 4.5rem);
+  font-weight: 900;
+  letter-spacing: -0.05em;
+  line-height: 0.95;
+  text-transform: uppercase;
+  color: var(--color-fg);
+}
+
+/* Suelta sobre la foto, la mesa necesita fondo propio para leerse sobre cualquier zona. */
+.page[data-layout-welcome="poster"] .welcome .mesa {
+  display: inline-block;
+  padding: 0.35rem 1rem;
+  border: 0;
+  background: #ffffff;
+  color: var(--color-primary);
+  font-size: 0.75rem;
+  font-weight: 400;
+  letter-spacing: 0.12em;
+}
+
+.page[data-layout-welcome="poster"] .enter {
+  padding: 0.6rem 1.4rem;
+  background: color-mix(in srgb, var(--color-accent) 85%, transparent);
+  color: #ffffff;
+  font-weight: 600;
 }

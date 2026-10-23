@@ -33,9 +33,8 @@ const MESA_PATTERN = /^\d+$/;
 /**
  * Carta pública de una mesa. Esta página hace UNA sola carga de datos y delega toda la
  * presentación al tema del tenant (`tenant_settings.theme`, resuelto por `resolveTheme`):
- * `generic` se pinta con el branding, y los temas a medida (garum, manuela) son componentes
- * codificados. Añadir un tema no toca este fichero -- todos consumen el mismo contrato
- * `MenuThemeProps`.
+ * hoy solo `generic`, que se pinta entero con el branding del cliente. Todo tema consume el
+ * mismo contrato `MenuThemeProps`.
  *
  * La carta se navega por NIVELES: `?cat=<slug>` elige el nodo del árbol de categorías y
  * `buildMenuView` resuelve qué pintar (hijos, productos y rastro de vuelta). Sin `cat` se

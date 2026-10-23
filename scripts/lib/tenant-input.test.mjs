@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { validarCanales, validarEmail, validarIdioma, validarSlug } from "./tenant-input.mjs";
+import {
+  validarCanales,
+  validarEmail,
+  validarIdioma,
+  validarMarca,
+  validarSlug,
+} from "./tenant-input.mjs";
 
 /**
  * Un alta va contra producción: un dato mal formado ahí rompe el subdominio del cliente o
@@ -70,5 +76,31 @@ describe("validarCanales", () => {
 
   it("el mensaje dice cuáles valen, para no tener que ir a buscarlo", () => {
     expect(() => validarCanales("x")).toThrow(/qr-mesa/);
+  });
+});
+
+describe("validarMarca", () => {
+  it("acepta el mismo JSON que guarda el panel y fija el nombre de --nombre", () => {
+    const marca = validarMarca(
+      '{"name":"Otro","colors":{"bg":"#ffffff"},"layout":{"welcome":"poster"}}',
+      "Bar Paco",
+    );
+    expect(marca).toEqual({
+      name: "Bar Paco",
+      colors: { bg: "#ffffff" },
+      layout: { welcome: "poster" },
+    });
+  });
+
+  it("una clave mal escrita se RECHAZA: la carta la ignoraría en silencio", () => {
+    expect(() => validarMarca('{"layuot":{"welcome":"poster"}}', "Bar Paco")).toThrow(
+      /Clave de marca desconocida: layuot/,
+    );
+  });
+
+  it("rechaza lo que no es un objeto JSON", () => {
+    expect(() => validarMarca("{no es json", "Bar Paco")).toThrow(/no es JSON válido/);
+    expect(() => validarMarca("[]", "Bar Paco")).toThrow(/objeto JSON/);
+    expect(() => validarMarca("null", "Bar Paco")).toThrow(/objeto JSON/);
   });
 });

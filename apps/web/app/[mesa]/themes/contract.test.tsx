@@ -1,4 +1,9 @@
-import { DEFAULT_BRANDING } from "@suarex/config";
+import {
+  type Branding,
+  type BrandingLayout,
+  DEFAULT_BRANDING,
+  LAYOUT_OPTIONS,
+} from "@suarex/config";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { strings } from "@/lib/i18n";
@@ -21,8 +26,10 @@ import type { MenuThemeProps, MenuView } from "./types";
  * Se comprueba por `data-testid` porque es lo que ya usa la suite e2e como contrato
  * compartido, y porque comprobar el marcado exacto prohibiría justo lo que SÍ debe variar.
  *
- * Recorre `THEMES` entero, no una lista escrita a mano: un tema nuevo entra en el test por
- * el mero hecho de registrarse.
+ * Recorre TODAS las combinaciones de los ejes de layout (el producto cartesiano de
+ * `LAYOUT_OPTIONS`), con y sin contenido de marca, en cada tema registrado. Un eje o un valor
+ * nuevo entra en el test por el mero hecho de existir: ninguna combinación que un cliente
+ * pueda elegir en su panel puede dejarle sin un paso del flujo.
  */
 
 const VIEW_RAIZ: MenuView = {
@@ -70,12 +77,53 @@ const VIEW_HOJA: MenuView = {
   totalProducts: 8,
 };
 
-function props(overrides: Partial<MenuThemeProps>): MenuThemeProps {
+/** Producto cartesiano de los ejes: 2·3·2·2·2·2 = 96 cartas distintas hoy. */
+function combinaciones(): BrandingLayout[] {
+  let parciales: Record<string, string>[] = [{}];
+  for (const [eje, valores] of Object.entries(LAYOUT_OPTIONS)) {
+    parciales = parciales.flatMap((parcial) => valores.map((v) => ({ ...parcial, [eje]: v })));
+  }
+  return parciales as BrandingLayout[];
+}
+
+/* Todo el contenido opcional relleno: logo, foto, textura, lema, insignia y superficie. Los
+   pasos del flujo no pueden depender de que el cliente haya subido una foto. */
+const CON_CONTENIDO: Omit<Branding, "layout"> = {
+  ...DEFAULT_BRANDING,
+  logoUrl: "/brands/prueba-logo.png",
+  heroUrl: "/brands/prueba-fondo.png",
+  tokens: { ...DEFAULT_BRANDING.tokens, surface: "#ffffff", cartIcon: "bag" },
+  background: { imageUrl: "/brands/prueba-textura.png", sizePx: 300 },
+  tagline: { es: "Cocina de mercado", en: "Market cooking" },
+  badge: { emoji: "☕", color: "#1b4d3e" },
+};
+
+const etiqueta = (layout: BrandingLayout) =>
+  Object.entries(layout)
+    .map(([eje, valor]) => `${eje}=${valor}`)
+    .join(" ");
+
+const CASOS = Object.keys(THEMES).flatMap((tema) =>
+  combinaciones().flatMap((layout) => [
+    {
+      nombre: `${tema} · ${etiqueta(layout)} · sin contenido`,
+      tema,
+      branding: { ...DEFAULT_BRANDING, layout },
+    },
+    {
+      nombre: `${tema} · ${etiqueta(layout)} · con contenido`,
+      tema,
+      branding: { ...CON_CONTENIDO, layout },
+    },
+  ]),
+);
+
+function props(overrides: Partial<MenuThemeProps>, branding: Branding): MenuThemeProps {
   return {
     tenantSlug: "prueba",
     businessName: "Bar de Prueba",
     mesa: "5",
-    branding: DEFAULT_BRANDING,
+    branding,
     view: VIEW_RAIZ,
     welcome: { active: false, href: "/5?ver=carta" },
     langs: [
@@ -87,23 +135,24 @@ function props(overrides: Partial<MenuThemeProps>): MenuThemeProps {
   };
 }
 
-const nombres = Object.keys(THEMES);
-
-it("hay temas registrados que comprobar", () => {
-  // Si el registro se vacía o se renombra, los describe.each de abajo pasarían sin ejecutar
-  // ni una sola comprobación, y el contrato quedaría sin vigilar en silencio.
-  expect(nombres.length).toBeGreaterThan(0);
+it("hay combinaciones que comprobar", () => {
+  // Si el registro o los ejes se vacían, los describe.each de abajo pasarían sin ejecutar ni
+  // una sola comprobación, y el contrato quedaría sin vigilar en silencio.
+  expect(Object.keys(THEMES).length).toBeGreaterThan(0);
+  expect(combinaciones()).toHaveLength(
+    Object.values(LAYOUT_OPTIONS).reduce((total, valores) => total * valores.length, 1),
+  );
 });
 
-describe.each(nombres)("tema %s", (nombre) => {
-  const Theme = THEMES[nombre];
-  if (!Theme) throw new Error(`tema '${nombre}' registrado pero vacío`);
+describe.each(CASOS)("$nombre", ({ tema, branding }) => {
+  const Theme = THEMES[tema];
+  if (!Theme) throw new Error(`tema '${tema}' registrado pero vacío`);
   // El carrito es un componente de cliente con su propio contexto: el tema se envuelve en el
   // proveedor, igual que hace la página, o el botón de añadir no tendría de dónde salir.
   const render = (overrides: Partial<MenuThemeProps>, canOrder = true) => {
     // El carrito recibe los MISMOS textos que el tema: en la app los dos salen de
     // `strings(lang)`, y separarlos aquí probaría una situación que no ocurre.
-    const p = props(overrides);
+    const p = props(overrides, branding);
     return renderToStaticMarkup(
       <CartProvider locale="es" currency="EUR" canOrder={canOrder} strings={p.strings}>
         {Theme(p)}
@@ -206,7 +255,7 @@ describe.each(nombres)("tema %s", (nombre) => {
   });
 
   it("coloca la puerta al pedido en algún sitio de su carta", () => {
-    // DÓNDE va es del tema (la bolsa de la cabecera en Manuela, un botón en otro); QUE esté,
+    // CÓMO se ve es del branding (botón liso o bolsa); QUE esté,
     // no: sin ella, ese cliente tendría una carta en la que se puede añadir y no se puede
     // pagar. El panel que abre lo pinta la página, así que ningún tema puede saltárselo.
     expect(render({ view: VIEW_HOJA })).toContain('data-testid="cart-open"');
@@ -275,5 +324,13 @@ describe.each(nombres)("tema %s", (nombre) => {
     // propio enlace a `/5` echaría al comensal fuera de la carta en vez de subirlo un nivel.
     expect(html).toContain("/5?ver=carta");
     expect(html).toContain("Tintos");
+  });
+
+  it("la marca de la cabecera lleva de vuelta a la bienvenida", () => {
+    // La salida de la carta: sin ella, volver a la bienvenida (o cambiar de idioma desde ahí)
+    // depende del botón "atrás" del navegador.
+    const html = render({ view: VIEW_HOJA });
+
+    expect(html).toMatch(/<a [^>]*href="\/5"[^>]*aria-label="Volver al inicio"/);
   });
 });
