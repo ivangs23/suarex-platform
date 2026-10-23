@@ -467,20 +467,29 @@ pasan a ser la 22ª-27ª.
 
 ### Tarea 5.2 — Documentación al día
 
-- [ ] `docs/HANDOFF.md`: actualizar con lo mergeado desde el 24-sep (PRs #50-#55: sesiones
+- [x] `docs/HANDOFF.md`: actualizar con lo mergeado desde el 24-sep (PRs #50-#55: sesiones
   del panel, watchdog en Windows, login explicativo, tablero solo pagados, pago sin Link) y
   con el estado de este plan.
-- [ ] Mover `docs/superpowers/plans/*` y `specs/*` anteriores a 2026-10 a
+- [x] Mover `docs/superpowers/plans/*` y `specs/*` anteriores a 2026-10 a
   `docs/superpowers/archivo/` con un `README.md` de una línea; dejar en `plans/` solo lo
   vivo.
-- [ ] `README.md`: la sección "Verificación" referencia CI; quitar la nota de que `pnpm test`
+- [x] `README.md`: la sección "Verificación" referencia CI; quitar la nota de que `pnpm test`
   y `pnpm --filter @suarex/config test` son lo mismo si ya no lo son (hoy 7 paquetes tienen
   `test`).
 
+**Hecho (2026-10-23):** `HANDOFF.md` reescrito con el estado del plan, lo pendiente de desplegar y
+las decisiones abiertas; planes y specs anteriores a octubre en `docs/superpowers/archivo/` (las
+migraciones, inmutables, siguen citando sus rutas antiguas); README → Verificación sin el
+`--filter @suarex/config test` redundante.
+
 ### Tarea 5.3 — Hooks locales (opcional, si Iván quiere)
 
-- [ ] `simple-git-hooks` + `lint-staged` con `biome check --write` en pre-commit. Nada de
+- [x] `simple-git-hooks` + `lint-staged` con `biome check --write` en pre-commit. Nada de
   `typecheck` en el hook (lento); eso es CI.
+
+**Hecho (2026-10-24, con el sí de Iván a las dos dependencias):** `lint-staged` 16.4 y no 17 (la 17
+pide Node >= 22.22.1 y `.nvmrc` es 22.12). Se instala con `prepare`; sin `.git` (el `docker build`)
+se salta solo.
 
 ---
 

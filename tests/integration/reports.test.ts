@@ -18,6 +18,10 @@ import {
  * ventas es peor que no tenerlo: el hostelero toma decisiones con ese número.
  */
 
+/** La zona de las sedes que crean las fixtures (la de reserva de `venues.timezone`). */
+const ZONA = "Europe/Madrid";
+/** El día de HOY en el local, que es el que pregunta el informe (no el de UTC). */
+const hoyLocal = () => new Intl.DateTimeFormat("en-CA", { timeZone: ZONA }).format(new Date());
 const HOY = () => new Date().toISOString();
 const haceHoras = (h: number) => new Date(Date.now() - h * 3600_000).toISOString();
 
@@ -61,7 +65,7 @@ describe("ventasDelDia", () => {
       await pedido(f.tenantId, seed.orderId, { status: "paid", paid_at: HOY(), total: 30 });
       await pedido(f.tenantId, seed.orderId, { status: "pending", total: 99 });
 
-      const r = await ventasDelDia(f.tenantId);
+      const r = await ventasDelDia(f.tenantId, hoyLocal(), ZONA);
       expect(r.totalCents).toBe(3000);
       expect(r.numPedidos).toBe(1);
     } finally {
@@ -78,7 +82,7 @@ describe("ventasDelDia", () => {
       await pedido(f.tenantId, seed.orderId, { status: "served", paid_at: HOY(), total: 10 });
       await pedido(f.tenantId, seed.orderId, { status: "preparing", paid_at: HOY(), total: 15 });
 
-      const r = await ventasDelDia(f.tenantId);
+      const r = await ventasDelDia(f.tenantId, hoyLocal(), ZONA);
       expect(r.totalCents).toBe(2500);
       expect(r.numPedidos).toBe(2);
     } finally {
@@ -99,7 +103,7 @@ describe("ventasDelDia", () => {
         refunded_cents: 1500,
       });
 
-      const r = await ventasDelDia(f.tenantId);
+      const r = await ventasDelDia(f.tenantId, hoyLocal(), ZONA);
       expect(r.totalCents, "50 EUR cobrados menos 15 devueltos").toBe(3500);
     } finally {
       await deleteTenantFixture(f);
@@ -117,7 +121,7 @@ describe("ventasDelDia", () => {
       });
       await pedido(f.tenantId, seed.orderId, { status: "served", paid_at: HOY(), total: 10 });
 
-      const r = await ventasDelDia(f.tenantId);
+      const r = await ventasDelDia(f.tenantId, hoyLocal(), ZONA);
       expect(r.totalCents).toBe(1000);
     } finally {
       await deleteTenantFixture(f);
@@ -134,7 +138,7 @@ describe("ventasDelDia", () => {
       await pedido(a.tenantId, seedA.orderId, { status: "served", paid_at: HOY(), total: 10 });
       await pedido(b.tenantId, seedB.orderId, { status: "served", paid_at: HOY(), total: 999 });
 
-      const r = await ventasDelDia(a.tenantId);
+      const r = await ventasDelDia(a.tenantId, hoyLocal(), ZONA);
       expect(r.totalCents).toBe(1000);
     } finally {
       await deleteTenantFixture(a);
@@ -174,7 +178,7 @@ describe("ventasDelDia", () => {
         },
       ]);
 
-      const r = await ventasDelDia(f.tenantId);
+      const r = await ventasDelDia(f.tenantId, hoyLocal(), ZONA);
       expect(r.porProducto[0]?.nombre).toBe("Croquetas");
       expect(r.porProducto[0]?.unidades).toBe(3);
       expect(r.porProducto[1]?.nombre).toBe("Café");
@@ -186,10 +190,35 @@ describe("ventasDelDia", () => {
   it("un día sin ventas devuelve ceros, no revienta", async () => {
     const f = await createTenantFixture(`vacio-${nonce()}`);
     try {
-      const r = await ventasDelDia(f.tenantId);
+      const r = await ventasDelDia(f.tenantId, hoyLocal(), ZONA);
       expect(r.totalCents).toBe(0);
       expect(r.numPedidos).toBe(0);
       expect(r.porProducto).toEqual([]);
+    } finally {
+      await deleteTenantFixture(f);
+    }
+  });
+
+  it("el día y las horas son los del LOCAL, no los de UTC", async () => {
+    // Las 00:30 del 23 en Madrid son las 22:30 UTC del 22: ese pedido es del 23 y de la hora 0.
+    // El de las 00:30 del 24 ya no es del 23. Antes se cortaba con la hora del servidor (UTC).
+    const f = await createTenantFixture(`zona-${nonce()}`);
+    try {
+      const seed = await seedCatalog(f.tenantId, "zona");
+      await pedido(f.tenantId, seed.orderId, {
+        status: "served",
+        paid_at: "2026-10-22T22:30:00Z",
+        total: 12,
+      });
+      await pedido(f.tenantId, seed.orderId, {
+        status: "served",
+        paid_at: "2026-10-23T22:30:00Z",
+        total: 99,
+      });
+
+      const r = await ventasDelDia(f.tenantId, "2026-10-23", ZONA);
+      expect(r.totalCents).toBe(1200);
+      expect(r.porHora).toEqual([{ hora: 0, importeCents: 1200 }]);
     } finally {
       await deleteTenantFixture(f);
     }

@@ -102,8 +102,13 @@ carta pública (`/m/{token}`). Igual que con `STAFF_SEED_PASSWORD`, si falta
 ## Verificación
 
 ```bash
-pnpm lint && pnpm typecheck && pnpm test && pnpm --filter @suarex/config test && pnpm test:integration && pnpm test:e2e
+pnpm lint && pnpm typecheck && pnpm test && pnpm test:integration && pnpm test:e2e
 ```
+
+**Pre-commit** (`simple-git-hooks` + `lint-staged`, se instala solo con `pnpm install`): pasa
+`biome check --write` por los ficheros del commit, así que el formato se arregla solo y un error
+de lint que no se arregla solo bloquea el commit. El typecheck no va en el hook (es lento): eso es
+el CI.
 
 **En CI** (`.github/workflows/ci.yml`, job `verificar`, en cada PR y en cada push a `main`):
 `pnpm lint`, `pnpm typecheck` y `pnpm test`, con el Node de `.nvmrc`. Tras él, el job
@@ -122,18 +127,16 @@ para tapar bugs. Por eso se cuentan:
 
 **Un test que aparece 3 veces en esas listas se abre como issue**: ya no es el entorno.
 
-`pnpm test` (vía Turbo) y `pnpm --filter @suarex/config test` ejecutan hoy los mismos 25
-tests unitarios de `packages/config` (es el único paquete con script `test`; Turbo solo
-corre el suyo) — están ambos porque ambos forman parte del comando de verificación de
-este repo, no por redundancia accidental.
+`pnpm test` corre, vía Turbo, los tests unitarios de los 9 paquetes que tienen script `test`.
 
 ## Dependencias
 
 Renovate (`renovate.json`) abre los PRs de actualización los lunes de madrugada (hora de
 Madrid), con los `@types/*` y Vitest agrupados. `stripe` y `@supabase/*` esperan una semana
-desde que se publican; `electron` y `electron-builder` no se suben solos (es la Fase 4 del plan
-de endurecimiento). **Quien valida esos PRs es el CI** de la sección anterior: se tratan como
-cualquier otro PR, también en lo de pasar el e2e en local antes de mergear.
+desde que se publican; `electron`, `electron-builder` y `electron-vite` van juntos y esperan dos
+semanas, y una mayor nueva de Electron se valida en un PC Windows real antes de mergear
+(`docs/agent-desktop-validacion.md`). **Quien valida esos PRs es el CI** de la sección anterior:
+se tratan como cualquier otro PR, también en lo de pasar el e2e en local antes de mergear.
 
 ## Reglas del repo
 

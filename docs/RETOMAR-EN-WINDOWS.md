@@ -236,7 +236,8 @@ Para que no lo des por probado ni lo intentes a ciegas:
 |---|---|
 | Cómo trabajar aquí, doctrina, patrones | `CLAUDE.md` |
 | Estado por fases y backlog completo | `docs/HANDOFF.md` |
-| Decisiones de cada fase, con su porqué | `docs/superpowers/specs/` |
+| Por qué el código es como es | `docs/decisions/` (ADRs) |
+| Decisiones de cada fase, con su porqué | `docs/superpowers/specs/` (las anteriores a octubre, en `docs/superpowers/archivo/`) |
 | Validar el agente en Windows | `docs/agent-desktop-validacion.md` |
 | Dar de alta un cliente | `docs/dar-de-alta-un-cliente.md` |
 | Seguridad del kiosko de Manuela | `kiosko-manuela/SEGURIDAD.md` (en su rama) |

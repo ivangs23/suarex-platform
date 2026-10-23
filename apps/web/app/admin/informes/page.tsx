@@ -1,5 +1,5 @@
-import { analiticaDeCarta, ventasDelDia } from "@suarex/db";
-import { formatCents } from "@suarex/domain";
+import { analiticaDeCarta, ventasDelDia, zonaHorariaDelTenant } from "@suarex/db";
+import { diaEnZona, formatCents } from "@suarex/domain";
 import { requireManager } from "@/lib/require-manager";
 import { descargarCsvAction } from "./actions";
 import { DescargarCsv } from "./DescargarCsv";
@@ -15,8 +15,10 @@ import styles from "./informes.module.css";
  */
 export default async function InformesPage() {
   const session = await requireManager();
+  // "Hoy" y sus horas son los del local (su sede), no los del servidor, que en el VPS es UTC.
+  const zona = await zonaHorariaDelTenant(session.tenantId);
   const [ventas, analitica] = await Promise.all([
-    ventasDelDia(session.tenantId),
+    ventasDelDia(session.tenantId, diaEnZona(new Date(), zona), zona),
     analiticaDeCarta(session.tenantId),
   ]);
 

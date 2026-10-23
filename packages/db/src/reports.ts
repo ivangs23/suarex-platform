@@ -1,4 +1,4 @@
-import { eurosToCents } from "@suarex/domain";
+import { eurosToCents, horaEnZona, limitesDelDia } from "@suarex/domain";
 import { tenantScoped } from "./client.js";
 import type { Json } from "./database.types.js";
 import { textosJson } from "./json.js";
@@ -42,24 +42,25 @@ export type VentasDelDia = {
 const ESTADOS_COBRADOS = ["paid", "preparing", "served", "refunded"] as const;
 
 /**
- * Ventas del día para un restaurante. Solo lectura: no cierra turno ni congela nada (decisión
- * D1 del spec de la Fase 3).
+ * Ventas de un día (`YYYY-MM-DD`) para un restaurante, en la zona de su sede. Solo lectura: no
+ * cierra turno ni congela nada (decisión D1 del spec de la Fase 3).
  *
- * `desde`/`hasta` se calculan en el llamante si hace falta otro rango; por defecto, desde la
- * medianoche de hoy. Se filtra por `paid_at` y no por `created_at` porque lo que interesa es
+ * El día y las horas son los del LOCAL, no los del servidor (UTC en el VPS): ver
+ * `limitesDelDia`. Se filtra por `paid_at` y no por `created_at` porque lo que interesa es
  * cuándo entró el dinero, no cuándo se abrió el carrito.
  */
 export async function ventasDelDia(
   tenantId: string,
-  desde: Date = new Date(new Date().setHours(0, 0, 0, 0)),
-  hasta: Date = new Date(new Date().setHours(23, 59, 59, 999)),
+  dia: string,
+  zona: string,
 ): Promise<VentasDelDia> {
+  const { desde, hasta } = limitesDelDia(dia, zona);
   const { data, error } = await tenantScoped("orders", tenantId)
     .select("paid_at, total, refunded_cents, order_items(name_snapshot, quantity, line_total)")
     .in("status", [...ESTADOS_COBRADOS])
     .not("paid_at", "is", null)
     .gte("paid_at", desde.toISOString())
-    .lte("paid_at", hasta.toISOString());
+    .lt("paid_at", hasta.toISOString());
   if (error) throw error;
 
   const filas = data;
@@ -75,7 +76,7 @@ export async function ventasDelDia(
     totalCents += neto;
 
     if (fila.paid_at) {
-      const hora = new Date(fila.paid_at).getHours();
+      const hora = horaEnZona(new Date(fila.paid_at), zona);
       porHora.set(hora, (porHora.get(hora) ?? 0) + neto);
     }
 

@@ -1,5 +1,5 @@
-import { getTenantSettings, paidOrdersBetween } from "@suarex/db";
-import { formatCents, summarizeDay } from "@suarex/domain";
+import { getTenantSettings, paidOrdersBetween, zonaHorariaDelTenant } from "@suarex/db";
+import { diaEnZona, formatCents, limitesDelDia, summarizeDay } from "@suarex/domain";
 import { requireManager } from "@/lib/require-manager";
 
 /**
@@ -24,22 +24,25 @@ export default async function AdminCierrePage({
   const session = await requireManager();
   const query = await searchParams;
 
-  const settings = await getTenantSettings(session.tenantId);
+  const [settings, zona] = await Promise.all([
+    getTenantSettings(session.tenantId),
+    zonaHorariaDelTenant(session.tenantId),
+  ]);
   const locale = settings?.locale ?? "es";
   const currency = settings?.currency ?? "EUR";
 
-  /* El día del negocio en SU zona, no en la del servidor. Sin esto, un cierre a las 23:00 en
-     España se calcularía sobre un día que en UTC ya cambió, y faltarían las últimas horas. */
-  const zona = "Europe/Madrid";
-  const hoy = new Intl.DateTimeFormat("en-CA", { timeZone: zona }).format(new Date());
+  /* El día del negocio en la zona de SU sede, no en la del servidor (UTC), y con el desfase real
+     de ese día: el del cambio de hora dura 23 o 25 horas (ver `limitesDelDia`). */
+  const hoy = diaEnZona(new Date(), zona);
   const dia =
     typeof query.dia === "string" && /^\d{4}-\d{2}-\d{2}$/.test(query.dia) ? query.dia : hoy;
+  const { desde, hasta } = limitesDelDia(dia, zona);
 
-  const desde = new Date(`${dia}T00:00:00+02:00`).toISOString();
-  const hasta = new Date(`${dia}T00:00:00+02:00`);
-  hasta.setDate(hasta.getDate() + 1);
-
-  const pedidos = await paidOrdersBetween(session.tenantId, desde, hasta.toISOString());
+  const pedidos = await paidOrdersBetween(
+    session.tenantId,
+    desde.toISOString(),
+    hasta.toISOString(),
+  );
   const resumen = summarizeDay(pedidos);
   const dinero = (cents: number) => formatCents(cents, locale, currency);
 
