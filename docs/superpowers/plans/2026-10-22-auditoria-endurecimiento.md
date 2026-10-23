@@ -270,7 +270,7 @@ Manuela sean **datos** en `tenant_settings.branding`.
 
 ### Tarea 2.1 — Inventario de qué diferencia a cada tema (sin código)
 
-- [ ] Leer los tres `.tsx` y los tres `.module.css`. Producir
+- [x] Leer los tres `.tsx` y los tres `.module.css`. Producir
   `docs/superpowers/specs/2026-10-22-temas-data-driven-design.md` con una tabla: para cada
   diferencia entre temas, clasificarla como **token** (color, fuente, radio, espaciado,
   imagen), **variante de layout** (p. ej. "tarjetas en rejilla vs lista", "bienvenida a
