@@ -21,5 +21,7 @@ export default defineConfig({
      * regresiones -- distingue "el WAL no había calentado" de "el código está mal".
      */
     retry: 2,
+    // ...y cuenta cuáles lo necesitaron, para que un flaky no pase en silencio.
+    reporters: ["default", "./tests/helpers/reintentos-reporter.ts"],
   },
 });

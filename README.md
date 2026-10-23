@@ -111,6 +111,17 @@ pnpm lint && pnpm typecheck && pnpm test && pnpm --filter @suarex/config test &&
 bloquea el merge (si falla, sube los logs del stack como artefacto). **Sigue siendo local**:
 `pnpm test:e2e`. Un PR no está listo con CI en verde si no ha pasado también el e2e en local.
 
+**Reintentos.** Integración (`retry: 2`) y e2e (`retries: 2`) reintentan un test que falla:
+es para el ENTORNO (Realtime frío, sockets de la impresora falsa, cold compile de Next), no
+para tapar bugs. Por eso se cuentan:
+
+- `pnpm test:integration` acaba con "N tests necesitaron reintento: …" si hubo alguno
+  (`tests/helpers/reintentos-reporter.ts`).
+- Tras `pnpm test:e2e`, `node scripts/flaky-e2e.mjs` lista los que pasaron solo al reintentar
+  (lee `test-results/e2e.json`).
+
+**Un test que aparece 3 veces en esas listas se abre como issue**: ya no es el entorno.
+
 `pnpm test` (vía Turbo) y `pnpm --filter @suarex/config test` ejecutan hoy los mismos 25
 tests unitarios de `packages/config` (es el único paquete con script `test`; Turbo solo
 corre el suyo) — están ambos porque ambos forman parte del comando de verificación de

@@ -47,6 +47,8 @@ export default defineConfig({
    * sucia. Un fallo real -- una aserción que el código incumple -- falla los tres intentos.
    */
   retries: 2,
+  // El JSON es para `scripts/flaky-e2e.mjs`: cuenta los que solo pasaron al reintentar.
+  reporter: [["list"], ["json", { outputFile: "test-results/e2e.json" }]],
   use: {
     baseURL: "http://garum.localhost:3000",
     // `*.localhost` lo resuelve el sistema a 127.0.0.1 solo, pero un DOMINIO PROPIO de
