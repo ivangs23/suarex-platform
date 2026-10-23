@@ -461,7 +461,7 @@ describe("markOrderPaid", () => {
     const pi = `pi_test_${nonce()}`;
     await admin.from("orders").update({ stripe_payment_intent_id: pi }).eq("id", order.orderId);
 
-    const outcome = await markOrderPaid(pi);
+    const outcome = await markOrderPaid(pi, order.totalCents, order.currency);
     expect(outcome).toBe("marked");
 
     const { data } = await admin
@@ -485,7 +485,7 @@ describe("markOrderPaid", () => {
     const pi = `pi_test_${nonce()}`;
     await admin.from("orders").update({ stripe_payment_intent_id: pi }).eq("id", order.orderId);
 
-    const first = await markOrderPaid(pi);
+    const first = await markOrderPaid(pi, order.totalCents, order.currency);
     expect(first).toBe("marked");
 
     const { data: afterFirst } = await admin
@@ -494,7 +494,7 @@ describe("markOrderPaid", () => {
       .eq("id", order.orderId)
       .single();
 
-    const second = await markOrderPaid(pi);
+    const second = await markOrderPaid(pi, order.totalCents, order.currency);
     expect(second).toBe("already-paid");
 
     const { data: afterSecond } = await admin
@@ -509,7 +509,7 @@ describe("markOrderPaid", () => {
   });
 
   it("devuelve order-not-found cuando ningún pedido tiene ese payment intent", async () => {
-    const outcome = await markOrderPaid(`pi_test_inexistente_${nonce()}`);
+    const outcome = await markOrderPaid(`pi_test_inexistente_${nonce()}`, 1800, "eur");
     expect(outcome).toBe("order-not-found");
   });
 });

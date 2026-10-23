@@ -303,6 +303,13 @@ export async function seedCatalog(tenantId: string, label: string): Promise<Seed
     .insert({ tenant_id: tenantId, access_key: `ak-${label}`, secret_key: `sk-${label}` });
   if (paymentError) throw paymentError;
 
+  // stripe_events lleva `tenant_id` (nulo en la ruta del entorno): una fila de este tenant para
+  // que la cobertura cross-tenant de WRITE_FIXTURES tenga contra qué operar, como las de arriba.
+  const { error: eventError } = await admin
+    .from("stripe_events")
+    .insert({ id: `evt_test_${label}_${tenantId}`, tenant_id: tenantId, type: "test.fixture" });
+  if (eventError) throw eventError;
+
   // allergens también es tenant-scoped (aparte de las 14 filas globales con tenant_id
   // NULL): cada tenant puede declarar sus propios alérgenos personalizados. Se siembra
   // aquí para que el control positivo de lectura y la cobertura de escritura cross-tenant

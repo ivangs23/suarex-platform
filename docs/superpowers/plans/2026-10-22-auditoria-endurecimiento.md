@@ -224,32 +224,37 @@ de llegar a `findTableByToken`.
 `payment_intent_id` sin comparar `amount_received` con `orders.total`, y no guardan
 `event.id` (la idempotencia se apoya en `status = 'pending'`).
 
-- [ ] Migración `supabase/migrations/20261022000001_stripe_events.sql`: tabla
+- [x] Migración `supabase/migrations/20261022000001_stripe_events.sql`: tabla
   `stripe_events (id text primary key, tenant_id uuid null, type text not null, received_at
   timestamptz not null default now())`. Sin RLS para `authenticated` ni `anon`: `revoke all`
   a ambos; solo service role escribe. Como NO lleva `tenant_id not null`, documentar en la
   propia migración por qué (es un registro técnico de plataforma, no dato de tenant) y
   comprobar que `tests/integration/tenant-isolation.test.ts` la excluye o la acepta
   (leer `helpers/policy-check.ts` antes).
-- [ ] `packages/db/src/orders.ts` → `markOrderPaid(paymentIntentId, amountCents, currency,
+- [x] `packages/db/src/orders.ts` → `markOrderPaid(paymentIntentId, amountCents, currency,
   tenantId?)`: solo pasa a `paid` si `total_cents = amountCents` y la moneda coincide; si no,
   devuelve `"amount-mismatch"` (nuevo miembro de `MarkPaidOutcome`) y NO cambia estado.
   Revisar cómo se guarda el total (`total` numérico vs céntimos) y convertir en un solo
   sitio, con test.
-- [ ] `packages/db/src/billing.ts` o fichero nuevo `stripe-events.ts`: `recordStripeEvent
+- [x] `packages/db/src/billing.ts` o fichero nuevo `stripe-events.ts`: `recordStripeEvent
   (event)` con `insert ... on conflict do nothing` y devuelve `"new" | "duplicate"`. Añadir
   la exención correspondiente en `client.ts` (tabla sin `tenant_id`), numerada y con
   docstring corto.
-- [ ] En las dos rutas de webhook: tras verificar la firma, `recordStripeEvent`; si
+- [x] En las dos rutas de webhook: tras verificar la firma, `recordStripeEvent`; si
   `duplicate`, responder 200 sin procesar. En `payment_intent.succeeded`, pasar
   `amount_received` y `currency`; si `amount-mismatch`, `log.error("stripe.importe_no_coincide",
   {...})` y responder 200 (Stripe no debe reintentar; el pedido queda `pending` y lo expira
   el cron).
-- [ ] Tests: `tests/integration/stripe-webhook.test.ts` → caso duplicado (segundo envío del
+- [x] Tests: `tests/integration/stripe-webhook.test.ts` → caso duplicado (segundo envío del
   mismo `event.id` no vuelve a tocar el pedido) y caso importe distinto (pedido sigue
   `pending`, log emitido). Hay helpers de firma ya en ese fichero: reutilizarlos.
-- [ ] Añadir `stripe_events` a la retención: `apps/web/app/api/internal/purge-orders/route.ts`
+- [x] Añadir `stripe_events` a la retención: `apps/web/app/api/internal/purge-orders/route.ts`
   borra eventos de más de 90 días.
+  Acordado con Iván: el evento se registra DESPUÉS de procesarlo con éxito (registrarlo antes
+  haría que el reintento de un fallo se descartara como duplicado); `stripe_events` entra en
+  `tenant-isolation.test.ts` con el patrón de `tenant_payment_config`. El fichero de tests no tenía
+  helpers de firma: la ruta se prueba en `apps/web/app/api/webhook/stripe/webhook.test.ts` con
+  eventos firmados de verdad y la base simulada, y la base en `stripe-webhook.test.ts`.
 
 **Aceptación:** reenviar un evento desde el dashboard de Stripe no produce efectos; un PI
 cuyo importe no cuadra no marca el pedido como pagado.

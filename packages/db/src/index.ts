@@ -162,6 +162,7 @@ export {
   reprintOrder,
 } from "./staff-orders.js";
 export { removeProductImage, uploadBrandingImage, uploadProductImage } from "./storage.js";
+export { purgeStripeEvents, recordStripeEvent, stripeEventYaProcesado } from "./stripe-events.js";
 export { findTableByToken } from "./tables.js";
 export type { UpdateTenantSettingsInput } from "./tenants.js";
 export {
