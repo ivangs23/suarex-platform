@@ -20,11 +20,7 @@ export default async function AdminAjustesPage() {
     <main>
       <h1>Ajustes del negocio</h1>
       <AjustesForm
-        name={branding.name ?? ""}
-        colors={branding.colors}
-        fonts={branding.fonts}
-        logoUrl={branding.logoUrl}
-        heroUrl={branding.heroUrl}
+        branding={branding}
         fiscal={{
           legalName: typeof fiscal.legalName === "string" ? fiscal.legalName : "",
           cif: typeof fiscal.cif === "string" ? fiscal.cif : "",

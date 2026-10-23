@@ -24,8 +24,8 @@ const ROOT_DOMAINS = resolveRootDomains(process.env);
  * `catalogo/actions.ts`): `managerAction` comprueba owner/admin ANTES del cuerpo, y el
  * `tenantId` es SIEMPRE `session.tenantId`, nunca del formulario.
  *
- * Las imágenes de marca (el logo y la foto de la pantalla de bienvenida) se suben aparte
- * (Storage, `uploadBrandingImage`) y sus URLs se fusionan en `branding`. Si el formulario no
+ * Las imágenes de marca (el logo, la foto de la pantalla de bienvenida y la textura de fondo)
+ * se suben aparte (Storage, `uploadBrandingImage`) y sus URLs se fusionan en `branding`. Si el formulario no
  * trae fichero nuevo, se PRESERVA la que ya tuviera el tenant (leída de los ajustes actuales
  * vía `parseBranding`, que degrada con seguridad) -- guardar la marca sin volver a subir la
  * foto no debe borrarla.
@@ -64,14 +64,15 @@ export const updateSettingsAction = managerAction(async (session, formData: Form
 
   const logoUrl = await subirSiViene("logo", guardado.logoUrl);
   const heroUrl = await subirSiViene("hero", guardado.heroUrl);
+  const texturaUrl = await subirSiViene("textura", guardado.background.imageUrl);
 
+  const { backgroundSizePx, ...marca } = brandingFields;
   await updateTenantSettings(session.tenantId, {
     branding: {
-      name: brandingFields.name,
-      colors: brandingFields.colors,
-      fonts: brandingFields.fonts,
+      ...marca,
       logoUrl,
       heroUrl,
+      background: { imageUrl: texturaUrl, sizePx: backgroundSizePx },
     },
     fiscal,
     locale,

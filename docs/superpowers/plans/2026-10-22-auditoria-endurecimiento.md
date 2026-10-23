@@ -282,15 +282,18 @@ Manuela sean **datos** en `tenant_settings.branding`.
 
 ### Tarea 2.2 — Extender `Branding` con tokens y variantes
 
-- [ ] `packages/config/src/branding.ts`: añadir a `Branding` un bloque `tokens` (radios,
+- [x] `packages/config/src/branding.ts`: añadir a `Branding` un bloque `tokens` (radios,
   espaciado base, sombras, `imageFit`) y un bloque `layout` con los ejes de la 2.1, cada
   uno un `z.enum`. `DEFAULT_BRANDING` = lo que hoy pinta `generic`. `parseBranding` sigue
   degradando campo a campo (un valor desconocido cae al default, nunca rompe la carta).
-- [ ] `brandingToCssVars` emite también los tokens nuevos como variables CSS.
-- [ ] `apps/web/lib/settings-action-input.ts` + formulario de `apps/web/app/admin/ajustes`:
+- [x] `brandingToCssVars` emite también los tokens nuevos como variables CSS.
+- [x] `apps/web/lib/settings-action-input.ts` + formulario de `apps/web/app/admin/ajustes`:
   exponer los campos nuevos (selects para las variantes, inputs para tokens). Solo es.
-- [ ] Tests: `packages/config/src/branding.test.ts` (parse, defaults, degradación) y
+- [x] Tests: `packages/config/src/branding.test.ts` (parse, defaults, degradación) y
   `apps/web/lib/settings-action-input.test.ts`.
+  Con las decisiones de la 2.1: rutas `/brands/`, `tagline` por idioma, `badge`, textura de
+  fondo y las fuentes como selector entre las familias cargadas. La textura y la insignia NO van
+  en `brandingToCssVars` (URL y texto libre dentro de un `<style>`): las pinta la 2.3.
 
 ### Tarea 2.3 — Un solo componente con variantes
 
