@@ -347,6 +347,27 @@ export function registrarEscaneoRpc(tableId: string) {
 }
 
 /**
+ * VIGÉSIMA EXENCIÓN DELIBERADA. `stripe_events` es un registro técnico de la plataforma: su
+ * `tenant_id` es nulo cuando el webhook (el del entorno) no sabe de quién es el evento, así que
+ * no encaja en `tenantScoped`. Acotado por firma a esa tabla y a `stripe-events.ts`
+ * (`stripeEventYaProcesado`, `recordStripeEvent`): búsqueda e inserción por `id` del evento,
+ * una fila o ninguna, nunca un barrido.
+ */
+export function stripeEventsTableForWebhook() {
+  return serviceClient().from("stripe_events");
+}
+
+/**
+ * VIGESIMOPRIMERA EXENCIÓN DELIBERADA, hermana de la anterior y separada de ella porque esta SÍ
+ * barre: borra los eventos de más de 90 días de todos los negocios. Es retención, mantenimiento
+ * de la plataforma, misma naturaleza que `purgeOrderPersonalDataRpc`. Acotado por firma a
+ * `purgeStripeEvents` (`src/stripe-events.ts`), que lo llama el cron de `purge-orders`.
+ */
+export function stripeEventsTableForRetention() {
+  return serviceClient().from("stripe_events");
+}
+
+/**
  * QUINTA EXENCIÓN DELIBERADA, mismo razonamiento que `ordersTableForPaymentResolution`:
  * el emparejamiento de un dispositivo se busca por `pairing_code` (índice único parcial
  * `devices_pairing_code_idx`, ver la migración), y en ese momento el llamante todavía no

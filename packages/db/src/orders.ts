@@ -1,5 +1,6 @@
 import {
   centsToEuros,
+  cobroCuadraConPedido,
   computeTotals,
   eurosToCents,
   lineTotal,
@@ -430,7 +431,7 @@ export async function cancelOrphanedPendingOrder(tenantId: string, orderId: stri
 }
 
 /**
- * Tres resultados, no dos, porque conflar los tres tiraría una señal que vale
+ * Cuatro resultados, no dos, porque conflar los cuatro tiraría una señal que vale
  * la pena conservar:
  *   - "marked": el pedido existía en `pending` y se acaba de marcar pagado.
  *   - "already-paid": el pedido existe pero ya no estaba `pending` (webhook
@@ -439,25 +440,29 @@ export async function cancelOrphanedPendingOrder(tenantId: string, orderId: stri
  *     Esto NO es inofensivo: implica un cobro sin pedido asociado en este
  *     sistema, un webhook apuntando al entorno equivocado, o alguien
  *     sondeando el endpoint.
+ *   - "amount-mismatch": el pedido está `pending` pero el cobro no es su total (o
+ *     no es su moneda). El PaymentIntent se crea con el importe exacto, así que esto
+ *     es un fallo o una manipulación: el pedido NO pasa a pagado y lo expira el cron.
  */
-export type MarkPaidOutcome = "marked" | "already-paid" | "order-not-found";
+export type MarkPaidOutcome = "marked" | "already-paid" | "order-not-found" | "amount-mismatch";
 
 /**
- * Idempotente por construcción: el UPDATE lleva `.eq("status", "pending")`, así
- * que una segunda llamada no encuentra filas que actualizar (0 filas afectadas)
- * y `paid_at` conserva el instante del primer cobro. El resultado del UPDATE
- * (filas realmente afectadas) es lo que decide "marked", no una lectura previa
- * del estado -- así, ante dos webhooks concurrentes para el mismo
- * paymentIntentId, como mucho uno de los dos ve "marked" y el otro cae al
- * SELECT de abajo y ve "already-paid", nunca los dos "marked".
+ * Lee el pedido por su PaymentIntent, comprueba que el cobro cuadra con su total
+ * (`cobroCuadraConPedido`, la única conversión céntimos/euros de este camino) y solo
+ * entonces lo marca pagado.
  *
- * Solo si el UPDATE no afectó ninguna fila hace falta un SELECT adicional para
- * distinguir "already-paid" (la fila existe, pero no estaba pending) de
- * "order-not-found" (no existe ninguna fila con ese payment intent) -- un
- * único UPDATE no puede por sí mismo distinguir esos dos casos.
+ * Idempotente por construcción: el UPDATE lleva `.eq("status", "pending")`, así
+ * que una segunda llamada no encuentra filas que actualizar y `paid_at` conserva el
+ * instante del primer cobro. Lo que decide "marked" es el resultado del UPDATE, no la
+ * lectura previa: ante dos webhooks concurrentes para el mismo PaymentIntent, como
+ * mucho uno ve "marked" y el otro "already-paid", nunca los dos "marked".
  */
 export async function markOrderPaid(
   paymentIntentId: string,
+  /** Lo cobrado de verdad (`amount_received`), en céntimos. */
+  amountCents: number,
+  /** Moneda del cobro, tal cual la manda Stripe (`eur`). */
+  currency: string,
   /**
    * Acota la marca al negocio dueño del webhook que trae el evento.
    *
@@ -471,25 +476,31 @@ export async function markOrderPaid(
   /* El filtro se añade encadenando sobre el mismo builder en vez de con un ayudante genérico:
      los tipos de postgrest son demasiado profundos para envolverlos sin que `tsc` se rinda
      (TS2589), y esto se lee igual de bien. */
-  let update = ordersTableForPaymentResolution()
-    .update({ status: "paid", paid_at: new Date().toISOString() })
-    .eq("stripe_payment_intent_id", paymentIntentId)
-    .eq("status", "pending");
-  if (tenantId) update = update.eq("tenant_id", tenantId);
-
-  const { data: updated, error: updateError } = await update.select("id");
-  if (updateError) throw updateError;
-  if ((updated ?? []).length > 0) return "marked";
-
   let lookup = ordersTableForPaymentResolution()
-    .select("id")
+    .select("id, status, total, currency")
     .eq("stripe_payment_intent_id", paymentIntentId);
   if (tenantId) lookup = lookup.eq("tenant_id", tenantId);
 
-  const { data: existing, error: selectError } = await lookup.maybeSingle();
+  const { data: pedido, error: selectError } = await lookup.maybeSingle();
   if (selectError) throw selectError;
+  if (!pedido) return "order-not-found";
+  if (pedido.status !== "pending") return "already-paid";
+  if (
+    !cobroCuadraConPedido(
+      { totalEuros: Number(pedido.total), currency: pedido.currency },
+      { amountCents, currency },
+    )
+  ) {
+    return "amount-mismatch";
+  }
 
-  return existing ? "already-paid" : "order-not-found";
+  const { data: updated, error: updateError } = await ordersTableForPaymentResolution()
+    .update({ status: "paid", paid_at: new Date().toISOString() })
+    .eq("id", pedido.id)
+    .eq("status", "pending")
+    .select("id");
+  if (updateError) throw updateError;
+  return updated.length > 0 ? "marked" : "already-paid";
 }
 
 export async function getOrderByPublicToken(publicToken: string): Promise<OrderStatus | null> {

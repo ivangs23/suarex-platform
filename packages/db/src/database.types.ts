@@ -765,6 +765,35 @@ export type Database = {
         }
         Relationships: []
       }
+      stripe_events: {
+        Row: {
+          id: string
+          received_at: string
+          tenant_id: string | null
+          type: string
+        }
+        Insert: {
+          id: string
+          received_at?: string
+          tenant_id?: string | null
+          type: string
+        }
+        Update: {
+          id?: string
+          received_at?: string
+          tenant_id?: string | null
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stripe_events_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tables: {
         Row: {
           created_at: string

@@ -1,4 +1,4 @@
-import { purgeOrderPersonalData } from "@suarex/db";
+import { purgeOrderPersonalData, purgeStripeEvents } from "@suarex/db";
 import { cronRoute } from "@/lib/cron-route";
 
 /**
@@ -6,14 +6,15 @@ import { cronRoute } from "@/lib/cron-route";
  *
  * Ejecuta los plazos que la política de privacidad publicada promete (90 días las notas, 24
  * meses el pedido). Lo dispara el cron del SISTEMA, igual que `expire-orders` y por el mismo
- * motivo: no se puede depender de pg_cron en el Supabase autoalojado.
+ * motivo: no se puede depender de pg_cron en el Supabase autoalojado. De paso borra los eventos
+ * de Stripe de más de 90 días (`stripe_events`): pasado ese plazo no protegen de ningún reintento.
  *
  * NO es un endpoint público: borra datos de forma irreversible. Se protege con el secreto
  * compartido (`CRON_SECRET`) y FALLA CERRADO -- sin secreto responde 503 y no borra nada.
  */
 export const runtime = "nodejs";
 
-export const POST = cronRoute(
-  "cron.purge_orders_fallo",
-  async () => await purgeOrderPersonalData(),
-);
+export const POST = cronRoute("cron.purge_orders_fallo", async () => ({
+  ...(await purgeOrderPersonalData()),
+  eventosStripeBorrados: await purgeStripeEvents(),
+}));

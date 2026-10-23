@@ -499,7 +499,7 @@ describe("unprintedPaidOrders — seam: estaciones resueltas ANTES del pago (rev
     await markStationDone(tenant.tenantId, order.orderId, "cocina");
     await markStationDone(tenant.tenantId, order.orderId, "barra");
 
-    const outcome = await markOrderPaid(paymentIntentId);
+    const outcome = await markOrderPaid(paymentIntentId, order.totalCents, order.currency);
     expect(outcome).toBe("marked");
 
     // Control: el pedido de verdad saltó pending -> served, nunca se quedó en `paid`, y

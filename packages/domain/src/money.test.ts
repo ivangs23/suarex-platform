@@ -1,5 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { centsToEuros, eurosToCents, formatCents } from "./money.js";
+import { centsToEuros, cobroCuadraConPedido, eurosToCents, formatCents } from "./money.js";
+
+describe("cobroCuadraConPedido", () => {
+  const pedido = { totalEuros: 4.35, currency: "EUR" };
+
+  it("cuadra con el importe exacto, aunque Stripe mande la moneda en minúsculas", () => {
+    // 4.35 € son 435 céntimos, no 434: la conversión tiene que redondear.
+    expect(cobroCuadraConPedido(pedido, { amountCents: 435, currency: "eur" })).toBe(true);
+  });
+
+  it("no cuadra con un céntimo de diferencia ni con otra moneda", () => {
+    expect(cobroCuadraConPedido(pedido, { amountCents: 434, currency: "eur" })).toBe(false);
+    expect(cobroCuadraConPedido(pedido, { amountCents: 436, currency: "eur" })).toBe(false);
+    expect(cobroCuadraConPedido(pedido, { amountCents: 435, currency: "usd" })).toBe(false);
+  });
+});
 
 describe("eurosToCents", () => {
   it("convierte sin errores de coma flotante", () => {

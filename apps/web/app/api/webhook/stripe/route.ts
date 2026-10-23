@@ -1,4 +1,10 @@
-import { markOrderDisputed, markOrderPaid, markOrderRefunded } from "@suarex/db";
+import {
+  markOrderDisputed,
+  markOrderPaid,
+  markOrderRefunded,
+  recordStripeEvent,
+  stripeEventYaProcesado,
+} from "@suarex/db";
 import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { log } from "@/lib/log";
@@ -36,17 +42,36 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Firma inválida" }, { status: 400 });
   }
 
+  // Reentrega de un evento ya procesado: no se repite. Se REGISTRA al final, solo si todo fue
+  // bien (ver `stripe-events.ts`): registrarlo antes descartaría el reintento de un fallo.
+  if (await stripeEventYaProcesado(event.id)) {
+    return NextResponse.json({ received: true, duplicate: true });
+  }
+
   if (event.type === "payment_intent.succeeded") {
     const paymentIntent = event.data.object as Stripe.PaymentIntent;
-    const outcome = await markOrderPaid(paymentIntent.id);
+    const outcome = await markOrderPaid(
+      paymentIntent.id,
+      paymentIntent.amount_received,
+      paymentIntent.currency,
+    );
 
-    // Se responde 200 en los tres casos: devolver un error haría que Stripe
+    // Se responde 200 en todos los casos: devolver un error haría que Stripe
     // reintentara indefinidamente algo que no va a cambiar. Pero un pedido
     // inexistente no es benigno -- significa que se cobró algo de lo que este
     // sistema no tiene registro, o que el webhook apunta al entorno equivocado --
     // así que se registra de forma distinguible.
     if (outcome === "order-not-found") {
       log.error("stripe.cobro_sin_pedido", { paymentIntentId: paymentIntent.id });
+    }
+    // Un cobro que no es el total del pedido: el pedido NO se da por pagado (lo expira el cron)
+    // y el dinero cobrado hay que devolverlo a mano. Es un fallo o una manipulación.
+    if (outcome === "amount-mismatch") {
+      log.error("stripe.importe_no_coincide", {
+        paymentIntentId: paymentIntent.id,
+        amountReceived: paymentIntent.amount_received,
+        currency: paymentIntent.currency,
+      });
     }
   }
 
@@ -93,5 +118,7 @@ export async function POST(request: Request) {
     if (paymentIntentId) await markOrderDisputed(paymentIntentId);
   }
 
+  // La ruta del entorno no sabe de qué negocio es el evento.
+  await recordStripeEvent(event, null);
   return NextResponse.json({ received: true });
 }

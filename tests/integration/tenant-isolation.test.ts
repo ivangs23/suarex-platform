@@ -28,7 +28,12 @@ const SHARED_READ_TABLES = new Set(["allergens"]);
  * Se declara aquí en vez de excluir la tabla del descubrimiento: así, si alguien volviera a
  * conceder el privilegio, este test la volvería a exigir aislada en vez de dejar de mirarla.
  */
-const NO_AUTHENTICATED_ACCESS = new Set(["tenant_payment_config", "tenant_stripe_config"]);
+const NO_AUTHENTICATED_ACCESS = new Set([
+  "tenant_payment_config",
+  "tenant_stripe_config",
+  // Registro técnico de los webhooks de Stripe (20261022000001): solo lo toca el service role.
+  "stripe_events",
+]);
 
 /** Denegación de privilegio a nivel de GRANT (no de RLS): Postgres responde 42501 antes de que
  *  ninguna policy llegue a evaluarse. */
@@ -167,6 +172,19 @@ const WRITE_FIXTURES: Record<string, WriteFixture> = {
     expectedInsertRejection: RLS_REJECTION,
     updateColumn: "publishable_key",
     updateValue: "pk_pisada",
+    expectedUpdateRejection: RLS_REJECTION,
+  },
+  /* Eventos de Stripe procesados: mismo razonamiento -- `authenticated` no tiene privilegio
+     ninguno, los rechazos vienen del GRANT. */
+  stripe_events: {
+    insertPayload: ({ tenantB }) => ({
+      id: `evt_intruso_${tenantB.tenantId}`,
+      tenant_id: tenantB.tenantId,
+      type: "payment_intent.succeeded",
+    }),
+    expectedInsertRejection: RLS_REJECTION,
+    updateColumn: "type",
+    updateValue: "pisado",
     expectedUpdateRejection: RLS_REJECTION,
   },
   products: {

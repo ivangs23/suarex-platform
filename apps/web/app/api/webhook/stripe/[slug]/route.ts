@@ -1,6 +1,13 @@
-import { findTenantBySlug, getStripeCredentials, markOrderPaid } from "@suarex/db";
+import {
+  findTenantBySlug,
+  getStripeCredentials,
+  markOrderPaid,
+  recordStripeEvent,
+  stripeEventYaProcesado,
+} from "@suarex/db";
 import { NextResponse } from "next/server";
 import type Stripe from "stripe";
+import { log } from "@/lib/log";
 import { stripeClientWithKey } from "@/lib/stripe";
 
 // `constructEvent` usa criptografía de Node; el runtime edge no sirve aquí.
@@ -56,17 +63,37 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
     return NextResponse.json({ error: "Firma inválida" }, { status: 400 });
   }
 
+  // Reentrega de un evento ya procesado: no se repite. Se REGISTRA al final, solo si todo fue
+  // bien (ver `stripe-events.ts`): registrarlo antes descartaría el reintento de un fallo.
+  if (await stripeEventYaProcesado(event.id)) {
+    return NextResponse.json({ received: true, duplicate: true });
+  }
+
+  let outcome: Awaited<ReturnType<typeof markOrderPaid>> | undefined;
   if (event.type === "payment_intent.succeeded") {
     const paymentIntent = event.data.object as Stripe.PaymentIntent;
     /* Acotado al negocio dueño de ESTE webhook. Un id de PaymentIntent solo existe dentro de la
        cuenta que lo creó, así que la colisión es teórica -- pero aquí se sabe de quién es el
        evento, y no usar ese dato sería tirar gratis una capa de aislamiento. */
-    const outcome = await markOrderPaid(paymentIntent.id, tenant.id);
-
-    // 200 en los tres desenlaces: un error haría que Stripe reintentara un evento que ya está
-    // resuelto (o que no le corresponde a nadie), y eso solo genera ruido, no arregla nada.
-    return NextResponse.json({ received: true, outcome });
+    outcome = await markOrderPaid(
+      paymentIntent.id,
+      paymentIntent.amount_received,
+      paymentIntent.currency,
+      tenant.id,
+    );
+    // Mismo criterio que la ruta del entorno: el pedido no se da por pagado y se avisa.
+    if (outcome === "amount-mismatch") {
+      log.error("stripe.importe_no_coincide", {
+        tenantId: tenant.id,
+        paymentIntentId: paymentIntent.id,
+        amountReceived: paymentIntent.amount_received,
+        currency: paymentIntent.currency,
+      });
+    }
   }
 
-  return NextResponse.json({ received: true });
+  // 200 en todos los desenlaces: un error haría que Stripe reintentara un evento que ya está
+  // resuelto (o que no le corresponde a nadie), y eso solo genera ruido, no arregla nada.
+  await recordStripeEvent(event, tenant.id);
+  return NextResponse.json(outcome ? { received: true, outcome } : { received: true });
 }
