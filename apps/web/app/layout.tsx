@@ -1,7 +1,7 @@
 import { brandingToCssVars, parseBranding } from "@suarex/config";
-import { getTenantSettings } from "@suarex/db";
 import { Inter, Playfair_Display } from "next/font/google";
 import type { ReactNode } from "react";
+import { settingsDeLaCarta } from "@/lib/carta-cache";
 import { requireTenant } from "@/lib/tenant-context";
 import "./globals.css";
 
@@ -53,7 +53,9 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   // wrong. Letting it degrade to default branding instead is deliberate and
   // bounded: it only ever masks *branding*, never which tenant is served
   // (`data-tenant` below still reflects the real, already-resolved tenant).
-  const settings = tenant ? await getTenantSettings(tenant.id).catch(() => null) : null;
+  // Los mismos ajustes cacheados que lee la carta: una sola lectura entre los dos, y la
+  // misma invalidación al guardar en el panel.
+  const settings = tenant ? await settingsDeLaCarta(tenant.id).catch(() => null) : null;
   const branding = parseBranding(settings?.branding);
 
   return (

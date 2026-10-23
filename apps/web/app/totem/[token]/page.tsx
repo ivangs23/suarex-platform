@@ -1,12 +1,7 @@
 import { hasChannel, parseBranding } from "@suarex/config";
-import {
-  findDeviceByTotemToken,
-  getCategories,
-  getProducts,
-  getTenantSettings,
-  listAssignableAllergens,
-} from "@suarex/db";
+import { findDeviceByTotemToken } from "@suarex/db";
 import { notFound } from "next/navigation";
+import { leerCarta, settingsDeLaCarta } from "@/lib/carta-cache";
 import { availableLangs, LANG_LABELS, resolveLang, strings } from "@/lib/i18n";
 import { requireTenant } from "@/lib/tenant-context";
 import { buildMenuView } from "../../[mesa]/menu-view";
@@ -49,11 +44,10 @@ export default async function TotemPage({
     notFound();
   }
 
-  const [categories, products, settings, allergens] = await Promise.all([
-    getCategories(entry.tenantId),
-    getProducts(entry.tenantId),
-    getTenantSettings(entry.tenantId).catch(() => null),
-    listAssignableAllergens(entry.tenantId),
+  // La misma caché que la carta por QR (`lib/carta-cache.ts`), y la misma invalidación.
+  const [{ categories, products, allergens }, settings] = await Promise.all([
+    leerCarta(entry.tenantId),
+    settingsDeLaCarta(entry.tenantId).catch(() => null),
   ]);
 
   /* El canal tiene que estar ENCENDIDO para este cliente (#22). Un dispositivo con rol kiosko no

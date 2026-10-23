@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { revalidarCarta } from "./carta-cache.js";
 
 const rawUrl = process.env.SUPABASE_URL;
 const rawServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -162,6 +163,7 @@ export async function withChannels(
       .update({ channels: valor })
       .eq("tenant_id", tenantId);
     if (error) throw error;
+    await revalidarCarta(tenantId);
   };
 
   await set(channels);

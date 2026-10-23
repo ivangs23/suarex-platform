@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { defineConfig } from "@playwright/test";
 import dotenv from "dotenv";
 
@@ -11,6 +12,11 @@ import dotenv from "dotenv";
 // (ver `runner/index.js`, `fork(..., { env: { ...process.env, ... } })`), así
 // que fijarlo aquí, antes de `defineConfig`, basta para que los tests lo vean.
 dotenv.config({ path: ".env.test" });
+
+// Secreto de usar y tirar para `/api/internal/*` en el dev server de la suite: lo heredan el
+// `webServer` (que arranca con `process.env`) y los workers. Los helpers que escriben la base
+// directamente lo usan para invalidar la carta cacheada (`helpers/carta-cache.ts`).
+process.env.CRON_SECRET ??= `e2e-${randomUUID()}`;
 
 export default defineConfig({
   testDir: "tests/e2e",

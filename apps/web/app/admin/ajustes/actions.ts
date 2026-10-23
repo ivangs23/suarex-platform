@@ -8,6 +8,7 @@ import {
   uploadBrandingImage,
 } from "@suarex/db";
 import { revalidatePath } from "next/cache";
+import { invalidarCarta } from "@/lib/carta-cache";
 import { managerAction } from "@/lib/require-manager";
 import {
   parseBrandingFields,
@@ -79,6 +80,9 @@ export const updateSettingsAction = managerAction(async (session, formData: Form
     currency,
     channels,
   });
+  // Marca, canales e idioma son de la carta y del layout (cacheados): invalidar YA, antes del
+  // dominio, que puede fallar y no debe dejar la carta con los ajustes viejos.
+  invalidarCarta(session.tenantId);
 
   // El dominio propio vive en `tenants`, no en `tenant_settings`: escritura aparte. Va
   // DESPUÉS de los ajustes a propósito -- es la única que puede fallar por un conflicto con
@@ -86,7 +90,5 @@ export const updateSettingsAction = managerAction(async (session, formData: Form
   // formulario, que ya quedó guardado.
   await setTenantCustomDomain(session.tenantId, customDomain);
 
-  // La marca vive en el layout raíz (CSS vars) y el nombre en la carta: revalidar todo.
   revalidatePath("/admin/ajustes");
-  revalidatePath("/", "layout");
 });

@@ -36,6 +36,14 @@ test("la purga de datos personales tampoco está abierta", async ({ request }) =
   expect(sinAuth.status()).not.toBe(200);
 });
 
+test("invalidar la carta cacheada tampoco está abierto", async ({ request }) => {
+  // No destruye nada, pero abierto serviría para vaciar la caché de todos a voluntad.
+  const sinAuth = await request.post(`${BASE}/api/internal/revalidar-carta`, {
+    data: { tenantId: "11111111-1111-1111-1111-111111111111" },
+  });
+  expect([401, 503]).toContain(sinAuth.status());
+});
+
 test("el barrido de salud de dispositivos tampoco está abierto", async ({ request }) => {
   // Escribe en `devices` de todos los tenants: no puede responder 200 sin credencial.
   const sinAuth = await request.post(`${BASE}/api/internal/device-health`);

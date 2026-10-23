@@ -98,6 +98,11 @@ test("un owner crea una categoría y un producto (con imagen), y aparecen en la 
 }) => {
   await login(page, "owner@garum.local", OWNER_PASSWORD as string);
 
+  // La carta está cacheada por tenant: cargarla ANTES de crear nada deja la caché caliente, y
+  // así ver luego lo nuevo prueba que el panel la invalida, no que estaba fría.
+  await page.goto("http://garum.localhost:3000/1?ver=carta");
+  await expect(page.getByTestId("category").first()).toBeVisible();
+
   await page.goto("http://garum.localhost:3000/admin/catalogo");
   await expect(page).toHaveURL("http://garum.localhost:3000/admin/catalogo");
   await expect(page.locator("h1")).toHaveText("Catálogo");

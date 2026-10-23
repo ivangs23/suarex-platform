@@ -21,6 +21,7 @@ import {
   uploadProductImage,
 } from "@suarex/db";
 import { revalidatePath } from "next/cache";
+import { invalidarCarta } from "@/lib/carta-cache";
 import { parseAllergenId, parseAvailability, parseFranja } from "@/lib/catalog-action-input";
 import { wouldCreateCycle } from "@/lib/category-move";
 import {
@@ -65,6 +66,15 @@ import { managerAction } from "@/lib/require-manager";
  * `parseAllergenIds` siguen locales a este fichero: son reglas de negocio del dominio de
  * catálogo, no parsers genéricos de `FormData`.
  */
+
+/**
+ * Tras CUALQUIER escritura del catálogo: el panel y la carta de este cliente (QR y totem, que
+ * están cacheadas por tenant). Una sola función para que ninguna acción pueda olvidar la carta.
+ */
+function refrescar(tenantId: string): void {
+  revalidatePath("/admin/catalogo");
+  invalidarCarta(tenantId);
+}
 
 function parseDestination(formData: FormData): "cocina" | "barra" | undefined {
   const raw = formData.get("destination");
@@ -190,7 +200,7 @@ export const createCategoryAction = managerAction(async (session, formData: Form
     destination: parseDestination(formData),
     taxRate: parseTaxRate(formData),
   });
-  revalidatePath("/admin/catalogo");
+  refrescar(session.tenantId);
 });
 
 export const updateCategoryAction = managerAction(async (session, formData: FormData) => {
@@ -209,7 +219,7 @@ export const updateCategoryAction = managerAction(async (session, formData: Form
     visibleDesde: franja?.visibleDesde,
     visibleHasta: franja?.visibleHasta,
   });
-  revalidatePath("/admin/catalogo");
+  refrescar(session.tenantId);
 });
 
 /**
@@ -238,8 +248,7 @@ export const moveCategoryAction = managerAction(async (session, formData: FormDa
     parentId: nuevoPadre,
     sortOrder: parseOptionalInt(formData, "sort_order"),
   });
-  revalidatePath("/admin/catalogo");
-  revalidatePath("/", "layout");
+  refrescar(session.tenantId);
 });
 
 /** Mueve un producto a otra categoría y/o cambia su orden dentro de ella. */
@@ -249,15 +258,14 @@ export const moveProductAction = managerAction(async (session, formData: FormDat
     categoryId: optionalString(formData, "category_id"),
     sortOrder: parseOptionalInt(formData, "sort_order"),
   });
-  revalidatePath("/admin/catalogo");
-  revalidatePath("/", "layout");
+  refrescar(session.tenantId);
 });
 
 export const deleteCategoryAction = managerAction(async (session, formData: FormData) => {
   const categoryId = requiredString(formData, "category_id");
 
   await deleteCategory(session.tenantId, categoryId);
-  revalidatePath("/admin/catalogo");
+  refrescar(session.tenantId);
 });
 
 // ---------------------------------------------------------------- productos
@@ -278,7 +286,7 @@ export const createProductAction = managerAction(async (session, formData: FormD
     allergenIds: parseAllergenIds(formData),
     taxRate: parseTaxRate(formData),
   });
-  revalidatePath("/admin/catalogo");
+  refrescar(session.tenantId);
 });
 
 export const updateProductAction = managerAction(async (session, formData: FormData) => {
@@ -303,14 +311,14 @@ export const updateProductAction = managerAction(async (session, formData: FormD
     allergenIds: parseAllergenIds(formData),
     taxRate: parseTaxRate(formData),
   });
-  revalidatePath("/admin/catalogo");
+  refrescar(session.tenantId);
 });
 
 export const deleteProductAction = managerAction(async (session, formData: FormData) => {
   const productId = requiredString(formData, "product_id");
 
   await deleteProduct(session.tenantId, productId);
-  revalidatePath("/admin/catalogo");
+  refrescar(session.tenantId);
 });
 
 export const setProductAvailabilityAction = managerAction(async (session, formData: FormData) => {
@@ -318,7 +326,7 @@ export const setProductAvailabilityAction = managerAction(async (session, formDa
   const isAvailable = parseAvailability(requiredString(formData, "is_available"));
 
   await setProductAvailability(session.tenantId, productId, isAvailable);
-  revalidatePath("/admin/catalogo");
+  refrescar(session.tenantId);
 });
 
 /**
@@ -329,14 +337,14 @@ export const setProductAvailabilityAction = managerAction(async (session, formDa
 export const marcarAgotadoHoyAction = managerAction(async (session, formData: FormData) => {
   const productId = requiredString(formData, "product_id");
   await marcarAgotadoHoy(session.tenantId, productId);
-  revalidatePath("/admin/catalogo");
+  refrescar(session.tenantId);
 });
 
 /** Llegó género antes de lo previsto: devuelve el producto a la carta sin esperar a mañana. */
 export const reponerProductoAction = managerAction(async (session, formData: FormData) => {
   const productId = requiredString(formData, "product_id");
   await reponerProducto(session.tenantId, productId);
-  revalidatePath("/admin/catalogo");
+  refrescar(session.tenantId);
 });
 
 // ---------------------------------------------------------------- extras
@@ -350,14 +358,14 @@ export const createExtraAction = managerAction(async (session, formData: FormDat
   const groupId = optionalString(formData, "group_id") ?? null;
 
   await createExtra(session.tenantId, { productId, nameI18n: { es: nameEs }, price, groupId });
-  revalidatePath("/admin/catalogo");
+  refrescar(session.tenantId);
 });
 
 export const deleteExtraAction = managerAction(async (session, formData: FormData) => {
   const extraId = requiredString(formData, "extra_id");
 
   await deleteExtra(session.tenantId, extraId);
-  revalidatePath("/admin/catalogo");
+  refrescar(session.tenantId);
 });
 
 // ------------------------------------------------- grupos de opciones (modificadores, #16)
@@ -389,14 +397,14 @@ export const createOptionGroupAction = managerAction(async (session, formData: F
     maxSelect: parseLimite(formData, "max_select"),
     sortOrder: parseOptionalInt(formData, "sort_order") ?? 0,
   });
-  revalidatePath("/admin/catalogo");
+  refrescar(session.tenantId);
 });
 
 export const deleteOptionGroupAction = managerAction(async (session, formData: FormData) => {
   const groupId = requiredString(formData, "group_id");
 
   await deleteOptionGroup(session.tenantId, groupId);
-  revalidatePath("/admin/catalogo");
+  refrescar(session.tenantId);
 });
 
 // ---------------------------------------------------------------- alérgenos del tenant
@@ -406,12 +414,12 @@ export const createTenantAllergenAction = managerAction(async (session, formData
   const icon = optionalString(formData, "icon");
 
   await createTenantAllergen(session.tenantId, { nameI18n: { es: nameEs }, icon });
-  revalidatePath("/admin/catalogo");
+  refrescar(session.tenantId);
 });
 
 export const deleteTenantAllergenAction = managerAction(async (session, formData: FormData) => {
   const allergenId = parseAllergenId(requiredString(formData, "allergen_id"));
 
   await deleteTenantAllergen(session.tenantId, allergenId);
-  revalidatePath("/admin/catalogo");
+  refrescar(session.tenantId);
 });

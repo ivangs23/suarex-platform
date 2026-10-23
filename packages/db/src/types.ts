@@ -91,6 +91,9 @@ export type Product = {
   optionGroups: ProductOptionGroup[];
 };
 
+/** Producto de la carta con su hora de vuelta si está agotado hoy (`null` si no lo está). */
+export type ProductoCarta = Product & { unavailableUntil: string | null };
+
 export type TableRow = {
   id: string;
   tenantId: string;
