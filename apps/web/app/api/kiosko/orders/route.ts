@@ -6,6 +6,7 @@ import {
   OrderCartError,
 } from "@suarex/db";
 import { NextResponse } from "next/server";
+import { kioskoOrderSchema, parseJsonBody } from "@/lib/api-input";
 
 // Alta de pedido del canal KIOSKO (totem). Hermana de `/api/orders` (canal QR), pero:
 //  - La autoridad NO es la cookie de mesa, sino el `totem_token` del dispositivo (el totem lo
@@ -24,15 +25,10 @@ function parseTableLabel(raw: unknown): string | null | "invalid" {
 }
 
 export async function POST(request: Request) {
-  const body = (await request.json()) as {
-    token?: string;
-    tableLabel?: string | null;
-    lines?: { productId: string; quantity: number; extraIds: string[]; notes: string | null }[];
-  };
+  const parsed = await parseJsonBody(request, kioskoOrderSchema);
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.data;
 
-  if (!body.token || !Array.isArray(body.lines) || body.lines.length === 0) {
-    return NextResponse.json({ error: "Petición inválida" }, { status: 400 });
-  }
   const tableLabel = parseTableLabel(body.tableLabel);
   if (tableLabel === "invalid") {
     return NextResponse.json({ error: "Número de mesa inválido (1–100)" }, { status: 400 });

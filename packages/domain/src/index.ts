@@ -1,5 +1,11 @@
 export type { ChannelTotal, DailySummary, SummaryLine, SummaryOrder } from "./daily-summary.js";
 export { summarizeDay } from "./daily-summary.js";
+export {
+  MAX_CANTIDAD_LINEA,
+  MAX_EXTRAS_LINEA,
+  MAX_LINEAS_PEDIDO,
+  MAX_NOTAS_LINEA,
+} from "./limites-pedido.js";
 export type { Cents } from "./money.js";
 export { centsToEuros, eurosToCents, formatCents } from "./money.js";
 export type { OptionGroup, OptionViolation } from "./option-groups.js";

@@ -3,6 +3,10 @@ import {
   computeTotals,
   eurosToCents,
   lineTotal,
+  MAX_CANTIDAD_LINEA,
+  MAX_EXTRAS_LINEA,
+  MAX_LINEAS_PEDIDO,
+  MAX_NOTAS_LINEA,
   type OptionGroup,
   type PricedLine,
   validateOptionGroups,
@@ -81,9 +85,24 @@ export async function createPendingOrder(input: {
   taxRate: number;
 }): Promise<{ orderId: string; publicToken: string; totalCents: number; currency: string }> {
   if (input.lines.length === 0) throw new OrderCartError("El pedido no tiene líneas");
+  // Los mismos límites que el borde de la API (`@suarex/domain`): la ruta valida la forma, pero
+  // esta función también la llaman otros caminos y no puede fiarse de que alguien lo hiciera.
+  if (input.lines.length > MAX_LINEAS_PEDIDO) {
+    throw new OrderCartError(`Demasiadas líneas (máximo ${MAX_LINEAS_PEDIDO})`);
+  }
   for (const line of input.lines) {
-    if (!Number.isInteger(line.quantity) || line.quantity <= 0) {
+    if (
+      !Number.isInteger(line.quantity) ||
+      line.quantity <= 0 ||
+      line.quantity > MAX_CANTIDAD_LINEA
+    ) {
       throw new OrderCartError(`Cantidad inválida: ${line.quantity}`);
+    }
+    if (line.extraIds.length > MAX_EXTRAS_LINEA) {
+      throw new OrderCartError(`Demasiadas opciones en una línea (máximo ${MAX_EXTRAS_LINEA})`);
+    }
+    if (line.notes !== null && line.notes.length > MAX_NOTAS_LINEA) {
+      throw new OrderCartError(`Nota demasiado larga (máximo ${MAX_NOTAS_LINEA} caracteres)`);
     }
   }
 

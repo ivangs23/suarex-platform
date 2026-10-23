@@ -1,6 +1,6 @@
 "use client";
 
-import { formatCents } from "@suarex/domain";
+import { formatCents, MAX_CANTIDAD_LINEA } from "@suarex/domain";
 import {
   createContext,
   type ReactNode,
@@ -194,7 +194,8 @@ export function CartProvider({
   const addLine = useCallback<CartState["addLine"]>((product, opciones) => {
     const extraIds = opciones?.extraIds ?? [];
     const notes = opciones?.notes?.trim() ? opciones.notes.trim() : null;
-    const quantity = Math.max(1, opciones?.quantity ?? 1);
+    // Tope en el carrito, el mismo que exige el servidor: pasarse daría un rechazo genérico.
+    const quantity = Math.min(MAX_CANTIDAD_LINEA, Math.max(1, opciones?.quantity ?? 1));
 
     setLines((actual) => {
       // Dos veces lo MISMO (mismas extras, misma nota) se agrupa en una línea con más
@@ -209,7 +210,9 @@ export function CartProvider({
       );
       if (igual) {
         return actual.map((line) =>
-          line.id === igual.id ? { ...line, quantity: line.quantity + quantity } : line,
+          line.id === igual.id
+            ? { ...line, quantity: Math.min(MAX_CANTIDAD_LINEA, line.quantity + quantity) }
+            : line,
         );
       }
 
@@ -233,7 +236,11 @@ export function CartProvider({
     setLines((actual) =>
       quantity <= 0
         ? actual.filter((line) => line.id !== lineId)
-        : actual.map((line) => (line.id === lineId ? { ...line, quantity } : line)),
+        : actual.map((line) =>
+            line.id === lineId
+              ? { ...line, quantity: Math.min(MAX_CANTIDAD_LINEA, quantity) }
+              : line,
+          ),
     );
   }, []);
 

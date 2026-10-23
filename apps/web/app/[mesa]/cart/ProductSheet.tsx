@@ -1,6 +1,6 @@
 "use client";
 
-import { isSelectionComplete } from "@suarex/domain";
+import { isSelectionComplete, MAX_CANTIDAD_LINEA } from "@suarex/domain";
 import { useId, useRef, useState } from "react";
 import type { MenuOptionGroup, MenuProduct } from "../menu-view";
 import { useCart } from "./CartProvider";
@@ -262,7 +262,8 @@ export function ProductSheet({ product, onClose }: { product: MenuProduct; onClo
               className={styles.step}
               data-testid="sheet-more"
               aria-label="Añadir una unidad"
-              onClick={() => setQuantity((actual) => actual + 1)}
+              disabled={quantity >= MAX_CANTIDAD_LINEA}
+              onClick={() => setQuantity((actual) => Math.min(MAX_CANTIDAD_LINEA, actual + 1))}
             >
               +
             </button>
