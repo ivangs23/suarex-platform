@@ -1,6 +1,7 @@
 "use server";
 
-import { ventasACsv, ventasDelDia } from "@suarex/db";
+import { ventasACsv, ventasDelDia, zonaHorariaDelTenant } from "@suarex/db";
+import { diaEnZona } from "@suarex/domain";
 import { managerAction } from "@/lib/require-manager";
 
 /**
@@ -10,8 +11,11 @@ import { managerAction } from "@/lib/require-manager";
  */
 export const descargarCsvAction = managerAction(
   async (session): Promise<{ nombre: string; contenido: string }> => {
-    const ventas = await ventasDelDia(session.tenantId);
-    const hoy = new Date().toISOString().slice(0, 10);
+    // El día del LOCAL (su sede), también en el nombre del fichero: en UTC, a las 00:30 seguiría
+    // siendo ayer.
+    const zona = await zonaHorariaDelTenant(session.tenantId);
+    const hoy = diaEnZona(new Date(), zona);
+    const ventas = await ventasDelDia(session.tenantId, hoy, zona);
     return { nombre: `ventas-${hoy}.csv`, contenido: ventasACsv(ventas) };
   },
 );
