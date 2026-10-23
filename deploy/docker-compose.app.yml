@@ -46,19 +46,10 @@ services:
       TENANT_ROOT_DOMAINS: ${TENANT_ROOT_DOMAINS}
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
-      # OJO: esta lista es LO UNICO que llega al proceso. No hay `env_file`, y
-      # `--env-file .env.app` solo alimenta la interpolacion ${...} de este compose: no
-      # exporta nada al contenedor. Una variable que este en .env.app pero NO aqui no existe
-      # para la aplicacion, y el fallo es silencioso y solo en produccion (en desarrollo se
-      # lee de apps/web/.env.local).
+      # OJO: esta lista es LO UNICO que llega al proceso (lo vigila deploy-env.test.ts). Ver
+      # docs/decisions/0005-variables-de-entorno-del-contenedor.md.
       #
-      # Ya no hace falta acordarse: `apps/web/lib/deploy-env.test.ts` lee este fichero y el
-      # Dockerfile, los cruza con los `process.env` del codigo y se pone rojo si falta alguna.
-      # Ese test encontro que NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY no llegaba al build, asi que
-      # en produccion no se podia pagar.
-      #
-      # Sin esta, el webhook de facturacion responde 500 SIEMPRE: Stripe reintenta tres dias,
-      # deshabilita el endpoint, y ningun cliente se corta nunca por impago.
+      # Sin esta, el webhook de facturacion responde 500 SIEMPRE y nadie se corta por impago.
       STRIPE_BILLING_WEBHOOK_SECRET: ${STRIPE_BILLING_WEBHOOK_SECRET}
       # Sin esta, los cuatro endpoints de /api/internal/* responden 503 "Cron no configurado":
       # ni retencion de datos, ni corte por impago, ni avisos de dispositivo caido.

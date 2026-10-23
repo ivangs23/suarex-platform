@@ -114,7 +114,11 @@ viejo trae CRLF: `git config core.autocrlf false` y renormalizar.
 ## Patrones clave
 
 - **Multi-tenancy**: `tenant_id` + RLS. Tenant resuelto por host (`findTenantByHost`). Claims JWT
-  vía `custom_access_token_hook`.
+  vía `custom_access_token_hook`. En `packages/db`, todo acceso va por `tenantScoped(tabla,
+  tenantId)` o por una exención NUEVA, nombrada y numerada en `client.ts` y registrada en
+  `docs/decisions/0007-tenantscoped-y-sus-exenciones.md`; nunca se reutiliza una existente.
+- **Comentarios**: uno de más de 8 líneas es un ADR (`docs/decisions/`, formato en su README).
+  En el código quedan 1-2 líneas y el enlace.
 - **Consola de plataforma**: superficie propia en `admin.<raíz>` (`app/plataforma`), para dar
   de alta clientes y suspenderlos. Dos barreras independientes: el proxy 404ea `/plataforma`
   bajo cualquier host de cliente Y la carta bajo el host de plataforma; y `requirePlatformAdmin()`
@@ -174,6 +178,7 @@ viejo trae CRLF: `git config core.autocrlf false` y renormalizar.
 
 ## Más docs
 
-`docs/HANDOFF.md` (estado y pendientes) · `docs/dar-de-alta-un-cliente.md` ·
+`docs/HANDOFF.md` (estado y pendientes) · `docs/decisions/` (por qué el código es como es) ·
+`docs/dar-de-alta-un-cliente.md` ·
 `docs/migrar-un-cliente.md` ·
 `docs/importar-catalogo.md` · `docs/agent-desktop-validacion.md`.

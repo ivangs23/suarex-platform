@@ -2,10 +2,10 @@ import { uploadProductImage } from "@suarex/db";
 import { afterAll, describe, expect, it } from "vitest";
 import { admin } from "./helpers/tenants.js";
 
-// PNG 1x1 mínimo válido.
+// PNG 1x1 mínimo válido (CRC y deflate correctos: el libpng de sharp >= 0.35 rechaza uno corrupto).
 const PNG_1x1 = Uint8Array.from(
   atob(
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
   ),
   (c) => c.charCodeAt(0),
 );

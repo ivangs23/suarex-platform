@@ -54,33 +54,8 @@ async function refreshStaffSession(request: NextRequest, response: NextResponse)
     },
   });
 
-  // `getUser()` verifica el JWT contra el servidor de Auth y, si hace falta,
-  // rota el refresh token -- exactamente lo que hace falta aquí (mantener viva
-  // la sesión), sin tomar ninguna decisión de autorización: esa decisión sigue
-  // viviendo en `getStaffSession()` (apps/web/lib/supabase-server.ts), que lee
-  // el claim `tenant_id` ya verificado, nunca en este middleware.
-  //
-  // Envuelto en try/catch a propósito, en profundidad: `@supabase/auth-js`
-  // (verificado contra su fuente instalada, v2.110.7) ya envuelve internamente
-  // los fallos de red del propio fetch como `AuthRetryableFetchError` (un
-  // `AuthError` reconocido) y los devuelve como `{ data, error }` en vez de
-  // lanzarlos -- confirmado también empíricamente aquí apuntando
-  // `NEXT_PUBLIC_SUPABASE_URL` a un host inalcanzable/inexistente con el dev
-  // server real corriendo (ver informe, sección "Fix round 1"): ninguna de
-  // esas pruebas produjo un throw sin capturar. Pero esa garantía es interna
-  // de auth-js, no de este código: `_getUser` solo evita relanzar errores que
-  // `isAuthError` reconoce, así que cualquier excepción de OTRO tipo --p. ej.
-  // una que viniera de nuestro propio adaptador de cookies (`request.cookies.getAll()`/
-  // `response.cookies.set()`), o de una versión futura de la librería que ya
-  // no envuelva algún fallo como AuthError-- sí se propagaría sin capturar.
-  // Este try/catch cierra esa vía de una vez, para que NINGÚN fallo al
-  // refrescar la sesión pueda convertirse en un 500 incondicional para CADA
-  // petición a /staff/*, incluida /staff/login -- eso bloquearía incluso el
-  // intento de volver a iniciar sesión. Degradamos con gracia: la sesión
-  // simplemente no se refresca en esta petición (el usuario podría necesitar
-  // reautenticarse si su access token ya expiró), pero la petición sigue
-  // sirviéndose con normalidad. Esto no relaja ninguna autorización:
-  // `getStaffSession()` sigue fallando cerrado si el JWT ya no es válido.
+  // Mantiene viva la sesión sin autorizar nada (eso es `getStaffSession()`), y ningún fallo
+  // aquí puede volverse un 500 de /staff. Ver docs/decisions/0001-refresco-de-sesion-en-el-proxy.md.
   try {
     // Antes de tocar la red, mirar si hace falta. `getSession()` lee la cookie que ya viene
     // en la petición y cuesta 0 ms; `getUser()` es una ida y vuelta a Supabase (32 ms
@@ -138,20 +113,8 @@ export async function proxy(request: NextRequest) {
   try {
     tenant = await findTenantByHost(host, ROOT_DOMAINS);
   } catch {
-    // Fallo de infraestructura: 503, nunca servir el tenant equivocado.
-    //
-    // No pasamos `request: { headers }` aquí a propósito, y no es un
-    // descuido: `new NextResponse(...)` (constructor plano, no `.rewrite()`/
-    // `.next()`) nunca activa `x-middleware-override-headers` -- de hecho su
-    // tipo (`ResponseInit`, no `MiddlewareResponseInit`) ni siquiera acepta
-    // `request` en TypeScript estricto. Pero eso no importa para la seguridad
-    // de esta rama: como esta respuesta no fija `x-middleware-rewrite` ni
-    // `x-middleware-next` ni `location`, el router de Next la trata como
-    // terminal (`x-middleware-refresh`) y devuelve su body tal cual, sin
-    // enrutar a ninguna página/layout. Ninguna cabecera de request -- forjada
-    // o no -- llega nunca a `requireTenant()` por esta vía porque ninguna
-    // página se renderiza. Verificado contra el código fuente de Next
-    // (`resolve-routes.js`) y con curl (ver informe).
+    // Fallo de infraestructura: 503 TERMINAL (no renderiza ninguna página, así que ninguna
+    // cabecera llega a `requireTenant()`). Ver docs/decisions/0002-proxy-503-y-cabeceras-forjadas.md.
     return new NextResponse("Servicio no disponible", { status: 503 });
   }
 
@@ -183,17 +146,8 @@ export async function proxy(request: NextRequest) {
   return response;
 }
 
-// `api/tls-check` queda FUERA del proxy a propósito. Lo llama Caddy, no un navegador, y lo
-// hace con `Host: web:3000` (el nombre del servicio en la red de Docker), que no es ningún
-// tenant: pasando por aquí, `findTenantByHost` no lo encuentra y reescribe a /not-found con
-// 404 ANTES de que la ruta llegue a ejecutarse. Con eso, el `ask` de Caddy recibe siempre
-// 404, jamás autoriza un certificado, y NINGÚN cliente con dominio propio puede servirse
-// por HTTPS. Verificado en el VPS: dentro de la red de Docker daba 404 aunque los tests
-// locales pasaran, porque estos lo llamaban con el Host de un tenant real.
-//
-// No necesita tenant ni lo usa: solo responde sí/no sobre `tenants.custom_domain`, y está
-// diseñado para ser alcanzable desde internet (falla cerrado y sus negativas son
-// indistinguibles entre sí).
+// `api/tls-check` queda FUERA del proxy: lo llama Caddy con `Host: web:3000`, que no es ningún
+// tenant. Ver docs/decisions/0003-tls-check-fuera-del-proxy.md.
 export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon.ico|api/tls-check).*)"],
 };

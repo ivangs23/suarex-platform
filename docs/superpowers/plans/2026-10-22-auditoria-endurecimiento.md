@@ -455,8 +455,15 @@ con curl, ver informe"). Son valiosos pero se desincronizan.
   (exenciones), `deploy/docker-compose.app.yml` (env que llega al proceso),
   `apps/web/next.config.ts` (webpack, `images.unoptimized`, standalone), `vitest.config.ts`
   (retry), `apps/agent-desktop/src/main/web-panel.ts` (sandbox).
-- [ ] En el código dejar 1-2 líneas + `Ver docs/decisions/0007-....md`.
-- [ ] Regla nueva en `CLAUDE.md`: "comentario > 8 líneas → ADR".
+- [x] En el código dejar 1-2 líneas + `Ver docs/decisions/0007-....md`.
+- [x] Regla nueva en `CLAUDE.md`: "comentario > 8 líneas → ADR".
+
+**En curso (2026-10-23):** ADRs 0001-0007 escritos y sus bloques recortados (código idéntico sin
+comentarios, comprobado con el printer de TypeScript). Falta `web-panel.ts` (sandbox) → ADR
+0008, después del merge de #73 (Electron 44), que toca ese fichero: la primera casilla se marca
+entonces. `client.ts` (opción A, decidida con Iván): un ADR con la política y el registro de las
+27 exenciones; las seis que no tenían número propio (el tótem y cinco "misma exención que…")
+pasan a ser la 22ª-27ª.
 
 ### Tarea 5.2 — Documentación al día
 
