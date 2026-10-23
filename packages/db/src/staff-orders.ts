@@ -1,4 +1,5 @@
 import { tenantScoped } from "./client.js";
+import { textosJson } from "./json.js";
 
 export type StaffOrderItem = {
   name: string;
@@ -17,21 +18,6 @@ export type StaffOrder = {
   kitchenStatus: StationStatus;
   barStatus: StationStatus;
   items: StaffOrderItem[];
-};
-
-type StaffOrderRow = {
-  id: string;
-  order_number: number;
-  status: string;
-  kitchen_status: StationStatus;
-  bar_status: StationStatus;
-  tables: { label: string } | null;
-  order_items: {
-    name_snapshot: Record<string, string>;
-    quantity: number;
-    destination: "cocina" | "barra";
-    notes: string | null;
-  }[];
 };
 
 /**
@@ -64,26 +50,28 @@ function resolveItemName(nameSnapshot: Record<string, string>): string {
  * argumento obligatorio y es la única vía de este paquete hacia `orders`.
  */
 export async function listActiveOrders(tenantId: string): Promise<StaffOrder[]> {
+  // Un solo literal: concatenado con `+` sería un `string` y postgrest-js no podría tiparlo.
   const { data, error } = await tenantScoped("orders", tenantId)
     .select(
-      "id, order_number, status, kitchen_status, bar_status, tables(label), " +
-        "order_items(name_snapshot, quantity, destination, notes)",
+      "id, order_number, status, kitchen_status, bar_status, tables(label), order_items(name_snapshot, quantity, destination, notes)",
     )
     .in("status", ["paid", "preparing"])
     .order("created_at", { ascending: true });
   if (error) throw error;
 
-  return (data as unknown as StaffOrderRow[]).map((row) => ({
+  // Los estados y el destino son `text` con CHECK: el tipo generado es `string`, los valores
+  // posibles los fija la migración.
+  return data.map((row) => ({
     id: row.id,
     orderNumber: row.order_number,
     tableLabel: row.tables?.label ?? null,
     status: row.status,
-    kitchenStatus: row.kitchen_status,
-    barStatus: row.bar_status,
+    kitchenStatus: row.kitchen_status as StationStatus,
+    barStatus: row.bar_status as StationStatus,
     items: row.order_items.map((item) => ({
-      name: resolveItemName(item.name_snapshot),
+      name: resolveItemName(textosJson(item.name_snapshot)),
       quantity: item.quantity,
-      destination: item.destination,
+      destination: item.destination as StaffOrderItem["destination"],
       notes: item.notes,
     })),
   }));
@@ -184,13 +172,7 @@ export async function paidOrdersBetween(
     .lt("paid_at", to);
   if (error) throw error;
 
-  type Fila = {
-    channel: string | null;
-    total: string | number;
-    order_items: { line_total: string | number; tax_rate: string | number }[] | null;
-  };
-
-  return (data as unknown as Fila[]).map((row) => ({
+  return data.map((row) => ({
     channel: row.channel ?? "qr-mesa",
     totalCents: Math.round(Number(row.total) * 100),
     lines: (row.order_items ?? []).map((item) => ({

@@ -248,20 +248,23 @@ export async function unprintedPaidOrders(tenantId: string): Promise<PrintableOr
     .eq("enabled", true);
   if (printersError) throw printersError;
 
+  // Literal de plantilla y no `+`: concatenado sería un `string` y postgrest-js no podría
+  // tiparlo. Los saltos de línea los ignora (al tipar y al construir la consulta).
   const { data: orderRows, error: ordersError } = await tenantScoped("orders", tenantId)
     .select(
-      "id, order_number, created_at, printed_targets, venue_id, kitchen_status, bar_status, " +
-        "channel, public_token, subtotal, tax_amount, total, currency, table_label, tables(label), " +
-        "order_items(name_snapshot, quantity, destination, notes, line_total, tax_rate, " +
-        "order_item_extras(name_snapshot))",
+      `id, order_number, created_at, printed_targets, venue_id, kitchen_status, bar_status,
+      channel, public_token, subtotal, tax_amount, total, currency, table_label, tables(label),
+      order_items(name_snapshot, quantity, destination, notes, line_total, tax_rate,
+      order_item_extras(name_snapshot))`,
     )
     .not("paid_at", "is", null)
     .is("printed_at", null)
     .order("created_at", { ascending: true });
   if (ordersError) throw ordersError;
 
-  const printers = printerRows as unknown as EnabledPrinterRow[];
-  return selectUnprintedOrders(orderRows as unknown as PaidOrderRow[], printers);
+  // Cast estrecho: las filas inferidas ya son estas; lo que se afina es `text` con CHECK
+  // (estados, destino, canal) y `jsonb` (`name_snapshot`, `printed_targets`) a su forma real.
+  return selectUnprintedOrders(orderRows as PaidOrderRow[], printerRows as EnabledPrinterRow[]);
 }
 
 /**

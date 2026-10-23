@@ -40,6 +40,8 @@ Playwright · Biome (lint+format) · Electron (app de escritorio, `electron-vite
 - `packages/agent` — bucle del agente (`runAgent`/`runAgentTick`): polling, impresión, marcado.
 - `packages/db` — acceso a datos (queries, tipos, storage, rate-limit). Se consume como fuente
   TS sin compilar (`exports "." -> "./src/index.ts"`, imports NodeNext `./x.js` -> `./x.ts`).
+  El cliente va tipado con `src/database.types.ts` (generado, `pnpm db:types`, no se exporta);
+  `src/types.ts` es la capa de dominio que consume `apps/web`.
 - `packages/printing` · `packages/ticket` · `packages/domain` · `packages/config` ·
   `packages/realtime`.
 - `supabase/migrations` — esquema + RLS. `scripts/` — utilidades (alta de cliente, import de
@@ -51,6 +53,7 @@ Playwright · Biome (lint+format) · Electron (app de escritorio, `electron-vite
 pnpm install
 pnpm db:start           # Supabase local (imprime las claves)
 pnpm db:reset           # reset a migraciones + seed
+pnpm db:types           # tras una migración: db:reset && db:types (database.types.ts va en git)
 pnpm db:env && pnpm seed:staff            # .env.test + cuentas demo
 node scripts/seed-platform-admin.mjs --email x@y.z   # primer superadmin de plataforma
 pnpm dev  (o preview_start name:"web")   # nunca levantar el dev server con bash

@@ -4,6 +4,7 @@ import {
   tenantsTableForCustomDomainWrite,
   tenantsTableForHostResolution,
 } from "./client.js";
+import type { Json } from "./database.types.js";
 import type { PlanStatus, Tenant, TenantSettingsRow } from "./types.js";
 
 export async function findTenantByHost(
@@ -199,9 +200,12 @@ export async function getTenantSettings(tenantId: string): Promise<TenantSetting
   };
 }
 
+/** Un objeto que cabe en una columna `jsonb`. */
+type ObjetoJson = { [clave: string]: Json | undefined };
+
 export type UpdateTenantSettingsInput = {
-  branding: Record<string, unknown>;
-  fiscal: Record<string, unknown>;
+  branding: ObjetoJson;
+  fiscal: ObjetoJson;
   locale: string;
   currency: string;
   /** Canales de venta encendidos. Ausente = no tocar los que ya hubiera. */

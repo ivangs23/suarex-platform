@@ -1,4 +1,6 @@
 import { globalAllergensTable, marcarAgotadoHoyRpc, tenantScoped } from "./client.js";
+import type { TablesInsert } from "./database.types.js";
+import { textosJson } from "./json.js";
 
 export type CategoryDestination = "cocina" | "barra";
 
@@ -142,7 +144,9 @@ function assertValidPrice(price: number): void {
   }
 }
 
-function categoryInsertValues(input: CreateCategoryInput): Record<string, unknown> {
+function categoryInsertValues(
+  input: CreateCategoryInput,
+): Omit<TablesInsert<"categories">, "tenant_id"> {
   return {
     slug: input.slug,
     name_i18n: input.nameI18n,
@@ -460,57 +464,6 @@ export async function deleteTenantAllergen(tenantId: string, allergenId: number)
   if (error) throw error;
 }
 
-type AdminExtraRow = {
-  id: string;
-  name_i18n: Record<string, string>;
-  price: string | number;
-  group_id: string | null;
-};
-
-type AdminOptionGroupRow = {
-  id: string;
-  name_i18n: Record<string, string>;
-  min_select: number;
-  max_select: number;
-  sort_order: number;
-};
-
-type AdminProductRow = {
-  id: string;
-  category_id: string;
-  name_i18n: Record<string, string>;
-  description_i18n: Record<string, string>;
-  price: string | number;
-  image_url: string | null;
-  allergen_ids: number[];
-  is_available: boolean;
-  unavailable_until: string | null;
-  sort_order: number;
-  product_extras: AdminExtraRow[];
-  product_option_groups: AdminOptionGroupRow[];
-  tax_rate: string | number | null;
-};
-
-type AdminCategoryRow = {
-  id: string;
-  slug: string;
-  name_i18n: Record<string, string>;
-  parent_id: string | null;
-  icon: string | null;
-  destination: CategoryDestination;
-  sort_order: number;
-  visible_desde: string | null;
-  visible_hasta: string | null;
-  products: AdminProductRow[];
-  tax_rate: string | number | null;
-};
-
-type AdminAllergenRow = {
-  id: number;
-  name_i18n: Record<string, string>;
-  icon: string | null;
-};
-
 /**
  * Lectura acotada al tenant para las pantallas de administración (Task 5): categorías
  * con sus productos y extras embebidos, más los alérgenos PROPIOS del tenant (los 14
@@ -525,13 +478,14 @@ type AdminAllergenRow = {
 export async function listAdminCatalog(tenantId: string): Promise<AdminCatalog> {
   const [categoriesResult, allergensResult] = await Promise.all([
     tenantScoped("categories", tenantId)
+      // Literal de plantilla y no `+`: concatenado, el SDK no puede tipar los embeds.
       .select(
-        "id, slug, name_i18n, parent_id, icon, destination, sort_order, tax_rate, " +
-          "visible_desde, visible_hasta, " +
-          "products(id, category_id, name_i18n, description_i18n, price, image_url, " +
-          "allergen_ids, is_available, unavailable_until, sort_order, tax_rate, " +
-          "product_extras(id, name_i18n, price, group_id), " +
-          "product_option_groups(id, name_i18n, min_select, max_select, sort_order))",
+        `id, slug, name_i18n, parent_id, icon, destination, sort_order, tax_rate,
+        visible_desde, visible_hasta,
+        products(id, category_id, name_i18n, description_i18n, price, image_url,
+        allergen_ids, is_available, unavailable_until, sort_order, tax_rate,
+        product_extras(id, name_i18n, price, group_id),
+        product_option_groups(id, name_i18n, min_select, max_select, sort_order))`,
       )
       .order("sort_order", { ascending: true }),
     tenantScoped("allergens", tenantId).select("id, name_i18n, icon"),
@@ -539,20 +493,17 @@ export async function listAdminCatalog(tenantId: string): Promise<AdminCatalog> 
   if (categoriesResult.error) throw categoriesResult.error;
   if (allergensResult.error) throw allergensResult.error;
 
-  const categoryRows = categoriesResult.data as unknown as AdminCategoryRow[];
-  const allergenRows = allergensResult.data as unknown as AdminAllergenRow[];
-
-  const categories: AdminCategory[] = categoryRows.map((category) => {
+  const categories: AdminCategory[] = categoriesResult.data.map((category) => {
     const products: AdminProduct[] = [...category.products]
       .sort((a, b) => a.sort_order - b.sort_order)
       .map((product) => ({
         id: product.id,
         categoryId: product.category_id,
-        nameI18n: product.name_i18n,
-        descriptionI18n: product.description_i18n,
+        nameI18n: textosJson(product.name_i18n),
+        descriptionI18n: textosJson(product.description_i18n),
         price: Number(product.price),
         imageUrl: product.image_url,
-        allergenIds: product.allergen_ids,
+        allergenIds: product.allergen_ids ?? [],
         isAvailable: product.is_available,
         // Agotado HOY solo mientras la hora de vuelta siga en el futuro: pasada esa hora el
         // producto ya está en la carta otra vez aunque la columna conserve el valor.
@@ -565,15 +516,15 @@ export async function listAdminCatalog(tenantId: string): Promise<AdminCatalog> 
             : Number(product.tax_rate),
         extras: product.product_extras.map((extra) => ({
           id: extra.id,
-          nameI18n: extra.name_i18n,
+          nameI18n: textosJson(extra.name_i18n),
           price: Number(extra.price),
-          groupId: extra.group_id ?? null,
+          groupId: extra.group_id,
         })),
-        optionGroups: [...(product.product_option_groups ?? [])]
+        optionGroups: [...product.product_option_groups]
           .sort((a, b) => a.sort_order - b.sort_order)
           .map((group) => ({
             id: group.id,
-            nameI18n: group.name_i18n,
+            nameI18n: textosJson(group.name_i18n),
             minSelect: group.min_select,
             maxSelect: group.max_select,
             sortOrder: group.sort_order,
@@ -583,24 +534,25 @@ export async function listAdminCatalog(tenantId: string): Promise<AdminCatalog> 
     return {
       id: category.id,
       slug: category.slug,
-      nameI18n: category.name_i18n,
-      parentId: category.parent_id ?? null,
-      icon: category.icon ?? null,
-      destination: category.destination,
+      nameI18n: textosJson(category.name_i18n),
+      parentId: category.parent_id,
+      icon: category.icon,
+      // `text` con CHECK: el tipo generado es `string`, los valores los fija la migración.
+      destination: category.destination as CategoryDestination,
       sortOrder: category.sort_order,
       taxRate:
         category.tax_rate === null || category.tax_rate === undefined
           ? null
           : Number(category.tax_rate),
-      visibleDesde: category.visible_desde ?? null,
-      visibleHasta: category.visible_hasta ?? null,
+      visibleDesde: category.visible_desde,
+      visibleHasta: category.visible_hasta,
       products,
     };
   });
 
-  const allergens: AdminAllergen[] = allergenRows.map((allergen) => ({
+  const allergens: AdminAllergen[] = allergensResult.data.map((allergen) => ({
     id: allergen.id,
-    nameI18n: allergen.name_i18n,
+    nameI18n: textosJson(allergen.name_i18n),
     icon: allergen.icon,
   }));
 
@@ -626,10 +578,11 @@ export async function listAssignableAllergens(tenantId: string): Promise<AdminAl
   if (globalResult.error) throw globalResult.error;
   if (tenantResult.error) throw tenantResult.error;
 
-  const globalRows = globalResult.data as unknown as AdminAllergenRow[];
-  const tenantRows = tenantResult.data as unknown as AdminAllergenRow[];
-
-  return [...globalRows, ...tenantRows]
+  return [...globalResult.data, ...tenantResult.data]
     .sort((a, b) => a.id - b.id)
-    .map((allergen) => ({ id: allergen.id, nameI18n: allergen.name_i18n, icon: allergen.icon }));
+    .map((allergen) => ({
+      id: allergen.id,
+      nameI18n: textosJson(allergen.name_i18n),
+      icon: allergen.icon,
+    }));
 }

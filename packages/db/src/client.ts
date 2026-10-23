@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "./database.types.js";
 
-let cached: SupabaseClient | null = null;
+let cached: SupabaseClient<Database> | null = null;
 
 /**
  * Cliente con service role, SIN NINGÚN filtro de tenant aplicado. Deliberadamente NO se
@@ -13,7 +14,7 @@ let cached: SupabaseClient | null = null;
  * El único código de todo el paquete que puede tocar Supabase sin pasar por
  * `tenantScoped`/`tenantsTableForHostResolution` es el que está en ESTE fichero.
  */
-function serviceClient(): SupabaseClient {
+function serviceClient(): SupabaseClient<Database> {
   if (cached) return cached;
 
   const url = process.env.SUPABASE_URL;
@@ -22,7 +23,7 @@ function serviceClient(): SupabaseClient {
     throw new Error("SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY son obligatorias");
   }
 
-  cached = createClient(url, key, {
+  cached = createClient<Database>(url, key, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
   return cached;
@@ -67,6 +68,17 @@ export type TenantScopedTable =
   // (sesión de owner/admin en el panel).
   | "devices";
 
+type Tablas = Database["public"]["Tables"];
+/** Lo que se escribe en una tabla del tenant, sin `tenant_id`: lo pone `tenantScoped`. */
+type SinTenant<Fila> = Omit<Fila, "tenant_id">;
+
+// Cada nombre de la unión tiene que existir en los tipos generados: renombrar o borrar una
+// tabla en una migración sin tocar esta lista no compila.
+type Cierto<T extends true> = T;
+export type _TenantScopedTableExiste = Cierto<
+  TenantScopedTable extends keyof Tablas ? true : false
+>;
+
 /**
  * ÚNICO punto de entrada a una tabla tenant-scoped desde este paquete. `tenantId` es un
  * parámetro obligatorio -- sin `?`, sin default -- así que omitirlo es un error de
@@ -78,14 +90,18 @@ export type TenantScopedTable =
  * sobre un resultado que ya viene acotado al tenant -- no hay forma de "quitar" el filtro
  * base desde fuera, porque nunca se expone el builder sin él.
  */
-export function tenantScoped(table: TenantScopedTable, tenantId: string) {
+export function tenantScoped<T extends TenantScopedTable>(table: T, tenantId: string) {
+  // El filtro va por `match` y no por `eq`: sobre un genérico, TypeScript no puede comprobar
+  // que `tenant_id` sea columna de `Tablas[T]` (lo es en todas, por construcción de la lista).
+  // `match` genera el mismo `tenant_id=eq.<id>` y devuelve el builder con su tipo intacto.
+  const delTenant = { tenant_id: tenantId };
   return {
     // Genérico sobre `Query`, igual que el `.select()` nativo de postgrest-js: si
     // `columns` se tipara como `string` a secas (en vez de preservar el literal que
     // recibe cada llamada), postgrest-js no puede parsear qué columnas se pidieron y el
     // resultado se degrada a `GenericStringError` en vez de la forma real de la fila.
     select<Query extends string = "*">(columns: Query) {
-      return serviceClient().from(table).select(columns).eq("tenant_id", tenantId);
+      return serviceClient().from(table).select(columns).match(delTenant);
     },
 
     /**
@@ -93,19 +109,27 @@ export function tenantScoped(table: TenantScopedTable, tenantId: string) {
      * `tenant_id` ajeno que venga en los datos no puede colarse: el del
      * parámetro siempre gana.
      */
-    insert<Row extends Record<string, unknown>>(rows: Row | Row[]) {
+    insert(rows: SinTenant<Tablas[T]["Insert"]> | SinTenant<Tablas[T]["Insert"]>[]) {
       const list = Array.isArray(rows) ? rows : [rows];
       const scoped = list.map((row) => ({ ...row, tenant_id: tenantId }));
-      return serviceClient().from(table).insert(scoped);
+      // `as never`: el tipo real ya lo comprueba la firma en cada llamada; aquí, sobre el
+      // genérico, postgrest-js no puede resolver el `Insert` de la tabla.
+      return serviceClient()
+        .from(table)
+        .insert(scoped as never);
     },
 
     /**
      * `tenant_id` se elimina de los valores (no tiene sentido reasignar una fila
      * a otro tenant) y el filtro se aplica antes de devolver el builder.
      */
-    update(values: Record<string, unknown>) {
-      const { tenant_id: _ignored, ...rest } = values;
-      return serviceClient().from(table).update(rest).eq("tenant_id", tenantId);
+    update(values: SinTenant<Tablas[T]["Update"]>) {
+      const { tenant_id: _ignored, ...rest } = values as Record<string, unknown>;
+      // `as never`: mismo motivo que en `insert`.
+      return serviceClient()
+        .from(table)
+        .update(rest as never)
+        .match(delTenant);
     },
 
     /**
@@ -117,10 +141,13 @@ export function tenantScoped(table: TenantScopedTable, tenantId: string) {
      * dispositivo sin reventar contra la PK (`user_id, tenant_id`) de una fila que ya
      * dejó un intento anterior a medio camino.
      */
-    upsert<Row extends Record<string, unknown>>(row: Row, onConflict: string) {
+    upsert(row: SinTenant<Tablas[T]["Insert"]>, onConflict: string) {
       const { tenant_id: _ignored, ...rest } = row as Record<string, unknown>;
       const scoped = { ...rest, tenant_id: tenantId };
-      return serviceClient().from(table).upsert(scoped, { onConflict });
+      // `as never`: mismo motivo que en `insert`.
+      return serviceClient()
+        .from(table)
+        .upsert(scoped as never, { onConflict });
     },
 
     /**
@@ -133,7 +160,7 @@ export function tenantScoped(table: TenantScopedTable, tenantId: string) {
      * necesitaba borrar filas.
      */
     delete() {
-      return serviceClient().from(table).delete().eq("tenant_id", tenantId);
+      return serviceClient().from(table).delete().match(delTenant);
     },
   };
 }

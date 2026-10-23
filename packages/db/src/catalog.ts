@@ -1,22 +1,8 @@
 import { tenantScoped } from "./client.js";
 import { filtrarPorFranja, minutosEnZona } from "./franjas.js";
+import { textosJson } from "./json.js";
 import type { Category, Product, ProductExtra } from "./types.js";
 import { zonaHorariaDelTenant } from "./venues.js";
-
-type ProductExtraRow = {
-  id: string;
-  name_i18n: Record<string, string>;
-  price: string | number;
-  group_id: string | null;
-};
-
-type OptionGroupRow = {
-  id: string;
-  name_i18n: Record<string, string>;
-  min_select: number;
-  max_select: number;
-  sort_order: number;
-};
 
 export async function getCategories(tenantId: string): Promise<Category[]> {
   // La zona va EN PARALELO con el catálogo, no antes: encadenarlas añadiría un viaje a la
@@ -32,21 +18,21 @@ export async function getCategories(tenantId: string): Promise<Category[]> {
 
   if (error) throw error;
 
-  const categorias = (data ?? []).map((row) => ({
-    id: row.id as string,
-    slug: row.slug as string,
-    nameI18n: row.name_i18n as Record<string, string>,
-    icon: (row.icon as string | null) ?? null,
-    imagePath: (row.image_url as string | null) ?? null,
-    sortOrder: row.sort_order as number,
+  const categorias = data.map((row) => ({
+    id: row.id,
+    slug: row.slug,
+    nameI18n: textosJson(row.name_i18n),
+    icon: row.icon,
+    imagePath: row.image_url,
+    sortOrder: row.sort_order,
     // `categories.parent_id` (FK auto-referenciada, ver 20260721000002_catalog.sql)
     // permite cartas en ÁRBOL: una carta grande se navega por niveles en vez de volcar
     // cientos de productos en una lista. `null` = categoría raíz.
-    parentId: (row.parent_id as string | null) ?? null,
+    parentId: row.parent_id,
     // Franja horaria de la categoría (`null` = siempre visible). Viaja en el tipo, y no solo
     // se usa para filtrar aquí, porque el panel necesita leerla para poder editarla.
-    visibleDesde: (row.visible_desde as string | null) ?? null,
-    visibleHasta: (row.visible_hasta as string | null) ?? null,
+    visibleDesde: row.visible_desde,
+    visibleHasta: row.visible_hasta,
   }));
 
   // El filtro va DESPUÉS del mapeo y no en la consulta: una franja que cruza medianoche
@@ -79,13 +65,12 @@ export async function getProducts(tenantId: string): Promise<Product[]> {
 
   if (error) throw error;
 
-  return (data ?? []).map((row) => {
-    const extraRows = (row.product_extras ?? []) as unknown as ProductExtraRow[];
-    const extras: ProductExtra[] = extraRows.map((extra) => ({
+  return data.map((row) => {
+    const extras: ProductExtra[] = row.product_extras.map((extra) => ({
       id: extra.id,
-      nameI18n: extra.name_i18n,
+      nameI18n: textosJson(extra.name_i18n),
       price: Number(extra.price),
-      groupId: extra.group_id ?? null,
+      groupId: extra.group_id,
     }));
 
     /* Los grupos llegan con SUS opciones ya dentro (#16). La ficha del producto tiene que pintar
@@ -93,13 +78,12 @@ export async function getProducts(tenantId: string): Promise<Product[]> {
        que la pertenencia se resuelve UNA vez aquí en vez de cruzarla en cada consumidor.
        El orden es el que fijó el gestor: un menú del día se lee primero -> segundo -> postre, y
        dejarlo al orden en que la base devuelva las filas lo barajaría en cada carga. */
-    const groupRows = (row.product_option_groups ?? []) as unknown as OptionGroupRow[];
-    const optionGroups = groupRows
+    const optionGroups = row.product_option_groups
       .slice()
       .sort((a, b) => a.sort_order - b.sort_order)
       .map((group) => ({
         id: group.id,
-        nameI18n: group.name_i18n,
+        nameI18n: textosJson(group.name_i18n),
         minSelect: group.min_select,
         maxSelect: group.max_select,
         sortOrder: group.sort_order,
@@ -107,15 +91,15 @@ export async function getProducts(tenantId: string): Promise<Product[]> {
       }));
 
     return {
-      id: row.id as string,
-      categoryId: row.category_id as string,
-      nameI18n: row.name_i18n as Record<string, string>,
-      descriptionI18n: row.description_i18n as Record<string, string>,
+      id: row.id,
+      categoryId: row.category_id,
+      nameI18n: textosJson(row.name_i18n),
+      descriptionI18n: textosJson(row.description_i18n),
       price: Number(row.price),
-      imagePath: (row.image_url as string | null) ?? null,
-      allergenIds: (row.allergen_ids as number[] | null) ?? [],
-      isAvailable: row.is_available as boolean,
-      sortOrder: row.sort_order as number,
+      imagePath: row.image_url,
+      allergenIds: row.allergen_ids ?? [],
+      isAvailable: row.is_available,
+      sortOrder: row.sort_order,
       extras,
       optionGroups,
     };
