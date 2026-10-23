@@ -66,7 +66,7 @@ Por qué el código es como es: [`docs/decisions/`](decisions/README.md) (ADRs).
 | 3.3 Flakiness | #70 | Hecho |
 | 4.1-4.2 Electron 44 | #73 (borrador) | **Esperando la 4.3**: validación de Iván en un PC Windows real |
 | 5.1 ADRs | #74 | Hecho, salvo el ADR 0008 (`web-panel.ts`, sandbox), que va tras #73 |
-| 5.2 Docs al día | este PR | |
+| 5.2 Docs al día | #77 | Hecho |
 | 5.3 Hooks pre-commit | | Opcional: decide Iván (añade dos dependencias de desarrollo) |
 
 Fuera del plan:
