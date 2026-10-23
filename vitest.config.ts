@@ -10,6 +10,10 @@ export default defineConfig({
     env: { DOTENV_CONFIG_PATH: ".env.test" },
     testTimeout: 30_000,
     fileParallelism: false,
+    // Hilos y no procesos: con `forks` (un proceso por fichero, ~73 por pasada), en Windows
+    // alguno se quedaba colgado al arrancar sin llegar a ejecutar nada y la pasada no acababa
+    // nunca (4 de ~8 el 2026-10-23). Con hilos no se crea ningún proceso.
+    pool: "threads",
     /**
      * Reintenta un test que falla, hasta 2 veces más.
      *
