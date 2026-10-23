@@ -150,7 +150,7 @@ function targetPrinterIds(
  * siguen pendientes de imprimir y los mapea a `PrintableOrder`. Extraído para que la ruta
  * del dispositivo (`@suarex/agent`, que lee con el JWT del device en vez del service role)
  * reutilice EXACTAMENTE esta lógica sin una tercera copia -- ver el razonamiento en
- * `docs/superpowers/specs/2026-07-22-agente-impresion-c2a-design.md`. El aislamiento por
+ * `docs/superpowers/archivo/specs/2026-07-22-agente-impresion-c2a-design.md`. El aislamiento por
  * tenant NO vive aquí: lo aplica quien hace los `select` (tenantScoped en la ruta
  * service-role, la RLS en la del dispositivo), así que esta función solo ve filas del
  * tenant correcto y no necesita conocer el `tenant_id`.
