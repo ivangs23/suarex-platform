@@ -91,6 +91,8 @@ export type Strings = {
   menuTitle: string;
   explore: string;
   backToCategories: string;
+  /** El logo de la barra lleva de vuelta a la bienvenida: es su nombre accesible. */
+  backToStart: string;
   dish: string;
   dishes: string;
   emptyMenu: string;
@@ -195,6 +197,7 @@ const ES: Strings = {
   menuTitle: "Menú",
   explore: "¿Qué te apetece hoy?",
   backToCategories: "← Explorar otras categorías",
+  backToStart: "Volver al inicio",
   dish: "plato",
   dishes: "platos",
   emptyMenu: "La carta todavía no tiene productos.",
@@ -285,6 +288,7 @@ const EN: Strings = {
   menuTitle: "Menu",
   explore: "What do you fancy today?",
   backToCategories: "← Browse other categories",
+  backToStart: "Back to start",
   dish: "dish",
   dishes: "dishes",
   emptyMenu: "This menu has no items yet.",
@@ -375,6 +379,7 @@ const PT: Strings = {
   menuTitle: "Menu",
   explore: "O que lhe apetece hoje?",
   backToCategories: "← Ver outras categorias",
+  backToStart: "Voltar ao início",
   dish: "prato",
   dishes: "pratos",
   emptyMenu: "A carta ainda não tem produtos.",

@@ -31,14 +31,6 @@ export function NuevoClienteForm({ action }: { action: (formData: FormData) => P
           />
         </label>
         <label className={styles.campo}>
-          Tema
-          <select name="theme" defaultValue="generic">
-            <option value="generic">generic</option>
-            <option value="garum">garum</option>
-            <option value="manuela">manuela</option>
-          </select>
-        </label>
-        <label className={styles.campo}>
           Idioma
           <select name="locale" defaultValue="es">
             <option value="es">es</option>

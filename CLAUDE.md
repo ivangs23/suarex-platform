@@ -21,10 +21,13 @@ idéntica para todos. Lo que varía por tenant: el **aspecto** (colores, dónde 
 **contenido** (productos, fotos, imagen de bienvenida, traducciones). Un paso del flujo no es
 opcional según el cliente; una foto sí.
 
-Esto lo blinda `apps/web/app/[mesa]/themes/contract.test.tsx`: renderiza TODOS los temas
-registrados y falla si a alguno le falta un paso del flujo (bienvenida, ficha, botón de pedido,
-conteo de productos, badges de alérgenos, selector de idioma). Al añadir un tema o un paso,
-pasa por ahí.
+La carta es UN componente (`themes/generic.tsx`); el aspecto de cada cliente es su
+`tenant_settings.branding` (colores, fuentes, tokens y seis ejes de layout como
+`data-layout-*`). No hay un `.tsx` por cliente. Esto lo blinda
+`apps/web/app/[mesa]/themes/contract.test.tsx`: renderiza TODAS las combinaciones de ejes, con
+y sin contenido de marca, y falla si a alguna le falta un paso del flujo (bienvenida, ficha,
+botón de pedido, conteo de productos, badges de alérgenos, selector de idioma). Al añadir un
+eje, un valor o un paso, pasa por ahí.
 
 ## Stack
 

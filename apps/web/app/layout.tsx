@@ -6,11 +6,10 @@ import { requireTenant } from "@/lib/tenant-context";
 import "./globals.css";
 
 /**
- * Fuentes que la plataforma carga para TODOS los temas de la carta: una serif de display y
- * una sans de texto. Se exponen como variables CSS (`--font-playfair`, `--font-inter`) para
- * que cada tema elija cuál usa -- el genérico las toma como defaults y los temas a medida
- * fijan la suya. Cargarlas aquí (next/font, self-hosted) evita una petición a Google Fonts
- * en runtime y el salto de layout del FOUT.
+ * Fuentes que la plataforma carga para TODOS los clientes: una serif de display y una sans
+ * de texto, expuestas como variables CSS (`--font-playfair`, `--font-inter`). Cargarlas aquí
+ * (next/font, self-hosted) evita una petición a Google Fonts en runtime y el salto de layout
+ * del FOUT.
  *
  * `branding.fonts` elige ENTRE ESTAS (y la del sistema): `brandingToCssVars` emite
  * `--font-display`/`--font-body` apuntando a una de estas variables. Una familia que no se

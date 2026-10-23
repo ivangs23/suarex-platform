@@ -297,23 +297,23 @@ Manuela sean **datos** en `tenant_settings.branding`.
 
 ### Tarea 2.3 — Un solo componente con variantes
 
-- [ ] `generic.tsx` y `generic.module.css`: implementar los ejes de layout con
+- [x] `generic.tsx` y `generic.module.css`: implementar los ejes de layout con
   `data-layout-<eje>="<valor>"` en el contenedor raíz y selectores CSS por atributo; nada
   de un componente por valor. Los pasos del flujo (bienvenida, ficha, botón de pedido,
   conteo, alérgenos, selector de idioma) NO dependen de ninguna variante.
-- [ ] Portar Garum y Manuela: reproducir su aspecto con tokens+variantes. Comparar con
+- [x] Portar Garum y Manuela: reproducir su aspecto con tokens+variantes. Comparar con
   capturas de antes (Playwright `toHaveScreenshot` en un test nuevo
   `tests/e2e/carta-visual.spec.ts`, tolerancia baja; las capturas base se generan desde los
   temas ANTIGUOS antes de borrarlos y se commitean).
-- [ ] Migración `20261022000002_branding_temas_en_datos.sql`: `update tenant_settings set
+- [x] Migración `20261022000002_branding_temas_en_datos.sql`: `update tenant_settings set
   branding = branding || '{...}'` para los tenants `garum` y `manuela` con sus tokens y
   variantes; `theme = 'generic'` para ambos. Actualizar `supabase/seed.sql` igual.
-- [ ] Borrar `garum.tsx`, `manuela.tsx` y sus CSS. `themes/index.ts` queda con `generic`
+- [x] Borrar `garum.tsx`, `manuela.tsx` y sus CSS. `themes/index.ts` queda con `generic`
   (mantener el registro y `resolveTheme` por si algún día hace falta un tema de código, pero
   el default y el único registrado es `generic`). `contract.test.tsx` pasa a recorrer
   **todas las combinaciones de variantes** (producto cartesiano de los enums), no una lista
   de temas: es la nueva garantía de la doctrina.
-- [ ] `scripts/create-tenant.mjs` y `docs/dar-de-alta-un-cliente.md`: el alta acepta un
+- [x] `scripts/create-tenant.mjs` y `docs/dar-de-alta-un-cliente.md`: el alta acepta un
   JSON de branding (o un preset `--preset clasico|moderno`) y ya no menciona temas de código.
 
 **Aceptación:** `garum.localhost:3000/5` y `manuela.localhost:3000/2` se ven igual que antes

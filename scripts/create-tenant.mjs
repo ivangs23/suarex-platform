@@ -6,8 +6,8 @@
  *
  *   node scripts/create-tenant.mjs --slug bar-paco --nombre "Bar Paco" --email dueno@barpaco.com
  *
- * Opcionales: --password (si no, se genera), --dominio, --tema (por defecto generic),
- * --idioma (es), --moneda (EUR).
+ * Opcionales: --password (si no, se genera), --dominio, --marca <fichero.json> (su branding:
+ * el mismo JSON que guarda el panel de ajustes), --idioma (es), --moneda (EUR).
  *
  * IDEMPOTENTE: reejecutar no duplica nada -- reutiliza lo que ya exista y crea lo que falte.
  * Necesita SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY. Imprime al final las credenciales del
@@ -15,8 +15,15 @@
  * configurada en el entorno.
  */
 import { randomBytes } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
-import { validarCanales, validarEmail, validarIdioma, validarSlug } from "./lib/tenant-input.mjs";
+import {
+  validarCanales,
+  validarEmail,
+  validarIdioma,
+  validarMarca,
+  validarSlug,
+} from "./lib/tenant-input.mjs";
 
 console.warn(
   "[obsoleto] El alta de clientes se hace desde la consola de plataforma:\n" +
@@ -44,21 +51,25 @@ function arg(nombre) {
 let slug;
 let nombre;
 let email;
+let marca;
 try {
   slug = validarSlug(arg("slug") ?? "");
   nombre = arg("nombre");
   email = validarEmail(arg("email") ?? "");
   if (!nombre) throw new Error("Falta --nombre (el nombre visible del negocio).");
+  const ficheroMarca = arg("marca");
+  marca = ficheroMarca
+    ? validarMarca(readFileSync(ficheroMarca, "utf8"), nombre)
+    : { name: nombre };
 } catch (e) {
   console.error(`\n${e.message}\n`);
   console.error(
-    'Uso: node scripts/create-tenant.mjs --slug <slug> --nombre "<Nombre>" --email <email> [--password ...] [--dominio ...] [--tema generic] [--idioma es] [--moneda EUR] [--canales qr-mesa,kiosko]',
+    'Uso: node scripts/create-tenant.mjs --slug <slug> --nombre "<Nombre>" --email <email> [--password ...] [--dominio ...] [--marca marca.json] [--idioma es] [--moneda EUR] [--canales qr-mesa,kiosko]',
   );
   process.exit(1);
 }
 
 const dominio = arg("dominio") ?? null;
-const tema = arg("tema") ?? "generic";
 const idioma = validarIdioma(arg("idioma") ?? "es");
 const moneda = (arg("moneda") ?? "EUR").toUpperCase();
 const canales = validarCanales(arg("canales") ?? "qr-mesa");
@@ -95,15 +106,14 @@ let tenantId;
   } else {
     const { error } = await db.from("tenant_settings").insert({
       tenant_id: tenantId,
-      branding: { name: nombre },
+      branding: marca,
       locale: idioma,
       currency: moneda,
       channels: canales,
-      theme: tema,
     });
     if (error) throw new Error(`No se pudieron crear los ajustes: ${error.message}`);
     console.log(
-      `Ajustes creados (tema '${tema}', idioma ${idioma}, moneda ${moneda}, canales ${canales.join("+") || "ninguno"}).`,
+      `Ajustes creados (marca ${Object.keys(marca).length > 1 ? "propia" : "por defecto"}, idioma ${idioma}, moneda ${moneda}, canales ${canales.join("+") || "ninguno"}).`,
     );
   }
 }

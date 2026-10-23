@@ -152,3 +152,24 @@ Con esto, Garum y Manuela se expresan sin código:
   `products=cards`, no colgado de un `testid` suelto.
 - **`contract.test.tsx`** pasa a recorrer el producto cartesiano de los ejes: 2·3·2·2·2·2 = 96
   combinaciones por estado (bienvenida y carta). Es asumible en tiempo, pero conviene medirlo.
+
+## 8. Resultado de la 2.3 (2026-10-23)
+
+Garum y Manuela son DATOS (`20261022000002_branding_temas_en_datos.sql`, mismos valores en el
+seed) y `contract.test.tsx` recorre las 96 combinaciones × con/sin contenido de marca (192
+casos, ~1,5 s). Comparación con `tests/e2e/carta-visual.spec.ts` (14 capturas, tolerancia
+1 %): las 8 de Garum pasan contra las capturas de los temas antiguos. Las 6 de Manuela se
+verificaron igual, dándole temporalmente su aire inferior exacto (pasaron las de carta; la
+bienvenida solo difería en las banderas), y luego se regeneraron 5 por estas diferencias
+DELIBERADAS:
+
+- **Aire bajo la carta**: 4rem para todos (`.page`, fuera del alto mínimo). Manuela tenía
+  4,5rem: sus páginas cortas quedan 8 px más bajas.
+- **Banderas en la bienvenida de Manuela**: el eje `langs=flag` pinta banderas en TODOS los
+  selectores del cliente; su tema antiguo solo las ponía en la barra de la carta. (En Windows
+  las banderas emoji salen como letras, `ES`/`GB`: es del sistema, igual que antes en la barra.)
+
+Diferencias por debajo de la tolerancia, también deliberadas: el texto sobre el color principal
+(botón de volver, entrar, pedido) es la superficie propia (blanco en los dos) y el texto
+secundario de Garum es el gris de la base (65 % del texto) en vez de su `#3f5548` verdoso. El
+logo de la barra, que ahora enlaza a la bienvenida, se oculta por debajo de 30rem en todos.

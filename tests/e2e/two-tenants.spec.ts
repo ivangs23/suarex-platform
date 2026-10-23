@@ -1,14 +1,15 @@
 import { expect, test } from "@playwright/test";
 
-test("garum sirve su catálogo, su marca y su tema", async ({ page }) => {
+test("garum sirve su catálogo, su marca y su aspecto", async ({ page }) => {
   await page.goto("http://garum.localhost:3000/5");
 
   // El nombre visible sale de `branding.name` (D3), no del slug.
   await expect(page.getByTestId("tenant-name")).toHaveText("Garum Vinoteca");
   await expect(page.getByTestId("mesa")).toHaveText("Mesa 5");
 
-  // Tema A MEDIDA de garum (ver apps/web/app/[mesa]/themes).
-  await expect(page.locator("[data-theme]")).toHaveAttribute("data-theme", "garum");
+  // La carta es la misma para todos; su aspecto sale de SU branding (ejes de layout incluidos).
+  await expect(page.locator("html")).toHaveAttribute("data-tenant", "garum");
+  await expect(page.locator("[data-theme]")).toHaveAttribute("data-layout-welcome", "panel");
 
   const bg = await page.evaluate(() =>
     getComputedStyle(document.documentElement).getPropertyValue("--color-bg").trim(),
@@ -36,11 +37,12 @@ test("garum sirve su catálogo, su marca y su tema", async ({ page }) => {
   await expect(page.getByTestId("breadcrumb")).toContainText("Vinos");
 });
 
-test("manuela sirve un catálogo, una marca y un tema distintos", async ({ page }) => {
+test("manuela sirve un catálogo, una marca y un aspecto distintos", async ({ page }) => {
   await page.goto("http://manuela.localhost:3000/2");
 
   await expect(page.getByTestId("tenant-name")).toHaveText("Manuela Desayuna");
-  await expect(page.locator("[data-theme]")).toHaveAttribute("data-theme", "manuela");
+  await expect(page.locator("html")).toHaveAttribute("data-tenant", "manuela");
+  await expect(page.locator("[data-theme]")).toHaveAttribute("data-layout-welcome", "poster");
 
   const bg = await page.evaluate(() =>
     getComputedStyle(document.documentElement).getPropertyValue("--color-bg").trim(),
@@ -97,7 +99,7 @@ test("un cliente con dominio propio sirve su carta por ese dominio", async ({ pa
 
   await expect(page.getByTestId("tenant-name")).toHaveText("Garum Vinoteca");
   await expect(page.getByTestId("mesa")).toHaveText("Mesa 5");
-  await expect(page.locator("[data-theme]")).toHaveAttribute("data-theme", "garum");
+  await expect(page.locator("html")).toHaveAttribute("data-tenant", "garum");
 
   // Y la navegación por niveles funciona igual que por el subdominio.
   await page.getByTestId("welcome-enter").click();

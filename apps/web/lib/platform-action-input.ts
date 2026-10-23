@@ -15,7 +15,6 @@ export type NuevoCliente = {
   slug: string;
   name: string;
   ownerEmail: string;
-  theme: string;
   locale: string;
   currency: string;
 };
@@ -44,7 +43,6 @@ export function parseNuevoCliente(formData: FormData): NuevoCliente {
     slug,
     name: requiredString(formData, "name").trim(),
     ownerEmail,
-    theme: requiredString(formData, "theme").trim(),
     locale: requiredString(formData, "locale").trim(),
     currency,
   };

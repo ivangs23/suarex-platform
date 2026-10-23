@@ -41,13 +41,13 @@ test("un token de mesa desconocido devuelve 404", async ({ page }) => {
   expect(response?.status()).toBe(404);
 });
 
-test("el QR de la mesa lleva a la carta del cliente, con su tema", async ({ page }) => {
+test("el QR de la mesa lleva a la carta del cliente", async ({ page }) => {
   await page.goto(QR_MESA_1);
 
-  // Redirigido a `/{mesa}`: misma mesa, y ahora con el tema a medida de garum.
+  // Redirigido a `/{mesa}`: misma mesa, y la carta de garum.
   await expect(page).toHaveURL("http://garum.localhost:3000/1");
   await expect(page.getByTestId("mesa")).toHaveText("Mesa 1");
-  await expect(page.locator("[data-theme]")).toHaveAttribute("data-theme", "garum");
+  await expect(page.locator("html")).toHaveAttribute("data-tenant", "garum");
 });
 
 test("la ficha del producto declara alérgenos, opciones y total antes de añadir", async ({

@@ -12,7 +12,6 @@ const VALIDO = {
   slug: "bar-paco",
   name: "Bar Paco",
   owner_email: "dueno@barpaco.com",
-  theme: "generic",
   locale: "es",
   currency: "eur",
 };

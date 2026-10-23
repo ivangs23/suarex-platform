@@ -272,7 +272,7 @@ export function AjustesForm(props: Props) {
             name="background_size"
             type="number"
             min={40}
-            max={600}
+            max={1200}
             step={1}
             defaultValue={branding.background.sizePx}
           />

@@ -1,34 +1,26 @@
-import { GarumTheme } from "./garum";
 import { GenericTheme } from "./generic";
-import { ManuelaTheme } from "./manuela";
 import { pickFromRegistry } from "./pick";
 import type { MenuTheme } from "./types";
 
 /**
  * Registro de temas de la carta pública, indexado por el slug que guarda
- * `tenant_settings.theme`. `generic` es la plantilla tokenizada que se pinta sola con el
- * branding (la que usa cualquier cliente que no quiera un diseño propio); el resto son
- * temas A MEDIDA codificados para clientes con identidad visual propia.
+ * `tenant_settings.theme`. Hoy hay UNO: `generic`, que se pinta entero con el branding del
+ * cliente (colores, fuentes, tokens y ejes de layout). Un cliente con aspecto propio es DATO,
+ * no un componente: ver `docs/superpowers/specs/2026-10-22-temas-data-driven-design.md`.
  *
- * Añadir un cliente a medida = añadir su componente aquí y poner su slug en
- * `tenant_settings.theme`. No hay que tocar la página ni el data layer: todos los temas
- * comparten el contrato `MenuThemeProps`.
+ * El registro se mantiene por si algún día hace falta un tema de código; si se añade, entra
+ * solo en `contract.test.tsx`, que recorre `THEMES` entero.
  */
-/* Exportado para que `contract.test.tsx` recorra TODOS los temas: un tema nuevo queda
-   vigilado por el mero hecho de registrarse aquí, sin apuntarlo en ninguna lista aparte que
-   alguien se olvidaría de actualizar. */
 export const THEMES: Record<string, MenuTheme> = {
   generic: GenericTheme,
-  garum: GarumTheme,
-  manuela: ManuelaTheme,
 };
 
 export const DEFAULT_THEME = "generic";
 
 /**
  * Devuelve el tema de un slug. Un slug desconocido, vacío o `null` cae SIEMPRE al genérico
- * -- un tenant mal configurado (o uno nuevo sin tema) renderiza una carta válida en vez de
- * romper la página.
+ * -- un tenant mal configurado (o uno con un tema de código ya retirado) renderiza una carta
+ * válida en vez de romper la página.
  */
 export function resolveTheme(slug: string | null | undefined): MenuTheme {
   return pickFromRegistry(THEMES, slug, DEFAULT_THEME);

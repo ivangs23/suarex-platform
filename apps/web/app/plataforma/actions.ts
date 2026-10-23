@@ -34,6 +34,8 @@ export const altaClienteAction = platformAction(async (_session, formData: FormD
   const entrada = parseNuevoCliente(formData);
   const { tenantId } = await createTenantWithOwner({
     ...entrada,
+    // La carta es una sola; el aspecto propio se rellena después en los ajustes del cliente.
+    theme: "generic",
     redirectTo: `${origenDelTenant(entrada.slug)}/staff/nueva-clave`,
   });
 
