@@ -4,7 +4,7 @@ import { admin } from "./helpers/tenants.js";
 
 const PNG_1x1 = Uint8Array.from(
   atob(
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
   ),
   (c) => c.charCodeAt(0),
 );
