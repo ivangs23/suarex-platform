@@ -128,6 +128,19 @@ Con esto, Garum y Manuela se expresan sin código:
    barra en móvil y las fuentes del panel. Recomendación: las tres en todos, en la 2.3, con su
    contrato en `contract.test.tsx`.
 
+### Decidido (Iván, 2026-10-23)
+
+"Sí" a los 6 ejes y al bloque de tokens, y **A en las cuatro**:
+
+1. `logoUrl`, `heroUrl` y la textura admiten también rutas `/brands/…` (prefijo cerrado, sin
+   `//` ni `..`). Va en la 2.2 (`parseBranding` y el borde de la Server Action).
+2. `branding.tagline`, traducible por idioma y opcional para cualquier cliente. 2.2 (esquema y
+   panel) y 2.3 (pintarlo).
+3. `welcome.badge = { emoji, color }`, opcional, solo en la variante `poster`. 2.2 y 2.3.
+4. En todos: el logo de la barra vuelve al inicio y la barra se protege en móvil (2.3, con su
+   contrato en `contract.test.tsx`). Las fuentes pasan a un selector entre las familias que se
+   cargan, y `generic` las usa (2.2 el selector, 2.3 el uso).
+
 ## 7. Riesgos para la 2.3
 
 - **Capturas**: la aceptación exige que Garum y Manuela "se vean igual". Las diferencias que se

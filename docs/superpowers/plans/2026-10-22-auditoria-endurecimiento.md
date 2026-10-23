@@ -276,7 +276,7 @@ Manuela sean **datos** en `tenant_settings.branding`.
   imagen), **variante de layout** (p. ej. "tarjetas en rejilla vs lista", "bienvenida a
   pantalla completa vs cabecera", "categorías en pestañas vs acordeón") o **funcionalidad**
   (si aparece alguna: es una violación de la doctrina y hay que unificarla en todos).
-- [ ] Listar las variantes resultantes (objetivo: ≤ 6 ejes, cada uno con 2-3 valores). Si
+- [x] Listar las variantes resultantes (objetivo: ≤ 6 ejes, cada uno con 2-3 valores). Si
   un tema necesita algo que no cabe en tokens+variantes, decidir con Iván si se generaliza
   o se descarta. **Parar aquí y pedir el "sí" de Iván antes de la 2.2.**
 
