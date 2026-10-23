@@ -4,15 +4,9 @@ import type { Database } from "./database.types.js";
 let cached: SupabaseClient<Database> | null = null;
 
 /**
- * Cliente con service role, SIN NINGÚN filtro de tenant aplicado. Deliberadamente NO se
- * exporta: es una función privada de este fichero, así que ningún otro módulo de este
- * paquete (ni por tanto ningún subproyecto externo) puede importarla -- no existe un
- * nombre `serviceClient` exportado que atrapar (`import { serviceClient } from
- * "./client.js"` desde otro fichero es un error de compilación, TS2459: "declares
- * 'serviceClient' locally, but it is not exported"; ver el fixture en
- * `src/__compile_fixtures__` y `tests/integration/tenant-filter-structural.test.ts`).
- * El único código de todo el paquete que puede tocar Supabase sin pasar por
- * `tenantScoped`/`tenantsTableForHostResolution` es el que está en ESTE fichero.
+ * Cliente con service role, SIN filtro de tenant. No se exporta (importarlo desde otro fichero es
+ * TS2459): solo este fichero toca Supabase sin `tenantScoped`. Ver
+ * docs/decisions/0007-tenantscoped-y-sus-exenciones.md.
  */
 function serviceClient(): SupabaseClient<Database> {
   if (cached) return cached;
@@ -80,15 +74,10 @@ export type _TenantScopedTableExiste = Cierto<
 >;
 
 /**
- * ÚNICO punto de entrada a una tabla tenant-scoped desde este paquete. `tenantId` es un
- * parámetro obligatorio -- sin `?`, sin default -- así que omitirlo es un error de
- * compilación (TS2554: "Expected 2 arguments, but got 1"), no un bug que dependa de que
- * alguien recuerde escribir `.eq('tenant_id', tenantId)` en cada función repositorio.
- *
- * El filtro se aplica DENTRO de `select`, antes de devolver el builder: quien llama solo
- * puede encadenar condiciones ADICIONALES (`.eq(...)`, `.order(...)`, `.maybeSingle()`...)
- * sobre un resultado que ya viene acotado al tenant -- no hay forma de "quitar" el filtro
- * base desde fuera, porque nunca se expone el builder sin él.
+ * ÚNICO punto de entrada a una tabla del tenant. `tenantId` es obligatorio (omitirlo no compila)
+ * y el filtro se aplica ANTES de devolver el builder: quien llama solo añade condiciones, nunca
+ * lo quita. Todo lo demás es una exención numerada de abajo, registrada en
+ * docs/decisions/0007-tenantscoped-y-sus-exenciones.md.
  */
 export function tenantScoped<T extends TenantScopedTable>(table: T, tenantId: string) {
   // El filtro va por `match` y no por `eq`: sobre un genérico, TypeScript no puede comprobar
@@ -133,13 +122,8 @@ export function tenantScoped<T extends TenantScopedTable>(table: T, tenantId: st
     },
 
     /**
-     * Igual que `insert`, pero como UPSERT sobre `onConflict` (columnas separadas por
-     * coma, tal como las espera postgrest-js): si ya existe una fila con esa clave,
-     * la actualiza en vez de fallar contra la restricción única/PK. Añadido para
-     * `pairDevice` (`src/devices.ts`, fix de la cuenta huérfana): un reintento tras un
-     * fallo parcial de emparejamiento debe poder volver a intentar la membership del
-     * dispositivo sin reventar contra la PK (`user_id, tenant_id`) de una fila que ya
-     * dejó un intento anterior a medio camino.
+     * Como `insert`, pero UPSERT sobre `onConflict` (columnas separadas por coma): un reintento
+     * de `pairDevice` tras un fallo parcial vuelve a escribir la membership sin chocar con la PK.
      */
     upsert(row: SinTenant<Tablas[T]["Insert"]>, onConflict: string) {
       const { tenant_id: _ignored, ...rest } = row as Record<string, unknown>;
@@ -151,13 +135,8 @@ export function tenantScoped<T extends TenantScopedTable>(table: T, tenantId: st
     },
 
     /**
-     * El filtro de tenant se aplica ANTES de devolver el builder, igual que en
-     * `select`/`update`: quien llama solo puede acotar el DELETE más (`.eq("id", ...)`,
-     * ...) sobre un conjunto que ya está limitado a `tenant_id = tenantId` -- no hay
-     * forma de borrar una fila de otro tenant pasando su id, porque el WHERE de tenant ya
-     * está fijado antes de que el llamante añada nada. Añadido para el CRUD de catálogo
-     * de administración (`src/admin-catalog.ts`): ningún repositorio anterior a este
-     * necesitaba borrar filas.
+     * El filtro de tenant va antes de devolver el builder, como en `select`/`update`: no se
+     * puede borrar una fila de otro tenant pasando su id.
      */
     delete() {
       return serviceClient().from(table).delete().match(delTenant);
@@ -166,81 +145,42 @@ export function tenantScoped<T extends TenantScopedTable>(table: T, tenantId: st
 }
 
 /**
- * EXENCIÓN DELIBERADA a la regla de arriba, acotada por firma a la tabla `tenants` (no un
- * `serviceClient()` genérico ni un parámetro de tabla): `tenants` no tiene `tenant_id`
- * propio (se identifica por su propia `id`), así que no encaja en `tenantScoped`.
- * Ningún otro código puede colarse por aquí para leer sin filtro ninguna otra tabla.
- * Esto NO es un escape hatch de propósito general -- si en el futuro hace falta otro
- * acceso sin `tenant_id` a una tabla DISTINTA, necesita su propio accessor igual de
- * estrecho y documentado, no una reutilización de este. Dos usos legítimos, ambos
- * búsquedas de una sola fila (nunca un barrido):
- *   1. `findTenantByHost` (`./tenants.js`): resuelve qué tenant corresponde al header
- *      `Host` de la petición ANTES de que exista ningún tenantId -- es precisamente la
- *      búsqueda que determina cuál es el tenant, así que no puede filtrarse por `id`
- *      (es justo lo que se busca resolver). Filtra por `slug`/`custom_domain`, cada uno
- *      con índice único.
- *   2. `getTenantStripeAccount` (`./tenants.js`): lee la fila del PROPIO tenant por su
- *      `id` (primary key) una vez que `tenantId` ya se conoce -- no es una búsqueda de
- *      resolución de host, pero sigue siendo una consulta de una sola fila acotada por
- *      clave única, y `tenants` no admite `tenantScoped` por el mismo motivo que el
- *      caso 1 (sin columna `tenant_id`). No amplía lo que este accessor puede hacer:
- *      sigue siendo lectura de una sola fila de `tenants`, nunca un barrido.
+ * PRIMERA EXENCIÓN DELIBERADA. Lectura de UNA fila de `tenants` por clave única (`slug`,
+ * `custom_domain` o `id`), nunca un barrido. `tenants` no tiene `tenant_id`, y resolver el host o
+ * el slug es justo lo que revela el tenant. Solo lectura: cada escritura a `tenants` tiene su
+ * propia exención (13ª, 14ª, 16ª). Llamantes en `src/tenants.ts`.
  */
 export function tenantsTableForHostResolution() {
   return serviceClient().from("tenants");
 }
 
 /**
- * DECIMOTERCERA EXENCIÓN DELIBERADA, hermana de `tenantsTableForHostResolution` pero para
- * ESCRITURA, y separada de ella justamente para que aquel siga siendo de solo lectura.
- *
- * Único uso legítimo: `setTenantCustomDomain` (`./tenants.js`), que fija el dominio propio
- * del tenant. Acotada por firma a `tenants` y, sobre todo, por contrato: su único llamante
- * SIEMPRE filtra `.eq("id", tenantId)` con el `tenantId` de la sesión, nunca uno que venga
- * del formulario. `tenants` no admite `tenantScoped` porque no tiene columna `tenant_id`
- * (se identifica por su propia `id`), que es el mismo motivo de la exención de lectura.
- *
- * Lo que se escribe por aquí decide qué certificados pide Caddy y qué tenant sirve un Host,
- * así que el valor pasa antes por `normalizeCustomDomain` (`@suarex/config`) en el borde de
- * la Server Action: aquí nunca llega texto crudo del formulario.
+ * DECIMOTERCERA EXENCIÓN DELIBERADA. Escritura del `custom_domain` del PROPIO tenant: su único
+ * llamante, `setTenantCustomDomain`, filtra siempre `.eq("id", tenantId)` con el de la sesión, y
+ * el valor llega normalizado (`normalizeCustomDomain`) desde la Server Action: decide qué
+ * certificados pide Caddy y qué tenant sirve un Host. Separada de la 1ª para que esa siga siendo
+ * de solo lectura.
  */
 export function tenantsTableForCustomDomainWrite() {
   return serviceClient().from("tenants");
 }
 
 /**
- * DECIMOCTAVA EXENCIÓN DELIBERADA. `sweep_device_health` es SECURITY DEFINER y recorre
- * `devices` de TODOS los tenants: su trabajo es precisamente encontrar los PCs caídos allá
- * donde estén, y un barrido acotado a un tenant exigiría saber de antemano cuál se ha caído.
- * Es mantenimiento de la plataforma, no una operación de negocio de ningún cliente -- misma
- * naturaleza que `expirePendingOrdersRpc`.
- *
- * El barrido vive DENTRO de la función SQL, no aquí: el UPDATE ... RETURNING es atómico, así
- * que dos ejecuciones solapadas del cron no pueden avisar las dos del mismo dispositivo.
- * Acotado por firma a `sweepDeviceHealth` (`src/device-health.ts`).
+ * DECIMOCTAVA EXENCIÓN DELIBERADA. `sweep_device_health` (SECURITY DEFINER) recorre `devices` de
+ * TODOS los tenants: encontrar los PCs caídos allá donde estén es mantenimiento de la plataforma.
+ * El UPDATE ... RETURNING es atómico, así que dos crons solapados no avisan dos veces del mismo.
+ * Solo `sweepDeviceHealth` (`src/device-health.ts`).
  */
 export function sweepDeviceHealthRpc(minutos: number) {
   return serviceClient().rpc("sweep_device_health", { p_minutos: minutos });
 }
 
 /**
- * DECIMOSEXTA EXENCIÓN DELIBERADA, y una de las DOS de todo el paquete que barren de verdad
- * (la otra es `devicesTableForHealthSweep`, arriba): devuelve `tenants` sin filtro de ninguna
- * clase, para leer TODAS las filas y para insertar una nueva.
- *
- * Es inevitable y es el punto: la consola de plataforma es, por definición, la superficie que
- * mira por encima de todos los clientes. No hay forma de expresarla sin esto, y fingir lo
- * contrario -- por ejemplo pidiendo un `tenantId` que luego se ignora -- sería peor: escondería
- * en una firma tranquilizadora lo que aquí está escrito a la vista.
- *
- * Lo que la mantiene acotada NO es la firma, entonces, sino su único llamante:
- * `src/platform.ts`, consumido exclusivamente desde `app/plataforma/**`, que a su vez está
- * detrás de DOS barreras independientes -- el 404 del proxy para cualquier host que no sea el
- * de plataforma (`apps/web/proxy.ts`) y `requirePlatformAdmin()`.
- *
- * Cualquier llamante nuevo a esta función es un fallo de revisión: si hace falta tocar
- * `tenants` desde otro sitio, se declara su propia exención estrecha, como
- * `tenantsTableForBilling`.
+ * DECIMOSEXTA EXENCIÓN DELIBERADA. `tenants` SIN ningún filtro, para listar todos y crear uno: es
+ * la consola de plataforma, que por definición mira por encima de todos los clientes. No la acota
+ * la firma sino su único llamante, `src/platform.ts`, usado solo desde `app/plataforma/**` detrás
+ * de dos barreras (el 404 del proxy fuera del host de plataforma y `requirePlatformAdmin()`).
+ * Un llamante nuevo es un fallo de revisión: otra necesidad, otra exención.
  */
 export function tenantsTableForPlatformConsole() {
   return serviceClient().from("tenants");
@@ -259,35 +199,19 @@ export function authAdminForPlatformConsole() {
 }
 
 /**
- * DECIMOQUINTA EXENCIÓN DELIBERADA. `platform_admins` no tiene `tenant_id` y no puede tenerlo:
- * un superadmin no pertenece a ningún cliente, y esa es toda su razón de ser (ver
- * `20260915000003_platform_admins.sql`). Acotado por firma a esa única tabla y a un único
- * llamante -- `isPlatformAdmin` (`src/platform.ts`) -- que es una búsqueda por clave primaria:
- * una fila o ninguna, nunca un barrido.
- *
- * La tabla tiene RLS sin policies Y el revoke a anon/authenticated, así que este accessor es
- * literalmente el único camino que existe hacia ella en todo el sistema.
+ * DECIMOQUINTA EXENCIÓN DELIBERADA. `platform_admins` no tiene ni puede tener `tenant_id`: un
+ * superadmin no es de ningún cliente. Búsqueda por PK desde `isPlatformAdmin` (`src/platform.ts`).
+ * La tabla tiene RLS sin policies y revoke a anon/authenticated: este es el único camino hacia ella.
  */
 export function platformAdminsTable() {
   return serviceClient().from("platform_admins");
 }
 
 /**
- * DECIMOCUARTA EXENCIÓN DELIBERADA, hermana de `tenantsTableForCustomDomainWrite` y separada
- * de ella por el mismo motivo por el que aquella se separó de la de lectura: cada escritura a
- * `tenants` declara qué columnas puede tocar y quién la llama.
- *
- * Único uso legítimo: `./billing.js` (`applySubscriptionState`, `suspendExpiredGrace`), que
- * escribe `plan_status`, `status`, `grace_until` y `stripe_subscription_id` a partir de lo que
- * comunica el webhook de facturación de Stripe. `tenants` no admite `tenantScoped` porque no
- * tiene columna `tenant_id` (se identifica por su propia `id`).
- *
- * Es la ÚNICA exención de este fichero cuyo filtro no es la `id` del tenant:
- * `applySubscriptionState` localiza por `stripe_customer_id` (índice único parcial, ver
- * `20260915000002_tenant_subscription.sql`) porque los webhooks de Stripe no saben nada de
- * tenants -- ese identificador es todo lo que traen. Sigue siendo una fila por clave única.
- * La excepción es `suspendExpiredGrace`, que actualiza por predicado de fecha a propósito: es
- * un barrido de mantenimiento, no una operación de negocio de ningún tenant.
+ * DECIMOCUARTA EXENCIÓN DELIBERADA. Escritura del estado de suscripción (`plan_status`, `status`,
+ * `grace_until`, `stripe_subscription_id`) desde `src/billing.ts`. `applySubscriptionState`
+ * localiza por `stripe_customer_id` (índice único parcial) porque el webhook de Stripe no conoce
+ * tenants: una fila. `suspendExpiredGrace` barre por fecha a propósito: es mantenimiento.
  */
 export function tenantsTableForBilling() {
   return serviceClient().from("tenants");
@@ -304,16 +228,10 @@ export function tablesTableForTokenResolution() {
 }
 
 /**
- * TERCERA EXENCIÓN DELIBERADA, con dos usos legítimos, ambos búsquedas por una
- * columna con índice único global (devuelven una fila o ninguna, nunca pueden
- * usarse para barrer datos de nadie):
- *   1. El webhook de Stripe identifica el pedido por `stripe_payment_intent_id`
- *      (columna `unique`) y no sabe nada de tenants: Stripe no los conoce.
- *   2. `getOrderByPublicToken` resuelve el estado de un pedido para el cliente
- *      (consulta de invitado, sin sesión) por `public_token` (índice único
- *      `orders_public_token_idx`) -- igual que el token de mesa, es lo que
- *      identifica la fila antes de que exista ningún tenant conocido.
- * Acotado por firma a `orders`; no es un escape hatch de propósito general.
+ * TERCERA EXENCIÓN DELIBERADA. `orders` por una columna con índice único global, una fila o
+ * ninguna: `stripe_payment_intent_id` (el webhook de Stripe no conoce tenants) o `public_token`
+ * (la pantalla del pedido, sin sesión: el token es lo que identifica la fila). Acotado por firma
+ * a `orders`; llamantes en `src/orders.ts`.
  */
 export function ordersTableForPaymentResolution() {
   return serviceClient().from("orders");
@@ -332,15 +250,9 @@ export function nextOrderNumberRpc(tenantId: string, venueId: string) {
 }
 
 /**
- * DECIMONOVENA EXENCIÓN DELIBERADA, mismo razonamiento que `nextOrderNumberRpc`:
- * `registrar_escaneo` es SECURITY DEFINER y deduce el tenant y la sede de la propia mesa, que
- * es lo único que el llamante conoce en ese punto -- la ruta del QR resuelve el token ANTES de
- * saber de quién es la mesa.
- *
- * Es una RPC y no un upsert porque el incremento tiene que ser atómico: dos comensales
- * escaneando en el mismo segundo se pisarían y el contador se quedaría corto.
- *
- * Acotado por firma a esa única RPC.
+ * DECIMONOVENA EXENCIÓN DELIBERADA. `registrar_escaneo` (SECURITY DEFINER) deduce el tenant y la
+ * sede de la propia mesa, que es lo único que conoce la ruta del QR. RPC y no upsert porque el
+ * incremento tiene que ser atómico: dos escaneos en el mismo segundo se pisarían.
  */
 export function registrarEscaneoRpc(tableId: string) {
   return serviceClient().rpc("registrar_escaneo", { p_table_id: tableId });
@@ -368,29 +280,19 @@ export function stripeEventsTableForRetention() {
 }
 
 /**
- * QUINTA EXENCIÓN DELIBERADA, mismo razonamiento que `ordersTableForPaymentResolution`:
- * el emparejamiento de un dispositivo se busca por `pairing_code` (índice único parcial
- * `devices_pairing_code_idx`, ver la migración), y en ese momento el llamante todavía no
- * conoce el tenant -- es precisamente esa búsqueda la que lo revela. Acotado por firma a
- * `devices`; no es un escape hatch de propósito general. Se reutiliza también para el
- * canje atómico en sí (un único `UPDATE ... WHERE pairing_code = $1 AND
- * pairing_expires_at > now() ... RETURNING` que borra el código y fija `paired_at` en la
- * MISMA sentencia, sin SELECT previo -- ver `pairDevice` en `src/devices.ts` para el
- * razonamiento de atomicidad bajo concurrencia) y para el UPDATE posterior que enlaza
- * `auth_user_id` tras crear/recuperar la cuenta: en ese punto la fila ya se identifica
- * por su `id` (primary key), así que sigue siendo una operación de una sola fila
- * conocida, nunca un barrido.
+ * QUINTA EXENCIÓN DELIBERADA. `devices` por `pairing_code` (índice único parcial): el código es
+ * lo que revela el tenant. También el canje atómico (un UPDATE ... RETURNING que borra el código y
+ * fija `paired_at` sin SELECT previo; ver `pairDevice`) y el UPDATE que enlaza `auth_user_id` por
+ * `id`. Siempre una fila conocida, nunca un barrido.
  */
 export function devicesTableForPairing() {
   return serviceClient().from("devices");
 }
 
 /**
- * Resolución del token de totem, ANTES de conocer el tenant. Igual que
- * `tablesTableForTokenResolution` para la mesa: un `SELECT ... WHERE totem_token = $1` de una
- * sola fila conocida, no un barrido. El token es la autoridad del canal kiosko (la ventana del
- * totem lo lleva en la URL), así que la búsqueda no puede pasar por `tenantScoped` (no hay tenant
- * todavía). No es un escape hatch general.
+ * VIGESIMOSEGUNDA EXENCIÓN DELIBERADA. `devices` por `totem_token`, igual que la mesa por su
+ * token: es la autoridad del canal kiosko y revela el tenant. Una fila, nunca un barrido. Solo
+ * `findDeviceByTotemToken` (`src/kiosko-entry.ts`).
  */
 export function devicesTableForTotemToken() {
   return serviceClient().from("devices");
@@ -431,46 +333,29 @@ export function reservePrintedRpc(
 }
 
 /**
- * OCTAVA EXENCIÓN DELIBERADA. Devuelve el accessor de Storage ya atado al bucket
- * `catalog` (`.storage.from("catalog")`), NO `.storage` a secas -- así, igual que
- * `tenantScoped` ata cada llamada a UNA tabla, esta función ata cada llamada a UN
- * bucket: quien la use puede subir/listar objetos de `catalog`, pero no puede pedir
- * ningún otro bucket ni colarse a ninguna tabla sin pasar por `tenantScoped`. El
- * bucket `catalog` (ver `supabase/migrations/20260722000007_catalog_storage.sql`) es
- * público en lectura y sin policies de escritura para anon/authenticated: solo el
- * service role escribe, y solo a través de esta función. Acotado por firma a
- * `uploadProductImage` (`src/storage.ts`), el único punto del paquete que sube
- * imágenes de producto.
+ * OCTAVA EXENCIÓN DELIBERADA. Storage atado al bucket `catalog`, no `.storage` a secas: quien la
+ * usa no puede pedir otro bucket ni una tabla. El bucket es público en lectura y sin policies de
+ * escritura: solo el service role escribe, y solo por aquí (`src/storage.ts`, fotos de producto y
+ * de marca).
  */
 export function catalogBucket() {
   return serviceClient().storage.from("catalog");
 }
 
 /**
- * NOVENA EXENCIÓN DELIBERADA. Los 14 alérgenos globales de la UE (`tenant_id` NULL, ver
- * `20260721000002_catalog.sql`) son un catálogo de referencia compartido por todos los
- * tenants -- no pertenecen a ninguno, así que no encajan en `tenantScoped` (que exige
- * `tenant_id = tenantId`) ni tiene sentido inventarles un tenant ficticio para colarlos
- * ahí. El filtro `tenant_id is null` va DENTRO de esta función, no expuesto como
- * parámetro: quien llama solo puede pedir "los globales", nunca los de un tenant
- * arbitrario (para eso ya existe `tenantScoped("allergens", tenantId)`). Acotado por
- * firma a `listAssignableAllergens` (`src/admin-catalog.ts`, Task 5): el formulario de
- * producto del panel de administración necesita ofrecer como casillas los 14 globales
- * MÁS los propios del tenant, y `listAdminCatalog` deliberadamente solo devuelve estos
- * últimos (ver su docstring).
+ * NOVENA EXENCIÓN DELIBERADA. Los 14 alérgenos globales de la UE (`tenant_id` NULL) no son de
+ * ningún tenant. El filtro `is null` va DENTRO: quien llama solo puede pedir los globales, nunca
+ * los de otro tenant (para los propios, `tenantScoped("allergens", …)`). Solo
+ * `listAssignableAllergens` (`src/admin-catalog.ts`).
  */
 export function globalAllergensTable() {
   return serviceClient().from("allergens").select("id, name_i18n, icon").is("tenant_id", null);
 }
 
 /**
- * DÉCIMA EXENCIÓN DELIBERADA, mismo razonamiento que `authAdminForDevicePairing`: el alta de
- * personal (D3) crea un usuario de Supabase Auth para el camarero antes de darle su
- * membership. No hay tabla que filtrar aquí -- es la API de administración de Auth -- así que
- * no encaja en `tenantScoped`. Acotado por firma al único uso legítimo: `createStaff`/
- * `listStaff` (`src/admin-staff.ts`). NO se reutiliza `authAdminForDevicePairing`: cada
- * consumidor de la Admin API declara su propia exención estrecha y documentada, para que
- * cada punto que puede crear cuentas de Auth sea rastreable a un único llamante.
+ * DÉCIMA EXENCIÓN DELIBERADA. Admin API de Auth para el alta de personal: crea el usuario del
+ * camarero antes de darle su membership; no hay tabla que filtrar. Solo `createStaff`/`listStaff`
+ * (`src/admin-staff.ts`); cada punto que crea cuentas tiene su propia exención.
  */
 export function authAdminForStaffCreation() {
   return serviceClient().auth.admin;
@@ -490,10 +375,9 @@ export function pairRateLimitRpc(ip: string, windowSeconds: number, max: number)
 }
 
 /**
- * MISMA EXENCIÓN QUE `pairRateLimitRpc`, con la tabla genérica `rate_limit_hits`:
- * `check_rate_limit` es SECURITY DEFINER, no depende de ningún tenant y se concede solo a
- * `service_role`. Acotado por firma a `checkRateLimit` (`src/rate-limit.ts`), que es la
- * única vía de este paquete hacia esa función.
+ * VIGESIMOTERCERA EXENCIÓN DELIBERADA. `check_rate_limit` (tabla genérica `rate_limit_hits`) es
+ * SECURITY DEFINER, no depende de ningún tenant y se concede solo a `service_role`. Solo
+ * `checkRateLimit` (`src/rate-limit.ts`).
  */
 export function rateLimitRpc(bucket: string, key: string, windowSeconds: number, max: number) {
   return serviceClient().rpc("check_rate_limit", {
@@ -505,19 +389,18 @@ export function rateLimitRpc(bucket: string, key: string, windowSeconds: number,
 }
 
 /**
- * MISMA EXENCIÓN. `expire_pending_orders` es SECURITY DEFINER, es una tarea de mantenimiento
- * (no una operación de negocio de ningún tenant) y se concede solo a `service_role`. Acotado
- * por firma a `expirePendingOrders` (`src/orders.ts`), que lo llama el endpoint de cron.
+ * VIGESIMOCUARTA EXENCIÓN DELIBERADA. `expire_pending_orders` es SECURITY DEFINER y mantenimiento
+ * de la plataforma, no negocio de ningún cliente; solo para `service_role`. Solo
+ * `expirePendingOrders` (`src/orders.ts`), desde el cron.
  */
 export function expirePendingOrdersRpc(timeoutMinutes: number) {
   return serviceClient().rpc("expire_pending_orders", { p_timeout_minutes: timeoutMinutes });
 }
 
 /**
- * MISMA EXENCIÓN. `marcar_agotado_hoy` es SECURITY DEFINER y recibe el tenant como parámetro,
- * así que el filtro va dentro de la función SQL -- que además calcula la hora de vuelta en la
- * ZONA DEL LOCAL, algo que en JavaScript exigiría aritmética de husos horarios propensa a
- * fallar. Acotado por firma a `marcarAgotadoHoy` (`src/admin-catalog.ts`).
+ * VIGESIMOQUINTA EXENCIÓN DELIBERADA. `marcar_agotado_hoy` es SECURITY DEFINER y recibe el tenant:
+ * el filtro va en SQL, que además calcula la hora de vuelta en la ZONA DEL LOCAL. Solo
+ * `marcarAgotadoHoy` (`src/admin-catalog.ts`).
  */
 export function marcarAgotadoHoyRpc(tenantId: string, productId: string) {
   return serviceClient().rpc("marcar_agotado_hoy", {
@@ -527,12 +410,10 @@ export function marcarAgotadoHoyRpc(tenantId: string, productId: string) {
 }
 
 /**
- * MISMA EXENCIÓN. `record_order_refund` es SECURITY DEFINER y localiza el pedido por
- * `stripe_payment_intent_id` (índice único global) porque el webhook de Stripe no conoce el
- * tenant -- Stripe no sabe nada de tenants. El bloqueo de fila y la decisión de si el
- * reembolso es total o parcial viven DENTRO de la función SQL, que es lo que hace la
- * operación atómica frente a dos eventos solapados de Stripe. Acotado por firma a
- * `markOrderRefunded` (`src/orders.ts`).
+ * VIGESIMOSEXTA EXENCIÓN DELIBERADA. `record_order_refund` es SECURITY DEFINER y localiza el
+ * pedido por `stripe_payment_intent_id` (el webhook no conoce el tenant). El bloqueo de fila y el
+ * total o parcial van dentro de la función: atómico frente a dos eventos solapados de Stripe.
+ * Solo `markOrderRefunded` (`src/orders.ts`).
  */
 export function recordOrderRefundRpc(paymentIntentId: string, refundedCents: number) {
   return serviceClient().rpc("record_order_refund", {
@@ -542,10 +423,9 @@ export function recordOrderRefundRpc(paymentIntentId: string, refundedCents: num
 }
 
 /**
- * MISMA EXENCIÓN QUE `expirePendingOrdersRpc`. `purge_order_personal_data` es SECURITY
- * DEFINER, es mantenimiento de RETENCIÓN (no una operación de negocio de ningún tenant: barre
- * todos por igual, que es justo lo que la retención exige) y se concede solo a `service_role`.
- * Acotado por firma a `purgeOrderPersonalData` (`src/orders.ts`), que lo llama el cron.
+ * VIGESIMOSÉPTIMA EXENCIÓN DELIBERADA. `purge_order_personal_data` es SECURITY DEFINER y
+ * RETENCIÓN: barre todos los tenants por igual, que es lo que la retención exige; solo para
+ * `service_role`. Solo `purgeOrderPersonalData` (`src/orders.ts`), desde el cron.
  */
 export function purgeOrderPersonalDataRpc(notesDays: number, ordersMonths: number) {
   return serviceClient().rpc("purge_order_personal_data", {
