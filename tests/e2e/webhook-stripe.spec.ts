@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import Stripe from "stripe";
 import {
+  cobroDelPedidoForTest,
   deleteOrder,
   deleteStripeConfig,
   findOrderByPublicToken,
@@ -27,13 +28,28 @@ const ORIGIN = "http://garum.localhost:3000";
 const QR_MESA_1 = `${ORIGIN}/m/11111111-1111-1111-1111-111111111111`;
 const SECRETO = "whsec_de_prueba_garum";
 
-/** Un evento firmado como lo firmaría Stripe, sin salir de la máquina. */
-function eventoFirmado(paymentIntentId: string, secret = SECRETO) {
+type Cobro = { amountCents: number; currency: string };
+
+/** Un evento firmado como lo firmaría Stripe, sin salir de la máquina. Lleva lo cobrado: el
+ *  webhook solo marca pagado un cobro que cuadra con el total del pedido. El `id` es único
+ *  porque una reentrega del mismo evento ya procesado se descarta. */
+function eventoFirmado(
+  paymentIntentId: string,
+  cobro: Cobro = { amountCents: 0, currency: "eur" },
+  secret = SECRETO,
+) {
   const payload = JSON.stringify({
-    id: `evt_${Date.now()}`,
+    id: `evt_${Date.now()}_${Math.random().toString(36).slice(2)}`,
     object: "event",
     type: "payment_intent.succeeded",
-    data: { object: { id: paymentIntentId, object: "payment_intent" } },
+    data: {
+      object: {
+        id: paymentIntentId,
+        object: "payment_intent",
+        amount_received: cobro.amountCents,
+        currency: cobro.currency,
+      },
+    },
   });
   const signature = Stripe.webhooks.generateTestHeaderString({ payload, secret });
   return { payload, signature };
@@ -50,7 +66,7 @@ async function pedidoPendiente(page: import("@playwright/test").Page, intentId: 
   const { publicToken } = (await response.json()) as { publicToken: string };
   const { orderId } = await findOrderByPublicToken(publicToken);
   await setPaymentIntentForTest(orderId, intentId);
-  return orderId;
+  return { orderId, cobro: await cobroDelPedidoForTest(orderId) };
 }
 
 /**
@@ -73,10 +89,10 @@ test.afterEach(async () => {
 
 test("un evento firmado por el negocio marca su pedido pagado", async ({ page }) => {
   const intentId = `pi_ok_${Date.now()}`;
-  const orderId = await pedidoPendiente(page, intentId);
+  const { orderId, cobro } = await pedidoPendiente(page, intentId);
   await conCredenciales();
   try {
-    const { payload, signature } = eventoFirmado(intentId);
+    const { payload, signature } = eventoFirmado(intentId, cobro);
     const response = await page.request.post(`${ORIGIN}/api/webhook/stripe/garum`, {
       headers: { "stripe-signature": signature, "content-type": "application/json" },
       data: payload,
@@ -90,14 +106,37 @@ test("un evento firmado por el negocio marca su pedido pagado", async ({ page })
   }
 });
 
+test("un cobro que no es el total del pedido no lo da por pagado", async ({ page }) => {
+  /* El PaymentIntent se crea con el importe exacto: un cobro distinto es un fallo o una
+     manipulación. Se responde 200 (Stripe no debe reintentar) y el pedido sigue sin pagar. */
+  const intentId = `pi_importe_${Date.now()}`;
+  const { orderId, cobro } = await pedidoPendiente(page, intentId);
+  await conCredenciales();
+  try {
+    const { payload, signature } = eventoFirmado(intentId, {
+      ...cobro,
+      amountCents: cobro.amountCents - 1,
+    });
+    const response = await page.request.post(`${ORIGIN}/api/webhook/stripe/garum`, {
+      headers: { "stripe-signature": signature, "content-type": "application/json" },
+      data: payload,
+    });
+
+    expect(response.ok()).toBeTruthy();
+    expect(await orderStatusForTest(orderId)).toBe("pending");
+  } finally {
+    await deleteOrder(orderId);
+  }
+});
+
 test("una firma hecha con OTRO secreto no marca nada", async ({ page }) => {
   /* Es la mitad que hace útil a la otra: si cualquier cuerpo colara, el endpoint sería una forma
      de marcar pedidos como pagados sin haber pagado. */
   const intentId = `pi_mala_${Date.now()}`;
-  const orderId = await pedidoPendiente(page, intentId);
+  const { orderId, cobro } = await pedidoPendiente(page, intentId);
   await conCredenciales();
   try {
-    const { payload, signature } = eventoFirmado(intentId, "whsec_de_otro_negocio");
+    const { payload, signature } = eventoFirmado(intentId, cobro, "whsec_de_otro_negocio");
     const response = await page.request.post(`${ORIGIN}/api/webhook/stripe/garum`, {
       headers: { "stripe-signature": signature, "content-type": "application/json" },
       data: payload,

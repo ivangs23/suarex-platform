@@ -297,6 +297,23 @@ export async function setPaymentIntentForTest(orderId: string, intentId: string)
   if (error) throw error;
 }
 
+/** Lo que Stripe cobraría por un pedido, como lo manda en el evento: céntimos y moneda en
+ *  minúsculas. El webhook solo marca pagado un cobro que cuadra con el total. */
+export async function cobroDelPedidoForTest(
+  orderId: string,
+): Promise<{ amountCents: number; currency: string }> {
+  const { data, error } = await admin
+    .from("orders")
+    .select("total, currency")
+    .eq("id", orderId)
+    .single();
+  if (error) throw error;
+  return {
+    amountCents: Math.round(Number(data.total) * 100),
+    currency: String(data.currency).toLowerCase(),
+  };
+}
+
 /** Estado actual de un pedido, para comprobar si el webhook lo marcó pagado. */
 export async function orderStatusForTest(orderId: string): Promise<string> {
   const { data, error } = await admin.from("orders").select("status").eq("id", orderId).single();
