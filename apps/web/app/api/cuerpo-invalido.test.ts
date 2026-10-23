@@ -49,6 +49,7 @@ describe("POST /api/orders con un cuerpo inválido", () => {
   it.each([
     ["JSON roto", "{no es json"],
     ["sin líneas", JSON.stringify({ lines: [] })],
+    ["líneas como objeto", JSON.stringify({ lines: {} })],
     [
       "productId que no es uuid",
       JSON.stringify({ lines: [{ productId: "1; drop table orders", quantity: 1 }] }),
