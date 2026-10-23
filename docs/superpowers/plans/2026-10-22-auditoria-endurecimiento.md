@@ -379,13 +379,18 @@ sin poder leer el contenedor avisa y sale con 1). `LOG_FICHERO` permite repetirl
 
 ### Tarea 3.3 — Medir la flakiness que absorbe `retry: 2`
 
-- [ ] Vitest: reporter que cuente tests que pasaron solo en reintento (vitest expone
+- [x] Vitest: reporter que cuente tests que pasaron solo en reintento (vitest expone
   `result.retryCount`; un reporter custom de 30 líneas en `tests/helpers/`). Imprimir al
   final "N tests necesitaron reintento: lista".
-- [ ] Playwright: `reporter: [["list"], ["json", { outputFile: "test-results/e2e.json" }]]` y
+- [x] Playwright: `reporter: [["list"], ["json", { outputFile: "test-results/e2e.json" }]]` y
   un script `scripts/flaky-e2e.mjs` que lista los `flaky`.
-- [ ] Anotar en `README.md` → "Verificación" que si un test aparece 3 veces en esa lista se
+- [x] Anotar en `README.md` → "Verificación" que si un test aparece 3 veces en esa lista se
   abre issue: `retry` es para el entorno, no para bugs.
+
+**Hecho (2026-10-23):** en Vitest 4.1.10 no hay `result.retryCount`: el reporter usa
+`testCase.diagnostic()` (`retryCount` y `flaky`), decidido con Iván. Va solo en
+`vitest.config.ts` (integración), el único con `retry`. El parseo del JSON de Playwright vive en
+`scripts/lib/flaky-e2e.mjs`, con test sobre un informe de muestra con `describe` anidados.
 
 ---
 
