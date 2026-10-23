@@ -4,11 +4,24 @@
  * `catalog-action-input.ts`/`device-action-input.ts`). En el borde de la Server Action se
  * RECHAZA (no se degrada en silencio) un color/fuente/IVA/moneda inválido: mejor UX que
  * dejar que `parseBranding` lo degrade a default en lectura sin que el owner se entere.
- * Los regex de color/fuente NO se duplican aquí -- se reusan vía `isHexColor`/`isFontName`
- * de `@suarex/config`, la misma fuente que usa `parseBranding` en lectura.
+ * Las reglas de color, fuente, tokens y ejes NO se duplican aquí -- se reusan de
+ * `@suarex/config` (`isHexColor`, `isFontFamily`, `TOKEN_OPTIONS`, `LAYOUT_OPTIONS`), la misma
+ * fuente que usa `parseBranding` en lectura.
  */
-import { isFontName, isHexColor, normalizeCustomDomain } from "@suarex/config";
+import {
+  type Branding,
+  type BrandingLayout,
+  type BrandingTokens,
+  type FontFamily,
+  isFontFamily,
+  isHexColor,
+  isOneOf,
+  LAYOUT_OPTIONS,
+  normalizeCustomDomain,
+  TOKEN_OPTIONS,
+} from "@suarex/config";
 import { InvalidFormFieldError, optionalString, requiredString } from "./form-parse";
+import { SUPPORTED_LANGS } from "./i18n";
 
 function requiredHexColor(formData: FormData, field: string): string {
   const value = requiredString(formData, field);
@@ -18,13 +31,42 @@ function requiredHexColor(formData: FormData, field: string): string {
   return value;
 }
 
-function requiredFont(formData: FormData, field: string): string {
+/** Un color que se puede dejar vacío (= automático). */
+function optionalHexColor(formData: FormData, field: string): string | null {
+  const value = optionalString(formData, field);
+  if (value === undefined) return null;
+  if (!isHexColor(value)) {
+    throw new InvalidFormFieldError(`Color inválido en ${field}: ${JSON.stringify(value)}`);
+  }
+  return value;
+}
+
+function requiredFont(formData: FormData, field: string): FontFamily {
   const value = requiredString(formData, field);
-  if (!isFontName(value)) {
+  if (!isFontFamily(value)) {
     throw new InvalidFormFieldError(`Fuente inválida en ${field}: ${JSON.stringify(value)}`);
   }
   return value;
 }
+
+/** Un select: tiene que llegar uno de sus valores. Un valor fuera de la lista es una petición
+ *  fabricada a mano, no un error de quien rellena el formulario. */
+function requiredOption<T extends string>(
+  formData: FormData,
+  field: string,
+  options: readonly T[],
+): T {
+  const value = requiredString(formData, field);
+  if (!isOneOf(options, value)) {
+    throw new InvalidFormFieldError(`Valor inválido en ${field}: ${JSON.stringify(value)}`);
+  }
+  return value;
+}
+
+/** Mismos límites que `parseBranding` (`packages/config/src/branding.ts`). */
+const MAX_TAGLINE_LENGTH = 120;
+const MAX_BADGE_EMOJI_LENGTH = 8;
+const BACKGROUND_SIZE = { min: 40, max: 600 };
 
 /** Mismo límite que `nameSchema` en `@suarex/config` (`packages/config/src/branding.ts`):
  * en lectura, un nombre por encima de este límite se degrada en silencio a `null` (y la
@@ -43,11 +85,75 @@ function optionalBusinessName(formData: FormData, field: string): string | null 
   return value;
 }
 
-export function parseBrandingFields(formData: FormData): {
-  name: string | null;
-  colors: { bg: string; fg: string; primary: string; accent: string; muted: string };
-  fonts: { display: string; body: string };
-} {
+function parseTokenFields(formData: FormData): BrandingTokens {
+  const o = TOKEN_OPTIONS;
+  return {
+    surface: optionalHexColor(formData, "token_surface"),
+    radius: requiredOption(formData, "token_radius", o.radius),
+    controlRadius: requiredOption(formData, "token_control_radius", o.controlRadius),
+    shadow: requiredOption(formData, "token_shadow", o.shadow),
+    border: requiredOption(formData, "token_border", o.border),
+    spacing: requiredOption(formData, "token_spacing", o.spacing),
+    titles: requiredOption(formData, "token_titles", o.titles),
+    imageFit: requiredOption(formData, "token_image_fit", o.imageFit),
+    thumb: requiredOption(formData, "token_thumb", o.thumb),
+    cartIcon: requiredOption(formData, "token_cart_icon", o.cartIcon),
+  };
+}
+
+function parseLayoutFields(formData: FormData): BrandingLayout {
+  const o = LAYOUT_OPTIONS;
+  return {
+    welcome: requiredOption(formData, "layout_welcome", o.welcome),
+    hero: requiredOption(formData, "layout_hero", o.hero),
+    nav: requiredOption(formData, "layout_nav", o.nav),
+    categories: requiredOption(formData, "layout_categories", o.categories),
+    products: requiredOption(formData, "layout_products", o.products),
+    langs: requiredOption(formData, "layout_langs", o.langs),
+  };
+}
+
+/** Un campo por idioma de la plataforma; los vacíos no se guardan. */
+function parseTagline(formData: FormData): Record<string, string> {
+  const tagline: Record<string, string> = {};
+  for (const lang of SUPPORTED_LANGS) {
+    const value = optionalString(formData, `tagline_${lang}`);
+    if (value === undefined) continue;
+    if (value.length > MAX_TAGLINE_LENGTH) {
+      throw new InvalidFormFieldError(
+        `El lema (${lang}) no puede superar ${MAX_TAGLINE_LENGTH} caracteres`,
+      );
+    }
+    tagline[lang] = value;
+  }
+  return tagline;
+}
+
+/** Sin emoji no hay insignia; con emoji, el color es obligatorio. */
+function parseBadge(formData: FormData): Branding["badge"] {
+  const emoji = optionalString(formData, "badge_emoji");
+  if (emoji === undefined) return null;
+  if (emoji.length > MAX_BADGE_EMOJI_LENGTH) {
+    throw new InvalidFormFieldError("La insignia es un emoji, no un texto");
+  }
+  return { emoji, color: requiredHexColor(formData, "badge_color") };
+}
+
+function parseBackgroundSize(formData: FormData): number {
+  const value = Number(requiredString(formData, "background_size"));
+  if (!Number.isInteger(value) || value < BACKGROUND_SIZE.min || value > BACKGROUND_SIZE.max) {
+    throw new InvalidFormFieldError(
+      `El tamaño de la textura va de ${BACKGROUND_SIZE.min} a ${BACKGROUND_SIZE.max} px`,
+    );
+  }
+  return value;
+}
+
+/** Todo lo de la marca que viene en el formulario. Las imágenes (logo, bienvenida, textura) se
+ *  suben aparte en la Server Action. */
+export function parseBrandingFields(
+  formData: FormData,
+): Omit<Branding, "logoUrl" | "heroUrl" | "background"> & { backgroundSizePx: number } {
   return {
     name: optionalBusinessName(formData, "name"),
     colors: {
@@ -61,6 +167,11 @@ export function parseBrandingFields(formData: FormData): {
       display: requiredFont(formData, "font_display"),
       body: requiredFont(formData, "font_body"),
     },
+    tokens: parseTokenFields(formData),
+    layout: parseLayoutFields(formData),
+    backgroundSizePx: parseBackgroundSize(formData),
+    tagline: parseTagline(formData),
+    badge: parseBadge(formData),
   };
 }
 

@@ -1,10 +1,14 @@
-export type { Branding } from "./branding.js";
+export type { Branding, BrandingLayout, BrandingTokens, FontFamily } from "./branding.js";
 export {
   brandingToCssVars,
   DEFAULT_BRANDING,
-  isFontName,
+  FONT_FAMILIES,
+  isFontFamily,
   isHexColor,
+  isOneOf,
+  LAYOUT_OPTIONS,
   parseBranding,
+  TOKEN_OPTIONS,
 } from "./branding.js";
 export type { SalesChannel, TenantSettings } from "./settings.schema.js";
 export { hasChannel, tenantSettingsSchema } from "./settings.schema.js";

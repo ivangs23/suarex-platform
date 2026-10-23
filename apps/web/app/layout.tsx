@@ -12,9 +12,9 @@ import "./globals.css";
  * fijan la suya. Cargarlas aquí (next/font, self-hosted) evita una petición a Google Fonts
  * en runtime y el salto de layout del FOUT.
  *
- * NOTA: `branding.fonts` sigue emitiéndose como variable CSS (ver brandingToCssVars) pero
- * hoy solo se aplica si nombra una familia que el navegador ya tiene; cargar fuentes
- * arbitrarias por configuración de tenant es un follow-up (ver el spec de temas).
+ * `branding.fonts` elige ENTRE ESTAS (y la del sistema): `brandingToCssVars` emite
+ * `--font-display`/`--font-body` apuntando a una de estas variables. Una familia que no se
+ * cargue aquí no se puede elegir en el panel.
  */
 const playfair = Playfair_Display({
   subsets: ["latin"],
@@ -64,7 +64,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       className={`${playfair.variable} ${inter.variable}`}
     >
       <head>
-        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: brandingToCssVars solo emite valores ya validados por parseBranding contra /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/ (colores) y /^[a-zA-Z0-9 ,'-]+$/ (fuentes), que no pueden contener `<`, `}` ni comillas. */}
+        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: brandingToCssVars solo emite colores ya validados por parseBranding contra /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/ y literales fijos para fuentes y tokens (enumerados), que no pueden contener `<`, `}` ni comillas. */}
         <style dangerouslySetInnerHTML={{ __html: `:root{${brandingToCssVars(branding)}}` }} />
       </head>
       <body>{children}</body>

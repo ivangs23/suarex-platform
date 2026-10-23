@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   brandingToCssVars,
   DEFAULT_BRANDING,
-  isFontName,
+  isFontFamily,
   isHexColor,
+  LAYOUT_OPTIONS,
   parseBranding,
+  TOKEN_OPTIONS,
 } from "./branding.js";
 
 describe("parseBranding", () => {
@@ -54,11 +56,60 @@ describe("parseBranding", () => {
 });
 
 describe("brandingToCssVars", () => {
-  it("genera una declaración por color y fuente", () => {
+  it("genera una declaración por color, fuente y token", () => {
     const css = brandingToCssVars(DEFAULT_BRANDING);
     expect(css).toContain(`--color-bg:${DEFAULT_BRANDING.colors.bg}`);
     expect(css).toContain(`--color-primary:${DEFAULT_BRANDING.colors.primary}`);
-    expect(css).toContain(`--font-display:${DEFAULT_BRANDING.fonts.display}`);
+    // Las fuentes salen como la pila de la familia cargada, no como un nombre suelto.
+    expect(css).toContain("--font-display:var(--font-playfair), Georgia, serif");
+    expect(css).toContain("--font-body:var(--font-inter), system-ui, sans-serif");
+    expect(css).toContain("--radius-card:0.75rem");
+    expect(css).toContain("--shadow-card:none");
+  });
+
+  it("sin superficie propia, la deriva del color tenue como el genérico de siempre", () => {
+    expect(brandingToCssVars(DEFAULT_BRANDING)).toContain(
+      "--color-surface:color-mix(in srgb, var(--color-muted) 45%, transparent)",
+    );
+    expect(brandingToCssVars(parseBranding({ tokens: { surface: "#ffffff" } }))).toContain(
+      "--color-surface:#ffffff",
+    );
+  });
+
+  it("cada token se traduce a su valor CSS", () => {
+    const css = brandingToCssVars(
+      parseBranding({
+        tokens: {
+          radius: "lg",
+          controlRadius: "rounded",
+          shadow: "medium",
+          border: "thick",
+          spacing: "comfortable",
+          titles: "uppercase",
+          imageFit: "contain",
+          thumb: "md",
+        },
+      }),
+    );
+    expect(css).toContain("--radius-card:1rem");
+    expect(css).toContain("--radius-control:0.9rem");
+    expect(css).toContain("--shadow-card:0 4px 6px -1px rgba(0, 0, 0, 0.1)");
+    expect(css).toContain("--border-card:2px");
+    expect(css).toContain("--space-card:1.4rem 1.5rem");
+    expect(css).toContain("--title-transform:uppercase");
+    expect(css).toContain("--image-fit:contain");
+    expect(css).toContain("--thumb-size:88px");
+  });
+
+  it("ni la textura ni la insignia llegan al <style>: llevan URL y texto libre", () => {
+    const css = brandingToCssVars(
+      parseBranding({
+        background: { imageUrl: "/brands/garum-pattern.svg", sizePx: 150 },
+        badge: { emoji: "☕", color: "#1b4d3e" },
+      }),
+    );
+    expect(css).not.toContain("garum-pattern");
+    expect(css).not.toContain("☕");
   });
 
   it("no emite comillas ni punto y coma sueltos que rompan el atributo style", () => {
@@ -101,12 +152,117 @@ describe("parseBranding — finding 2: degradación por campo, no todo o nada", 
   it("conserva bg válido y fonts.display válido aunque colors.primary sea inválido", () => {
     const result = parseBranding({
       colors: { bg: "#ffffff", primary: "not-a-color" },
-      fonts: { display: "Georgia" },
+      fonts: { display: "inter" },
     });
     expect(result.colors.bg).toBe("#ffffff");
     expect(result.colors.primary).toBe(DEFAULT_BRANDING.colors.primary);
-    expect(result.fonts.display).toBe("Georgia");
+    expect(result.fonts.display).toBe("inter");
     expect(result.fonts.body).toBe(DEFAULT_BRANDING.fonts.body);
+  });
+
+  it("una fuente que no es de las cargadas cae al default (las de texto libre de antes)", () => {
+    // El seed guardaba "Playfair Display": nunca se pintó, y el genérico ya usaba Playfair.
+    const result = parseBranding({ fonts: { display: "Playfair Display", body: "Georgia" } });
+    expect(result.fonts).toEqual(DEFAULT_BRANDING.fonts);
+  });
+});
+
+describe("parseBranding — tokens y ejes de layout", () => {
+  it("los defaults son lo que pinta hoy el genérico", () => {
+    expect(DEFAULT_BRANDING.fonts).toEqual({ display: "playfair", body: "inter" });
+    // El default de cada eje es el primer valor de su lista.
+    for (const [eje, valores] of Object.entries(LAYOUT_OPTIONS)) {
+      expect(DEFAULT_BRANDING.layout[eje as keyof typeof LAYOUT_OPTIONS]).toBe(valores[0]);
+    }
+    for (const [token, valores] of Object.entries(TOKEN_OPTIONS)) {
+      expect(DEFAULT_BRANDING.tokens[token as keyof typeof TOKEN_OPTIONS]).toBe(valores[0]);
+    }
+    expect(DEFAULT_BRANDING.tokens.surface).toBeNull();
+  });
+
+  it("acepta cada valor permitido de cada eje", () => {
+    for (const [eje, valores] of Object.entries(LAYOUT_OPTIONS)) {
+      for (const valor of valores) {
+        const layout = parseBranding({ layout: { [eje]: valor } }).layout;
+        expect(layout[eje as keyof typeof LAYOUT_OPTIONS]).toBe(valor);
+      }
+    }
+  });
+
+  it("un valor desconocido cae a su default y no arrastra a los demás", () => {
+    const result = parseBranding({
+      layout: { products: "carrusel", welcome: "poster" },
+      tokens: { shadow: "brutal", radius: "lg", surface: "verde" },
+    });
+    expect(result.layout.products).toBe(DEFAULT_BRANDING.layout.products);
+    expect(result.layout.welcome).toBe("poster");
+    expect(result.tokens.shadow).toBe(DEFAULT_BRANDING.tokens.shadow);
+    expect(result.tokens.radius).toBe("lg");
+    expect(result.tokens.surface).toBeNull();
+  });
+
+  it("la textura: imagen y tamaño, cada uno con su default", () => {
+    expect(
+      parseBranding({ background: { imageUrl: "/brands/manuela-terrazo.png", sizePx: 300 } })
+        .background,
+    ).toEqual({ imageUrl: "/brands/manuela-terrazo.png", sizePx: 300 });
+    expect(parseBranding({ background: { sizePx: 5000 } }).background).toEqual(
+      DEFAULT_BRANDING.background,
+    );
+  });
+});
+
+describe("parseBranding — assets de /brands/", () => {
+  it("acepta una imagen de /brands/ en logo, bienvenida y textura", () => {
+    const result = parseBranding({
+      logoUrl: "/brands/garum-logo.png",
+      heroUrl: "/brands/manuela-fondo.png",
+      background: { imageUrl: "/brands/garum-pattern.svg" },
+    });
+    expect(result.logoUrl).toBe("/brands/garum-logo.png");
+    expect(result.heroUrl).toBe("/brands/manuela-fondo.png");
+    expect(result.background.imageUrl).toBe("/brands/garum-pattern.svg");
+  });
+
+  it("rechaza cualquier otra ruta relativa o una que intente salir de la carpeta", () => {
+    for (const ruta of [
+      "/brands/../.env",
+      "/brands/sub/x.png",
+      "//evil.example.com/x.png",
+      "/otra/x.png",
+      "/brands/x.html",
+      "/brands/X.PNG",
+      "brands/x.png",
+    ]) {
+      expect(parseBranding({ logoUrl: ruta }).logoUrl, ruta).toBe(DEFAULT_BRANDING.logoUrl);
+    }
+  });
+});
+
+describe("parseBranding — lema e insignia", () => {
+  it("el lema se guarda por idioma y descarta lo que no es texto o no es un idioma", () => {
+    expect(
+      parseBranding({
+        tagline: {
+          es: "  Vinoteca & cocina de producto  ",
+          en: "Wine bar & produce-led kitchen",
+          pt: 3,
+          espanol: "no es un código",
+          fr: "x".repeat(121),
+        },
+      }).tagline,
+    ).toEqual({ es: "Vinoteca & cocina de producto", en: "Wine bar & produce-led kitchen" });
+    expect(parseBranding({ tagline: "un texto suelto" }).tagline).toEqual({});
+  });
+
+  it("la insignia es entera o nada", () => {
+    expect(parseBranding({ badge: { emoji: "☕", color: "#1b4d3e" } }).badge).toEqual({
+      emoji: "☕",
+      color: "#1b4d3e",
+    });
+    expect(parseBranding({ badge: { emoji: "☕" } }).badge).toBeNull();
+    expect(parseBranding({ badge: { emoji: "☕", color: "verde" } }).badge).toBeNull();
+    expect(parseBranding({ badge: { emoji: "un texto largo", color: "#000" } }).badge).toBeNull();
   });
 });
 
@@ -161,30 +317,38 @@ describe("brandingToCssVars — límite de seguridad ante payloads hostiles", ()
     "Arial}body{background:url(javascript:alert(1))}",
   ];
 
-  it("ningún payload hostil en colores/fuentes/logoUrl deja rastro en el CSS emitido", () => {
+  it("ningún payload hostil en colores/fuentes/tokens/ejes/imágenes deja rastro en el CSS emitido", () => {
     for (const payload of HOSTILE_PAYLOADS) {
       const branding = parseBranding({
         colors: { bg: payload, fg: payload, primary: payload, accent: payload, muted: payload },
         fonts: { display: payload, body: payload },
         logoUrl: payload,
+        tokens: Object.fromEntries(
+          [...Object.keys(TOKEN_OPTIONS), "surface"].map((token) => [token, payload]),
+        ),
+        layout: Object.fromEntries(Object.keys(LAYOUT_OPTIONS).map((eje) => [eje, payload])),
+        background: { imageUrl: payload, sizePx: payload },
+        tagline: { es: payload },
+        badge: { emoji: payload, color: payload },
       });
       const css = brandingToCssVars(branding);
       for (const char of FORBIDDEN_CHARS) {
         expect(css.includes(char)).toBe(false);
       }
-      // 5 colores + 2 fuentes = 7 declaraciones, exactamente 7 punto y coma.
-      expect(css.split(";").length - 1).toBe(7);
+      // 6 colores (con la superficie) + 2 fuentes + 8 tokens = 16 declaraciones, exactamente
+      // 16 punto y coma: un payload que colara uno de más habría abierto otra regla.
+      expect(css.split(";").length - 1).toBe(16);
     }
   });
 
   it("un payload mixto (campos válidos + hostiles) conserva lo válido y sigue siendo CSS seguro", () => {
     const branding = parseBranding({
       colors: { bg: "#ffffff", primary: "<script>alert(1)</script>" },
-      fonts: { display: "Georgia", body: '"; } * {color:red} /*' },
+      fonts: { display: "system", body: '"; } * {color:red} /*' },
       logoUrl: "javascript:alert(1)",
     });
     expect(branding.colors.bg).toBe("#ffffff");
-    expect(branding.fonts.display).toBe("Georgia");
+    expect(branding.fonts.display).toBe("system");
     expect(branding.logoUrl).toBe(DEFAULT_BRANDING.logoUrl);
 
     const css = brandingToCssVars(branding);
@@ -206,13 +370,15 @@ describe("isHexColor", () => {
   });
 });
 
-describe("isFontName", () => {
-  it("acepta una fuente simple", () => {
-    expect(isFontName("Inter, sans-serif")).toBe(true);
+describe("isFontFamily", () => {
+  it("acepta solo las familias que carga la app", () => {
+    expect(isFontFamily("playfair")).toBe(true);
+    expect(isFontFamily("inter")).toBe(true);
+    expect(isFontFamily("system")).toBe(true);
   });
-  it("rechaza caracteres peligrosos", () => {
-    expect(isFontName("a<b")).toBe(false);
-    expect(isFontName("x".repeat(65))).toBe(false);
-    expect(isFontName(123)).toBe(false);
+  it("rechaza cualquier otro nombre, aunque sea una fuente real", () => {
+    expect(isFontFamily("Inter, sans-serif")).toBe(false);
+    expect(isFontFamily("a<b")).toBe(false);
+    expect(isFontFamily(123)).toBe(false);
   });
 });
