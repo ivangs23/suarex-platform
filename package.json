@@ -18,7 +18,8 @@
     "db:types": "supabase gen types typescript --local --schema public > packages/db/src/database.types.ts",
     "seed:staff": "node scripts/seed-staff.mjs",
     "test:integration": "vitest run --config vitest.config.ts",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "prepare": "simple-git-hooks"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.12",
@@ -33,7 +34,9 @@
     "@supabase/supabase-js": "^2.110.7",
     "@types/node": "^26.1.1",
     "dotenv": "^17.4.2",
+    "lint-staged": "^16.4.0",
     "sharp": "^0.35.5",
+    "simple-git-hooks": "^2.14.0",
     "stripe": "^22.3.2",
     "turbo": "^2.5.0",
     "typescript": "^5.9.3",
@@ -45,5 +48,11 @@
       "esbuild",
       "koffi"
     ]
+  },
+  "simple-git-hooks": {
+    "pre-commit": "pnpm exec lint-staged"
+  },
+  "lint-staged": {
+    "*": "biome check --write --no-errors-on-unmatched --files-ignore-unknown=true"
   }
 }
