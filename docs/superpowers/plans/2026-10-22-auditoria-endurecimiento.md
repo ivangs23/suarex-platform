@@ -440,6 +440,18 @@ construye en Windows con los mismos 18 módulos que el de Electron 33. Renovate 
   des-emparejar.
 - [ ] Solo tras eso, mergear.
 
+**Validado en el PC de Iván (2026-10-24, automatizado, a petición suya):** instalador 0.0.1
+silencioso y sin admin; arranque con Electron 44.9.3; impresoras de Windows; winspool vía koffi
+(contra una impresora inexistente: no hay ESC/POS USB en ese PC); emparejar; tarea del watchdog
+con su XML; arranque con Windows registrado; pedido de punta a punta por impresora de red (la
+falsa de la suite); **matar el proceso → vuelve en ~4 min e imprime** con la sesión DPAPI; un solo
+proceso tras el ciclo; relanzar con la sesión guardada; des-emparejar borra la tarea;
+diagnóstico sin datos sensibles; **auto-update 0.0.1 → 0.0.2** desde un feed local. Encontró un
+fallo latente (también en `main`): con `UPDATE_FEED_URL` horneado el agente moría al arrancar
+(`import { autoUpdater }` de un CommonJS en ESM nativo); arreglado en #73 con test en Node ESM real.
+**Falta, por hardware:** imprimir en una ESC/POS USB real, el tótem con cobro (datáfono Paytef),
+reiniciar Windows, y ver a ojo que el watchdog no abre ventanas y el aviso de SmartScreen.
+
 ---
 
 ## Fase 5 — Mantenibilidad de la base (continuo; 1 día de arranque)
