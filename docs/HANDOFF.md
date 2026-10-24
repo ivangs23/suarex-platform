@@ -1,6 +1,6 @@
 # Handoff — estado del proyecto
 
-_Última actualización: 2026-10-23. Punto de continuidad entre sesiones y máquinas: una
+_Última actualización: 2026-10-24. Punto de continuidad entre sesiones y máquinas: una
 conversación de Claude no se transfiere sola. Para retomar, lee esto, `git log` y `CLAUDE.md`._
 
 > **Si retomas desde otra máquina, empieza por [`RETOMAR-EN-WINDOWS.md`](RETOMAR-EN-WINDOWS.md).**
@@ -18,7 +18,7 @@ Suite en verde:
 | lint | ok |
 | typecheck | 10/10 + tests |
 | unit | 9 paquetes; web: 3.959 |
-| integración | 494 (73 ficheros) |
+| integración | 503 (74 ficheros) |
 | e2e | 149, en Windows, incluidas 14 capturas visuales de la carta |
 
 **CI** (`.github/workflows/ci.yml`), en cada PR:
@@ -46,7 +46,10 @@ Por qué el código es como es: [`docs/decisions/`](decisions/README.md) (ADRs).
      select t.slug, s.theme, s.branding from tenant_settings s
        join tenants t on t.id = s.tenant_id where t.slug in ('garum','manuela');
      ```
-3. **Caddy (#59):** recarga el `Caddyfile` y comprueba con `curl -I` que salen `X-Frame-Options: DENY` y `frame-ancestors 'none'` (tarea 0.3).
+   - `20261024000001_device_zonas_horarias.sql` (#82): solo crea una función. Aplícala **antes** de publicar una versión nueva del agente. Si no, el agente nuevo imprime con la hora peninsular, como hasta ahora, y avisa una vez en su log.
+3. **Caddy (#59, #81):** reinicia Caddy para que lea el `Caddyfile` y comprueba:
+   - con `curl -I`, que salen `X-Frame-Options: DENY` y `frame-ancestors 'none'` (tarea 0.3);
+   - que un cuerpo de 2MB en `/api/*` da 413 (`deploy/README.md` §7).
 4. **Copias (#60):** el backup ya lleva las fotos. Haz el simulacro de restauración de `deploy/README.md` (tarea 0.4).
 5. **Cron diario de errores (#69):** añade `alertas-log.sh` al `crontab` con tu `AVISO_A` (`deploy/README.md` §8).
 
@@ -79,13 +82,14 @@ Fuera del plan:
   - el cierre usaba `+02:00` fijo, que falla desde el fin del horario de verano;
   - el informe usaba la hora del servidor (UTC) todo el año.
 - **#81**: Caddy corta en 1MB el cuerpo de `/api/*`, con un 413, en la plataforma y en los dominios propios. El pedido legítimo más grande (todos los límites de `limites-pedido.ts` al máximo) ronda los 255KB. `api.<dominio>` (Kong) queda sin tope, porque por ahí van las subidas a Storage. Lo blinda `tests/integration/caddy-limite-cuerpo.test.ts`.
+- **#82**: comandas, recibos y analítica van en la hora de la sede.
+  - El agente lee la zona de cada sede con la RPC `device_zonas_horarias`. El device sigue sin leer `venues`.
+  - Cada pedido usa la zona de su propia sede. Si la RPC falta o la zona no es válida, imprime con `Europe/Madrid` en vez de dejar de imprimir.
+  - `analiticaDeCarta` cuenta los 30 días desde la medianoche local, igual que `menu_scans.dia`.
 
 ## Pendiente — decisiones abiertas (fuera del plan)
 
 - **Validar el agente en hardware real (resto de la 4.3).** En el PC de Iván no hay impresora ESC/POS USB ni datáfono: queda imprimir por USB, el tótem con cobro, reiniciar Windows y ver a ojo que el watchdog no abre ventanas. Hacerlo en la próxima instalación con ese hardware, con `docs/agent-desktop-validacion.md`.
-- **La hora de la sede en tickets y analítica.** El cierre y el informe de ventas ya usan la zona de la sede (`zonaHorariaDelTenant`) con su desfase real, también el día del cambio de hora. Quedan dos restos, sin el problema del cambio de hora:
-  - los tickets y el recibo (`packages/ticket`) formatean la hora con `Europe/Madrid` fijo, así que en Canarias saldría la hora peninsular;
-  - `analiticaDeCarta` empieza su ventana de 30 días a la medianoche del servidor.
 - **Impresora de red que cierra limpio sin imprimir.** Una impresora que acepta la conexión y la cierra con FIN se da por entregada (`packages/printing/src/print-order.ts`): TCP no lo distingue de un envío correcto. Cerrarlo exige consultar el estado ESC/POS tras enviar.
 - **Avisos de dependencias que solo actúan en build.** Quedan anotados sin tocar:
   - `nanoid` 3.3.16 y `source-map-js` 1.2.1, vía el `postcss` que fija next;

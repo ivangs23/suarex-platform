@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   admin,
+  anonClient,
   createMembershipFixture,
   createTenantFixture,
   deleteMembershipFixtureUser,
@@ -183,6 +184,26 @@ describe("reserve_printed_self: la única vía de un device para marcar impreso"
       .eq("id", seedB.orderId)
       .single();
     expect(data?.printed_at).toBeNull();
+  });
+});
+
+describe("device_zonas_horarias: la zona de sus sedes, sin abrirle `venues`", () => {
+  it("devuelve la zona de las sedes de su tenant, ninguna de otro", async () => {
+    const { data, error } = await deviceA.client.rpc("device_zonas_horarias");
+    expect(error).toBeNull();
+    const filas = (data ?? []) as { venue_id: string; timezone: string }[];
+    expect(filas).toContainEqual({ venue_id: seedA.venueId, timezone: "Europe/Madrid" });
+    expect(filas.map((f) => f.venue_id)).not.toContain(seedB.venueId);
+  });
+
+  it("la tabla `venues` le sigue cerrada", async () => {
+    const { data } = await deviceA.client.from("venues").select("id, name, timezone");
+    expect(data ?? []).toEqual([]);
+  });
+
+  it("un anónimo no puede llamarla", async () => {
+    const { error } = await anonClient().rpc("device_zonas_horarias");
+    expect(error).not.toBeNull();
   });
 });
 

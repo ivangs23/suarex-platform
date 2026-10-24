@@ -1,4 +1,5 @@
 import { AVISO_NO_FACTURA, ETIQUETA_EMISOR, formatCents, idiomaDeRecibo } from "@suarex/domain";
+import { horaLocal } from "./hora.js";
 import { sanitizeForThermal } from "./sanitize.js";
 import type { ReceiptOrder, TicketBranding, TicketFiscal, TicketLine } from "./types.js";
 
@@ -32,14 +33,6 @@ function desgloseImpositivo(order: ReceiptOrder, money: (cents: number) => strin
     { kind: "row", left: `Base ${porcentaje(bucket.taxRate)}`, right: money(bucket.baseCents) },
     { kind: "row", left: `IVA ${porcentaje(bucket.taxRate)}`, right: money(bucket.taxCents) },
   ]);
-}
-
-function formatHHMM(iso: string): string {
-  return new Date(iso).toLocaleTimeString("es-ES", {
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "Europe/Madrid",
-  });
 }
 
 /**
@@ -77,7 +70,7 @@ export function buildReceiptLines(
     order.tableLabel
       ? { kind: "text", text: `MESA ${order.tableLabel}`, align: "left", bold: true }
       : { kind: "text", text: "PARA LLEVAR", align: "left", bold: true },
-    { kind: "text", text: `Hora: ${formatHHMM(order.createdAt)}`, align: "left" },
+    { kind: "text", text: `Hora: ${horaLocal(order.createdAt, order.timeZone)}`, align: "left" },
     { kind: "divider" },
   ];
 

@@ -129,8 +129,9 @@ viejo trae CRLF: `git config core.autocrlf false` y renormalizar.
   y el barrido diario suspende lo vencido. Toda la política está en `decidirEstado`, pura.
 - **Rol `device`**: la app de escritorio inicia sesión con credenciales de dispositivo (nunca la
   service key, que JAMÁS llega al PC del cliente). Solo puede imprimir: RLS lo excluye de escribir
-  catálogo; escribe vía RPCs `SECURITY DEFINER` acotadas al JWT (`reserve_printed_self`,
-  `device_heartbeat`).
+  catálogo ni leer `venues`; escribe vía RPCs `SECURITY DEFINER` acotadas al JWT
+  (`reserve_printed_self`, `device_heartbeat`) y lee así la zona de sus sedes
+  (`device_zonas_horarias`), para imprimir la hora del local.
 - **Cookie de mesa** (`suarex_mesa`, httpOnly, 12 h): el QR `/m/{token}` la fija y redirige a
   `/{mesa}`. Pedir exige que la cookie designe ESA mesa de ESTE tenant (`page.tsx` `canOrder`).
   El token nunca sale del servidor ni viaja en URL compartible. Sin cookie, la carta se consulta

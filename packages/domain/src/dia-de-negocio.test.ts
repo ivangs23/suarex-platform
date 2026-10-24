@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { diaEnZona, horaEnZona, limitesDelDia } from "./dia-de-negocio.js";
+import { diaEnZona, horaEnZona, limitesDelDia, sumarDias } from "./dia-de-negocio.js";
 
 const MADRID = "Europe/Madrid";
 const CANARIAS = "Atlantic/Canary";
@@ -46,6 +46,23 @@ describe("limitesDelDia", () => {
     expect(limitesDelDia("2026-12-31", MADRID).hasta.toISOString()).toBe(
       "2026-12-31T23:00:00.000Z",
     );
+  });
+});
+
+describe("sumarDias", () => {
+  it("resta días cruzando meses y años", () => {
+    expect(sumarDias("2026-10-24", -29)).toBe("2026-09-25");
+    expect(sumarDias("2026-01-05", -10)).toBe("2025-12-26");
+  });
+
+  it("cuenta días de calendario aunque el día del cambio de hora dure 25 horas", () => {
+    expect(sumarDias("2026-10-25", 1)).toBe("2026-10-26");
+    expect(sumarDias("2026-10-26", -1)).toBe("2026-10-25");
+  });
+
+  it("respeta los bisiestos", () => {
+    expect(sumarDias("2028-02-28", 1)).toBe("2028-02-29");
+    expect(sumarDias("2027-02-28", 1)).toBe("2027-03-01");
   });
 });
 

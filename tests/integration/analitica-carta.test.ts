@@ -16,6 +16,9 @@ import {
  * pide NADIE -- los que ocupan sitio en la carta y no venden.
  */
 
+/** La zona de la sede que siembra `seedCatalog` (la de `venues` por defecto). */
+const MADRID = "Europe/Madrid";
+
 /** Mesa activa del tenant, que es lo que la ruta del QR resuelve antes de contar. */
 async function seedMesa(tenantId: string, venueId: string): Promise<string> {
   const { data } = await admin
@@ -37,7 +40,7 @@ describe("registrarEscaneo", () => {
       await registrarEscaneo(mesaId);
       await registrarEscaneo(mesaId);
 
-      const analitica = await analiticaDeCarta(f.tenantId, 30);
+      const analitica = await analiticaDeCarta(f.tenantId, MADRID, 30);
       expect(analitica.escaneos).toBe(3);
     } finally {
       await deleteTenantFixture(f);
@@ -54,7 +57,7 @@ describe("registrarEscaneo", () => {
       await admin.from("tables").update({ is_active: false }).eq("id", mesaId);
 
       await expect(registrarEscaneo(mesaId)).resolves.toBeUndefined();
-      expect((await analiticaDeCarta(f.tenantId, 30)).escaneos).toBe(0);
+      expect((await analiticaDeCarta(f.tenantId, MADRID, 30)).escaneos).toBe(0);
     } finally {
       await deleteTenantFixture(f);
     }
@@ -66,7 +69,7 @@ describe("registrarEscaneo", () => {
       await expect(
         registrarEscaneo("00000000-0000-0000-0000-000000000000"),
       ).resolves.toBeUndefined();
-      expect((await analiticaDeCarta(f.tenantId, 30)).escaneos).toBe(0);
+      expect((await analiticaDeCarta(f.tenantId, MADRID, 30)).escaneos).toBe(0);
     } finally {
       await deleteTenantFixture(f);
     }
@@ -79,8 +82,8 @@ describe("registrarEscaneo", () => {
       const seedB = await seedCatalog(b.tenantId, "tb");
       await registrarEscaneo(await seedMesa(b.tenantId, seedB.venueId));
 
-      expect((await analiticaDeCarta(a.tenantId, 30)).escaneos).toBe(0);
-      expect((await analiticaDeCarta(b.tenantId, 30)).escaneos).toBe(1);
+      expect((await analiticaDeCarta(a.tenantId, MADRID, 30)).escaneos).toBe(0);
+      expect((await analiticaDeCarta(b.tenantId, MADRID, 30)).escaneos).toBe(1);
     } finally {
       await deleteTenantFixture(a);
       await deleteTenantFixture(b);
@@ -94,7 +97,7 @@ describe("analiticaDeCarta", () => {
     // decirle que su carta no funciona cuando lo que pasa es que nadie ha escaneado aún.
     const f = await createTenantFixture(`cero-${nonce()}`);
     try {
-      const analitica = await analiticaDeCarta(f.tenantId, 30);
+      const analitica = await analiticaDeCarta(f.tenantId, MADRID, 30);
       expect(analitica.escaneos).toBe(0);
       expect(analitica.pedidos).toBe(0);
       expect(analitica.pedidosPorEscaneo).toBeNull();
@@ -122,7 +125,7 @@ describe("analiticaDeCarta", () => {
         order_number: 1,
       });
 
-      const analitica = await analiticaDeCarta(f.tenantId, 30);
+      const analitica = await analiticaDeCarta(f.tenantId, MADRID, 30);
       expect(analitica.escaneos).toBe(4);
       expect(analitica.pedidos).toBe(1);
       expect(analitica.pedidosPorEscaneo).toBeCloseTo(0.25, 5);
@@ -150,7 +153,7 @@ describe("analiticaDeCarta", () => {
         order_number: 2,
       });
 
-      const analitica = await analiticaDeCarta(f.tenantId, 30);
+      const analitica = await analiticaDeCarta(f.tenantId, MADRID, 30);
       expect(analitica.pedidos).toBe(0);
       expect(analitica.pedidosPorEscaneo).toBe(0);
     } finally {
@@ -197,7 +200,7 @@ describe("analiticaDeCarta", () => {
         destination: "cocina",
       });
 
-      const analitica = await analiticaDeCarta(f.tenantId, 30);
+      const analitica = await analiticaDeCarta(f.tenantId, MADRID, 30);
       const nombres = analitica.sinVender.map((p) => p.nombre);
       expect(nombres).toContain("Nadie me pide");
       expect(nombres, "el que sí se vendió no está en la lista").not.toContain("Prod sinv");
@@ -215,8 +218,48 @@ describe("analiticaDeCarta", () => {
       const seed = await seedCatalog(f.tenantId, "fuera");
       await admin.from("products").update({ is_available: false }).eq("id", seed.productId);
 
-      const analitica = await analiticaDeCarta(f.tenantId, 30);
+      const analitica = await analiticaDeCarta(f.tenantId, MADRID, 30);
       expect(analitica.sinVender.map((p) => p.nombre)).not.toContain("Prod fuera");
+    } finally {
+      await deleteTenantFixture(f);
+    }
+  });
+});
+
+describe("ventana de la analítica", () => {
+  it("empieza a la medianoche de la sede, no a la del servidor", async () => {
+    // 30 días hasta el 30-jul contando hoy = desde el 1-jul. En Madrid empieza a las 22:00 UTC
+    // del 30-jun; con la medianoche del servidor (UTC), el pedido de las 00:30 del 1-jul se perdía.
+    const ahora = new Date("2026-07-30T10:00:00Z");
+    const f = await createTenantFixture(`vent-${nonce()}`);
+    try {
+      const seed = await seedCatalog(f.tenantId, "vent");
+      const mesaId = await seedMesa(f.tenantId, seed.venueId);
+      const comun = {
+        tenant_id: f.tenantId,
+        venue_id: seed.venueId,
+        table_id: mesaId,
+        status: "paid",
+        total: 950,
+        subtotal: 864,
+        tax_amount: 86,
+      };
+      await admin.from("orders").insert([
+        { ...comun, order_number: 20, paid_at: "2026-06-30T22:30:00Z" }, // 00:30 del 1-jul
+        { ...comun, order_number: 21, paid_at: "2026-06-30T21:30:00Z" }, // 23:30 del 30-jun
+      ]);
+      await admin.from("menu_scans").insert([
+        { tenant_id: f.tenantId, venue_id: seed.venueId, dia: "2026-07-01", escaneos: 2 },
+        { tenant_id: f.tenantId, venue_id: seed.venueId, dia: "2026-06-30", escaneos: 5 },
+      ]);
+
+      const madrid = await analiticaDeCarta(f.tenantId, MADRID, 30, ahora);
+      expect(madrid.pedidos, "el de las 00:30 locales del primer día").toBe(1);
+      expect(madrid.escaneos, "solo los del 1-jul").toBe(2);
+
+      // Los mismos datos en Canarias: allí las 22:30 UTC son todavía el 30-jun.
+      const canarias = await analiticaDeCarta(f.tenantId, "Atlantic/Canary", 30, ahora);
+      expect(canarias.pedidos).toBe(0);
     } finally {
       await deleteTenantFixture(f);
     }
@@ -251,7 +294,7 @@ describe("conversión con totem", () => {
         { ...comun, order_number: 12, channel: "kiosko" },
       ]);
 
-      const analitica = await analiticaDeCarta(f.tenantId, 30);
+      const analitica = await analiticaDeCarta(f.tenantId, MADRID, 30);
       expect(analitica.escaneos).toBe(1);
       expect(analitica.pedidos, "solo el del QR").toBe(1);
       expect(analitica.pedidosPorEscaneo).toBe(1);

@@ -1,3 +1,4 @@
+import { horaLocal } from "./hora.js";
 import { filterItems } from "./routing.js";
 import { sanitizeForThermal } from "./sanitize.js";
 import type { TicketBranding, TicketDestination, TicketLine, TicketOrder } from "./types.js";
@@ -7,14 +8,6 @@ const DEST_LABELS: Record<TicketDestination, string> = {
   barra: "BARRA",
   all: "TODOS",
 };
-
-function formatHHMM(iso: string): string {
-  return new Date(iso).toLocaleTimeString("es-ES", {
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "Europe/Madrid",
-  });
-}
 
 export function buildTicketLines(
   order: TicketOrder,
@@ -36,7 +29,7 @@ export function buildTicketLines(
     order.tableLabel
       ? { kind: "text", text: `MESA ${order.tableLabel}`, align: "left", bold: true }
       : { kind: "text", text: "PARA LLEVAR", align: "left", bold: true },
-    { kind: "text", text: `Hora: ${formatHHMM(order.createdAt)}`, align: "left" },
+    { kind: "text", text: `Hora: ${horaLocal(order.createdAt, order.timeZone)}`, align: "left" },
     { kind: "divider" },
   ];
 

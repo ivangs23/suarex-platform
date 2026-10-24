@@ -592,6 +592,36 @@ describe("runAgentTick", () => {
     expect(recibo.connectionCount()).toBe(1);
   });
 
+  it("comanda y recibo llevan la hora de la sede del pedido, no la peninsular", async () => {
+    const cocina = await startFakePrinter();
+    const recibo = await startFakePrinter();
+    openPrinters.push(cocina, recibo);
+    const f = await seedKioskoLoop(cocina.port, recibo.port);
+    fixtures.push(f);
+    // 12:00 UTC en julio: 13:00 en Canarias, 14:00 en Madrid.
+    const sedes = await admin
+      .from("venues")
+      .update({ timezone: "Atlantic/Canary" })
+      .eq("tenant_id", f.tenant.tenantId);
+    expect(sedes.error).toBeNull();
+    const pedido = await admin
+      .from("orders")
+      .update({ created_at: "2026-07-15T12:00:00Z" })
+      .eq("id", f.orderId);
+    expect(pedido.error).toBeNull();
+
+    const client = await createDeviceClient({
+      supabaseUrl: supabaseUrlForTest(),
+      anonKey: anonKeyForTest(),
+      email: f.deviceEmail,
+      password: f.devicePassword,
+    });
+
+    expect((await runAgentTick(client)).printed).toBe(2);
+    expect(cocina.received().toString("latin1")).toContain("Hora: 13:00");
+    expect(recibo.received().toString("latin1")).toContain("Hora: 13:00");
+  });
+
   it("#15: reimprimir devuelve el pedido a la cola y el agente lo saca otra vez", async () => {
     const cocina = await startFakePrinter();
     openPrinters.push(cocina);

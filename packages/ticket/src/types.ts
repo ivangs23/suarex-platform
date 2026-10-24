@@ -24,6 +24,8 @@ export type TicketOrder = {
   orderNumber: number;
   tableLabel: string | null;
   createdAt: string;
+  /** Zona de la sede del pedido (`venues.timezone`): la hora impresa es la del local. */
+  timeZone: string;
   items: TicketItem[];
 };
 
@@ -65,6 +67,8 @@ export type ReceiptOrder = {
   orderNumber: number;
   tableLabel: string | null;
   createdAt: string;
+  /** Zona de la sede del pedido, como en `TicketOrder`. */
+  timeZone: string;
   items: ReceiptItem[];
   subtotalCents: number;
   taxCents: number;
