@@ -18,7 +18,7 @@ Suite en verde:
 | lint | ok |
 | typecheck | 10/10 + tests |
 | unit | 9 paquetes; web: 3.959 |
-| integración | 503 (74 ficheros) |
+| integración | 508 (74 ficheros) |
 | e2e | 150, en Windows, incluidas 14 capturas visuales de la carta |
 
 **CI** (`.github/workflows/ci.yml`), en cada PR:
@@ -49,9 +49,9 @@ Por qué el código es como es: [`docs/decisions/`](decisions/README.md) (ADRs).
        join tenants t on t.id = s.tenant_id where t.slug in ('garum','manuela');
      ```
    - `20261024000001_device_zonas_horarias.sql` (#82): solo crea una función. Aplícala **antes** de publicar una versión nueva del agente. Si no, el agente nuevo imprime con la hora peninsular, como hasta ahora, y avisa una vez en su log.
-3. **Caddy (#59, #81):** reinicia Caddy para que lea el `Caddyfile` y comprueba:
+3. **Caddy (#59, #81, #84):** reinicia Caddy para que lea el `Caddyfile` y comprueba (los dos `curl` de `deploy/README.md` §7):
    - con `curl -I`, que salen `X-Frame-Options: DENY` y `frame-ancestors 'none'` (tarea 0.3);
-   - que un cuerpo de 2MB en `/api/*` da 413 (`deploy/README.md` §7).
+   - que un cuerpo de 2MB en `/api/*` da 413, y con esas mismas cabeceras.
 4. **Copias (#60):** el backup ya lleva las fotos. Haz el simulacro de restauración de `deploy/README.md` (tarea 0.4).
 5. **Cron diario de errores (#69):** añade `alertas-log.sh` al `crontab` con tu `AVISO_A` (`deploy/README.md` §8).
 
@@ -89,6 +89,7 @@ Fuera del plan:
   - Cada pedido usa la zona de su propia sede. Si la RPC falta o la zona no es válida, imprime con `Europe/Madrid` en vez de dejar de imprimir.
   - `analiticaDeCarta` cuenta los 30 días desde la medianoche local, igual que `menu_scans.dia`.
 - **#83**: las fotos de catálogo y de marca se suben hasta los 15MB de `storage.ts`. Antes, Next cortaba el cuerpo de las Server Actions en 1MB y el proxy lo truncaba en 10MB, así que una foto de móvil normal fallaba. Ahora los dos topes están en 16MB (ADR 0004). Lo cubre un e2e que sube una foto de ~14,5MB.
+- **#84**: los errores que genera Caddy (502 con la web o Kong caídos, 413 del tope) llevan también las cabeceras de seguridad, y ya no `Server: Caddy`. Las cabeceras viven en un snippet, `(cabeceras)`, que `(seguridad)` aplica en la respuesta normal y en `handle_errors`. Cada sitio solo elige su HSTS.
 
 ## Pendiente — decisiones abiertas (fuera del plan)
 

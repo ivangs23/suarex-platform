@@ -27,6 +27,31 @@
 	}
 }
 
+# Cabeceras de seguridad de todo sitio. Nadie enmarca la web (clickjacking sobre el panel o el
+# pago): el panel del agente y el tótem no son iframes, cargan la URL en su propia ventana. La
+# CSP es el estándar; X-Frame-Options, para navegadores viejos. El argumento es el valor de HSTS.
+(cabeceras) {
+	header {
+		Strict-Transport-Security "{args[0]}"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Frame-Options "DENY"
+		Content-Security-Policy "frame-ancestors 'none'"
+		-Server
+	}
+}
+
+# Las mismas cabeceras también en los errores que genera Caddy (502 con la web caída, 413 del
+# tope de `/api/*`): esas respuestas las compone de cero y saldrían sin ellas y con
+# `Server: Caddy`. Mismo estado y sin cuerpo, como antes.
+(seguridad) {
+	import cabeceras {args[0]}
+	handle_errors {
+		import cabeceras {args[0]}
+		respond "" {err.status_code}
+	}
+}
+
 # El comodín NO cubre el dominio desnudo (`*.suarex.app` no incluye `suarex.app`), así que
 # se declaran los dos. Caddy pide un certificado que cubra ambos.
 *.{$PLATFORM_DOMAIN}, {$PLATFORM_DOMAIN} {
@@ -34,21 +59,9 @@
 		dns cloudflare {$CLOUDFLARE_API_TOKEN}
 	}
 
-	# Cabeceras de seguridad para toda la plataforma. HSTS incluye subdominios porque cada
-	# cliente vive en uno: sin `includeSubDomains` un `garum.suarex.app` en claro seguiría
-	# siendo un objetivo de downgrade.
-	#
-	# Nadie enmarca la web (clickjacking sobre el panel o el pago). El panel del agente y el
-	# tótem no son iframes: cargan la URL en su propia ventana. La CSP es el estándar;
-	# X-Frame-Options, para navegadores viejos.
-	header {
-		Strict-Transport-Security "max-age=31536000; includeSubDomains"
-		X-Content-Type-Options "nosniff"
-		Referrer-Policy "strict-origin-when-cross-origin"
-		X-Frame-Options "DENY"
-		Content-Security-Policy "frame-ancestors 'none'"
-		-Server
-	}
+	# HSTS incluye subdominios porque cada cliente vive en uno: sin `includeSubDomains` un
+	# `garum.suarex.app` en claro seguiría siendo un objetivo de downgrade.
+	import seguridad "max-age=31536000; includeSubDomains"
 
 	# La API de Supabase (auth, PostgREST, storage, realtime) cuelga de su propio
 	# subdominio. Va ANTES del handle genérico: el primer matcher que case gana.
@@ -92,14 +105,8 @@
 		on_demand
 	}
 
-	header {
-		Strict-Transport-Security "max-age=31536000"
-		X-Content-Type-Options "nosniff"
-		Referrer-Policy "strict-origin-when-cross-origin"
-		X-Frame-Options "DENY"
-		Content-Security-Policy "frame-ancestors 'none'"
-		-Server
-	}
+	# Sin `includeSubDomains`: el resto de subdominios de ese dominio son del cliente, no nuestros.
+	import seguridad "max-age=31536000"
 
 	# El mismo tope que en la plataforma: estas rutas son las mismas.
 	request_body /api/* {
