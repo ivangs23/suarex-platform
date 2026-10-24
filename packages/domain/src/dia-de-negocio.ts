@@ -56,14 +56,18 @@ function medianocheEnZona(dia: string, zona: string): Date {
   return new Date(ingenua - desfaseMinutos(new Date(aprox), zona) * 60_000);
 }
 
+/** `dia` (`YYYY-MM-DD`) más `n` días de calendario; `n` negativo resta. No depende de zona. */
+export function sumarDias(dia: string, n: number): string {
+  const [anio, mes, diaMes] = dia.split("-").map(Number);
+  return new Date(Date.UTC(anio ?? 0, (mes ?? 1) - 1, (diaMes ?? 1) + n))
+    .toISOString()
+    .slice(0, 10);
+}
+
 /**
  * Límites `[desde, hasta)` de un día local: de su medianoche a la del día siguiente. El día del
  * cambio de hora dura 23 o 25 horas, y por eso no vale sumar 24 horas a `desde`.
  */
 export function limitesDelDia(dia: string, zona: string): { desde: Date; hasta: Date } {
-  const [anio, mes, diaMes] = dia.split("-").map(Number);
-  const siguiente = new Date(Date.UTC(anio ?? 0, (mes ?? 1) - 1, (diaMes ?? 1) + 1))
-    .toISOString()
-    .slice(0, 10);
-  return { desde: medianocheEnZona(dia, zona), hasta: medianocheEnZona(siguiente, zona) };
+  return { desde: medianocheEnZona(dia, zona), hasta: medianocheEnZona(sumarDias(dia, 1), zona) };
 }

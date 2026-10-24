@@ -1,3 +1,4 @@
+import { diaEnZona, limitesDelDia, sumarDias } from "@suarex/domain";
 import { registrarEscaneoRpc, tenantScoped } from "./client.js";
 import { textosJson } from "./json.js";
 
@@ -66,12 +67,17 @@ export async function registrarEscaneo(tableId: string): Promise<void> {
   }
 }
 
-export async function analiticaDeCarta(tenantId: string, dias = 30): Promise<AnaliticaDeCarta> {
-  const desde = new Date();
-  desde.setDate(desde.getDate() - (dias - 1));
-  desde.setHours(0, 0, 0, 0);
+/** Los últimos `dias` días de la sede, contando hoy: desde su medianoche LOCAL (la misma de
+ *  `menu_scans.dia`), no la del servidor, que en el VPS es UTC. */
+export async function analiticaDeCarta(
+  tenantId: string,
+  zona: string,
+  dias = 30,
+  ahora = new Date(),
+): Promise<AnaliticaDeCarta> {
   // `menu_scans.dia` es una fecha local de la sede, no un instante: se compara con otra fecha.
-  const desdeDia = `${desde.getFullYear()}-${String(desde.getMonth() + 1).padStart(2, "0")}-${String(desde.getDate()).padStart(2, "0")}`;
+  const desdeDia = sumarDias(diaEnZona(ahora, zona), -(dias - 1));
+  const { desde } = limitesDelDia(desdeDia, zona);
 
   const [scans, pedidos, catalogo] = await Promise.all([
     tenantScoped("menu_scans", tenantId).select("escaneos").gte("dia", desdeDia),

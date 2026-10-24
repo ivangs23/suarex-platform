@@ -105,6 +105,37 @@ async function ticketBranding(
   };
 }
 
+/** La reserva cuando no se conoce la zona de la sede: la misma que `zonaHorariaDelTenant` y SQL. */
+const ZONA_POR_DEFECTO = "Europe/Madrid";
+
+function esZonaValida(zona: string): boolean {
+  try {
+    new Intl.DateTimeFormat("es-ES", { timeZone: zona });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+let avisadoSinZonas = false;
+
+/** Zona de cada sede, por la RPC acotada al JWT (el device no lee `venues`). Nunca lanza, y una
+ *  zona inválida se descarta: sin zona el ticket sale con la peninsular, nunca sin imprimir. */
+async function zonasDeSedes(client: SupabaseClient): Promise<Map<string, string>> {
+  const { data, error } = await client.rpc("device_zonas_horarias");
+  if (error) {
+    // Un servidor sin la migración falla en cada tick: se avisa una vez, no cada 4 s.
+    if (!avisadoSinZonas) console.error("[agent] sin zonas horarias de las sedes:", error.message);
+    avisadoSinZonas = true;
+    return new Map();
+  }
+  avisadoSinZonas = false;
+  const filas = (data ?? []) as { venue_id: string; timezone: string }[];
+  return new Map(
+    filas.filter((f) => esZonaValida(f.timezone)).map((f) => [f.venue_id, f.timezone]),
+  );
+}
+
 /** Impresora id del PROPIO dispositivo del agente, leída con su JWT (`devices_select_own`
  * devuelve solo la fila cuyo `auth_user_id = auth.uid()`). `null` si no hay fila (p. ej. un
  * device sembrado sin fila en `devices`): entonces no se reclama ninguna USB. */
@@ -240,11 +271,12 @@ export async function probeNetworkPrinters(client: SupabaseClient): Promise<Netw
  * la mesa de al lado. Una nota puede ser "sin gluten"; una extra es algo que hay que emplatar y
  * que el cliente ya ha pagado.
  */
-export function toTicketOrder(order: PrintableOrder): TicketOrder {
+export function toTicketOrder(order: PrintableOrder, timeZone: string): TicketOrder {
   return {
     orderNumber: order.orderNumber,
     tableLabel: order.tableLabel,
     createdAt: order.createdAt,
+    timeZone,
     items: order.items.map((item) => ({
       name: item.name,
       quantity: item.quantity,
@@ -257,11 +289,12 @@ export function toTicketOrder(order: PrintableOrder): TicketOrder {
 
 /** El pedido como RECIBO de cliente (con importes y código de recogida). El código sale del token
  *  público con la MISMA regla que la pantalla del totem (`pickupCodeFromToken`), para que cuadren. */
-function toReceiptOrder(order: PrintableOrder, locale: string): ReceiptOrder {
+function toReceiptOrder(order: PrintableOrder, locale: string, timeZone: string): ReceiptOrder {
   return {
     orderNumber: order.orderNumber,
     tableLabel: order.tableLabel,
     createdAt: order.createdAt,
+    timeZone,
     items: order.items.map((item) => ({
       name: item.name,
       quantity: item.quantity,
@@ -313,13 +346,16 @@ export async function runAgentTick(
 ): Promise<AgentTickResult> {
   // Una sola lectura de `printers` por tick, compartida entre "qué falta imprimir"
   // (`selectUnprintedOrders`) y "a qué impresora" (`resolvePrintersFromRows`) -- antes se
-  // consultaba dos veces (#13). Las cuatro lecturas van en paralelo (1 RTT).
-  const [printerRows, orderRows, { branding, fiscal, locale }, deviceId] = await Promise.all([
-    enabledPrinterRows(client),
-    paidUnprintedOrderRows(client),
-    ticketBranding(client),
-    ownDeviceId(client),
-  ]);
+  // consultaba dos veces (#13). Las cinco lecturas van en paralelo (1 RTT).
+  const [printerRows, orderRows, { branding, fiscal, locale }, deviceId, zonas] = await Promise.all(
+    [
+      enabledPrinterRows(client),
+      paidUnprintedOrderRows(client),
+      ticketBranding(client),
+      ownDeviceId(client),
+      zonasDeSedes(client),
+    ],
+  );
   const orders = selectUnprintedOrders(orderRows, printerRows);
   const printers = resolvePrintersFromRows(printerRows, deviceId);
 
@@ -329,7 +365,8 @@ export async function runAgentTick(
   const succeeded = new Set<string>();
 
   for (const order of orders) {
-    const ticketOrder = toTicketOrder(order);
+    const zona = zonas.get(order.venueId) ?? ZONA_POR_DEFECTO;
+    const ticketOrder = toTicketOrder(order, zona);
     const neededDestinations = new Set(order.items.map((i) => i.destination));
     for (const printer of printers) {
       // Acotado por local (venue) para TODAS las impresoras (red y USB): un pedido solo se
@@ -348,7 +385,7 @@ export async function runAgentTick(
 
       const lines =
         dest === "recibo"
-          ? buildReceiptLines(toReceiptOrder(order, locale), branding, fiscal)
+          ? buildReceiptLines(toReceiptOrder(order, locale, zona), branding, fiscal)
           : buildTicketLines(ticketOrder, branding, dest);
       const result = await enqueueByDevice(deviceKey(printer.config), () =>
         printToPrinter(lines, printer.config),

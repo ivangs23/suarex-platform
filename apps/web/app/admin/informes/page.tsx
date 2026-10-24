@@ -19,7 +19,7 @@ export default async function InformesPage() {
   const zona = await zonaHorariaDelTenant(session.tenantId);
   const [ventas, analitica] = await Promise.all([
     ventasDelDia(session.tenantId, diaEnZona(new Date(), zona), zona),
-    analiticaDeCarta(session.tenantId),
+    analiticaDeCarta(session.tenantId, zona),
   ]);
 
   const maximoPorHora = Math.max(1, ...ventas.porHora.map((h) => h.importeCents));

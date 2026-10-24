@@ -196,7 +196,7 @@ async function runPrintFlowOnce(
        el mismo `extras: []` que tenía producción -- así que el test estaba de acuerdo con el
        fallo y no podía verlo. Un test que copia lo que prueba solo comprueba que sabes
        copiar. */
-    const ticketOrder: TicketOrder = toTicketOrder(order);
+    const ticketOrder: TicketOrder = toTicketOrder(order, "Europe/Madrid");
     const neededDestinations = new Set(order.items.map((item) => item.destination));
 
     for (const printer of printers) {

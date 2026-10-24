@@ -6,6 +6,7 @@ const base: ReceiptOrder = {
   orderNumber: 42,
   tableLabel: "12",
   createdAt: "2026-07-22T10:30:00.000Z",
+  timeZone: "Europe/Madrid",
   items: [
     { name: "Ribera del Duero", quantity: 2, extras: ["Copa extra"], lineCents: 4200 },
     { name: "Tosta de jamón", quantity: 1, extras: [], lineCents: 1200 },
@@ -99,6 +100,14 @@ describe("buildReceiptLines", () => {
 
   it("termina en corte", () => {
     expect(buildReceiptLines(base, branding).at(-1)?.kind).toBe("cut");
+  });
+
+  it("imprime la hora de la sede del pedido, no una zona fija", () => {
+    // 10:30 UTC en julio: 12:30 en Madrid, 11:30 en Canarias.
+    expect(texts(buildReceiptLines(base, branding))).toContain("Hora: 12:30");
+    expect(texts(buildReceiptLines({ ...base, timeZone: "Atlantic/Canary" }, branding))).toContain(
+      "Hora: 11:30",
+    );
   });
 });
 

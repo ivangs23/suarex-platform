@@ -6,6 +6,7 @@ const order: TicketOrder = {
   orderNumber: 42,
   tableLabel: "5",
   createdAt: "2026-07-22T10:30:00.000Z",
+  timeZone: "Europe/Madrid",
   items: [
     { name: "Tosta de jamón", quantity: 2, destination: "cocina", notes: null, extras: [] },
     { name: "Copa de vino", quantity: 1, destination: "barra", notes: null, extras: [] },
@@ -60,6 +61,16 @@ describe("buildTicketLines", () => {
       .map((l) => (l.kind === "text" ? l.text : ""));
     expect(texts.some((t) => t.includes("Tosta de jamon"))).toBe(true);
   });
+
+  it("imprime la hora de la sede del pedido, no una zona fija", () => {
+    // 10:30 UTC en julio: 12:30 en Madrid, 11:30 en Canarias.
+    const hora = (timeZone: string) =>
+      buildTicketLines({ ...order, timeZone }, branding, "cocina")
+        .map((l) => (l.kind === "text" ? l.text : ""))
+        .find((t) => t.startsWith("Hora:"));
+    expect(hora("Europe/Madrid")).toBe("Hora: 12:30");
+    expect(hora("Atlantic/Canary")).toBe("Hora: 11:30");
+  });
 });
 
 describe("la nota del comensal llega a la cocina", () => {
@@ -70,6 +81,7 @@ describe("la nota del comensal llega a la cocina", () => {
     orderNumber: 7,
     tableLabel: "3",
     createdAt: "2026-08-03T12:00:00.000Z",
+    timeZone: "Europe/Madrid",
     items: [
       {
         name: "Tosta de jamón",

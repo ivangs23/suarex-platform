@@ -1094,6 +1094,13 @@ export type Database = {
         Args: { p_app_version: string; p_printers?: string[] }
         Returns: undefined
       }
+      device_zonas_horarias: {
+        Args: never
+        Returns: {
+          timezone: string
+          venue_id: string
+        }[]
+      }
       expire_pending_orders: {
         Args: { p_timeout_minutes?: number }
         Returns: string[]
