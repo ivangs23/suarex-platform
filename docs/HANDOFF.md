@@ -66,10 +66,10 @@ Por qué el código es como es: [`docs/decisions/`](decisions/README.md) (ADRs).
 | 3.1 Caché de la carta | #68 | Hecho |
 | 3.2 Alertas por log | #69 | Hecho; falta el `crontab` |
 | 3.3 Flakiness | #70 | Hecho |
-| 4.1-4.2 Electron 44 | #73 (borrador) | **Esperando la 4.3**: validación de Iván en un PC Windows real |
-| 5.1 ADRs | #74 | Hecho, salvo el ADR 0008 (`web-panel.ts`, sandbox), que va tras #73 |
+| 4.1-4.3 Electron 44 | #73 | Hecho. Validado en el PC de Iván (instalar, emparejar, pedido, watchdog, auto-update); falta en hardware real: ESC/POS USB, tótem con cobro y reinicio de Windows |
+| 5.1 ADRs | #74, #80 | Hecho: ADRs 0001-0008 |
 | 5.2 Docs al día | #77 | Hecho |
-| 5.3 Hooks pre-commit | | Opcional: decide Iván (añade dos dependencias de desarrollo) |
+| 5.3 Hooks pre-commit | #79 | Hecho |
 
 Fuera del plan:
 
@@ -81,6 +81,7 @@ Fuera del plan:
 
 ## Pendiente — decisiones abiertas (fuera del plan)
 
+- **Validar el agente en hardware real (resto de la 4.3).** En el PC de Iván no hay impresora ESC/POS USB ni datáfono: queda imprimir por USB, el tótem con cobro, reiniciar Windows y ver a ojo que el watchdog no abre ventanas. Hacerlo en la próxima instalación con ese hardware, con `docs/agent-desktop-validacion.md`.
 - **La hora de la sede en tickets y analítica.** El cierre y el informe de ventas ya usan la zona de la sede (`zonaHorariaDelTenant`) con su desfase real, también el día del cambio de hora. Quedan dos restos, sin el problema del cambio de hora:
   - los tickets y el recibo (`packages/ticket`) formatean la hora con `Europe/Madrid` fijo, así que en Canarias saldría la hora peninsular;
   - `analiticaDeCarta` empieza su ventana de 30 días a la medianoche del servidor.
@@ -127,14 +128,14 @@ Fuera del plan:
 - Credenciales SMTP.
 - **Auto-update en producción:**
   - montar el feed estático, por ejemplo `updates.suarex.app` sirviendo `latest.yml` y el instalador;
-  - pasar `UPDATE_FEED_URL` al build del agente (desde #73 es opcional: sin él no hay auto-update);
+  - pasar `UPDATE_FEED_URL` al build del agente (opcional: sin él no hay auto-update; con él, desde #73 ya no se cae al arrancar);
   - **firmar** el instalador NSIS. Sin firma, Windows muestra el aviso de SmartScreen.
 
 ## Seguridad: auditoría de producción del 2026-09-25
 
 Se hizo sobre la imagen de producción construida y con tráfico. Estado de lo que salió:
 
-- **Electron 33 fuera de soporte:** subida a 44.9.3 en #73, pendiente de la 4.3.
+- **Electron 33 fuera de soporte:** subido a 44.9.3 en #73.
 - **Clickjacking:** resuelto en #59. `WebContentsView` no usa iframe, así que el agente no se ve afectado.
 - **`tar` crítico vía electron-builder:** desaparece con electron-builder 26 (#73).
 

@@ -40,3 +40,4 @@ y se escribe la nueva.
 | [0005](0005-variables-de-entorno-del-contenedor.md) | La lista `environment` del compose es lo único que llega a la web |
 | [0006](0006-reintentos-y-pool-de-la-integracion.md) | Integración: `retry: 2` para el entorno, contado, y pool de hilos |
 | [0007](0007-tenantscoped-y-sus-exenciones.md) | Todo acceso a datos pasa por `tenantScoped` o por una exención nombrada y numerada |
+| [0008](0008-panel-web-aislado-en-el-agente.md) | El panel web del agente es contenido remoto aislado (sin preload, sandbox, dos sesiones, solo su origen) |
