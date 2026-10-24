@@ -19,7 +19,7 @@ Suite en verde:
 | typecheck | 10/10 + tests |
 | unit | 9 paquetes; web: 3.959 |
 | integración | 503 (74 ficheros) |
-| e2e | 149, en Windows, incluidas 14 capturas visuales de la carta |
+| e2e | 150, en Windows, incluidas 14 capturas visuales de la carta |
 
 **CI** (`.github/workflows/ci.yml`), en cada PR:
 - `verificar`: lint, typecheck y unit.
@@ -35,7 +35,9 @@ Por qué el código es como es: [`docs/decisions/`](decisions/README.md) (ADRs).
    - **#75**: next 16.4.3 (DoS por Server Actions; RCE y SSRF de imagen, no explotables aquí por `images.unoptimized`), sharp 0.35.5 (procesa las fotos subidas) y dompurify;
    - **#76**: zod 4.6.7 (agotamiento de memoria en `/api/orders`).
 
-   En la misma reconstrucción va **#78**: el cierre y el informe de ventas, en la hora del local. **Antes del 25 de octubre**, cuando acaba el horario de verano.
+   En la misma reconstrucción van:
+   - **#78**: el cierre y el informe de ventas, en la hora del local. **Antes del 25 de octubre**, cuando acaba el horario de verano.
+   - **#83**: las fotos de más de 1MB ya se pueden subir. Hoy, en producción, una foto de móvil falla al subirla.
 
    No hay variables de entorno nuevas.
 2. **Migraciones de octubre:**
@@ -86,8 +88,11 @@ Fuera del plan:
   - El agente lee la zona de cada sede con la RPC `device_zonas_horarias`. El device sigue sin leer `venues`.
   - Cada pedido usa la zona de su propia sede. Si la RPC falta o la zona no es válida, imprime con `Europe/Madrid` en vez de dejar de imprimir.
   - `analiticaDeCarta` cuenta los 30 días desde la medianoche local, igual que `menu_scans.dia`.
+- **#83**: las fotos de catálogo y de marca se suben hasta los 15MB de `storage.ts`. Antes, Next cortaba el cuerpo de las Server Actions en 1MB y el proxy lo truncaba en 10MB, así que una foto de móvil normal fallaba. Ahora los dos topes están en 16MB (ADR 0004). Lo cubre un e2e que sube una foto de ~14,5MB.
 
 ## Pendiente — decisiones abiertas (fuera del plan)
+
+- **Una foto de más de 15MB da un error genérico en el navegador.** No dice "la foto es demasiado grande": a partir de 16MB la corta Next, y entre 15 y 16MB la rechaza `storage.ts`, y en los dos casos la Server Action lanza un error. Si molesta, se puede comprobar el tamaño en el formulario antes de enviar.
 
 - **Validar el agente en hardware real (resto de la 4.3).** En el PC de Iván no hay impresora ESC/POS USB ni datáfono: queda imprimir por USB, el tótem con cobro, reiniciar Windows y ver a ojo que el watchdog no abre ventanas. Hacerlo en la próxima instalación con ese hardware, con `docs/agent-desktop-validacion.md`.
 - **Impresora de red que cierra limpio sin imprimir.** Una impresora que acepta la conexión y la cierra con FIN se da por entregada (`packages/printing/src/print-order.ts`): TCP no lo distingue de un envío correcto. Cerrarlo exige consultar el estado ESC/POS tras enviar.

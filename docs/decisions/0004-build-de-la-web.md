@@ -1,6 +1,6 @@
-# 0004 — Build de la web: webpack, `standalone` con la raíz del monorepo, imágenes sin optimizador
+# 0004 — Build de la web: webpack, `standalone` con la raíz del monorepo, imágenes sin optimizador, tope del cuerpo
 
-**Estado:** vigente · **Fecha:** 2026-10-23
+**Estado:** vigente · **Fecha:** 2026-10-23 (tope del cuerpo: 2026-10-24)
 
 ## Contexto
 
@@ -22,6 +22,11 @@ cada tenant por su subdominio (`{slug}.dominio`).
   Node): devuelve 400 y la imagen sale rota. Las fotos de catálogo ya se suben optimizadas
   (900 px WebP, `packages/db/src/image.js`) y los assets de marca se comprimen en origen
   (`public/brands/`): re-optimizar solo gastaría CPU del VPS.
+- **`serverActions.bodySizeLimit` y `proxyClientMaxBodySize` a 16MB.** Las fotos se suben por
+  Server Actions (`FormData`). Por defecto Next corta su cuerpo en 1MB y el proxy en 10MB, así
+  que el `MAX_BYTES` de 15MB de `storage.ts` (pensado para fotos de móvil) era papel mojado. El
+  del proxy, además, no falla: trunca el cuerpo, y sharp recibe un PNG roto. 16MB son los 15 de
+  la foto más el margen del multipart.
 
 ## Consecuencias
 
@@ -29,3 +34,8 @@ cada tenant por su subdominio (`{slug}.dominio`).
   layout) y hace lazy-load.
 - Pasar a Turbopack exige antes que soporte `extensionAlias` o compilar los paquetes.
 - Una foto subida sin pasar por `image.js` se sirve tal cual, sin redimensionar.
+- El tope es global: cualquier Server Action, y cualquier POST que pase por el proxy, admite
+  16MB. Next lee el cuerpo antes de que la acción compruebe la sesión, así que también un
+  anónimo. Antes eran 10MB para el proxy, sin tope en Caddy fuera de `/api/*`.
+- Subir `MAX_BYTES` obliga a subir este tope; bajarlo, a mirar el e2e de la foto grande
+  (`admin-catalogo-editar.spec.ts`), que sube ~14,5MB.

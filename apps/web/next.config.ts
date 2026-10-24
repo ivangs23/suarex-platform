@@ -2,8 +2,12 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { NextConfig } from "next";
 
-// Las tres decisiones de este fichero (webpack, `standalone` con la raíz del monorepo e imágenes
-// sin optimizador) están razonadas en docs/decisions/0004-build-de-la-web.md.
+// Las decisiones de este fichero (webpack, `standalone` con la raíz del monorepo, imágenes sin
+// optimizador y el tope del cuerpo) están razonadas en docs/decisions/0004-build-de-la-web.md.
+
+// Tope del cuerpo de Server Actions y proxy: una foto de móvil hasta el `MAX_BYTES` de
+// `packages/db/src/storage.ts` (15MB) más la cabecera del multipart. Lo cubre el e2e de la foto.
+const TOPE_CUERPO = "16mb";
 
 // Raíz del monorepo: sin ella, `standalone` deja fuera los `packages/*` y el store de pnpm.
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -18,6 +22,9 @@ const config: NextConfig = {
   // Imports NodeNext (`./x.js` -> `./x.ts`) de los paquetes sin compilar: solo webpack.
   experimental: {
     extensionAlias: { ".js": [".ts", ".tsx", ".js"] },
+    // Por defecto 1MB y 10MB; el del proxy además TRUNCA en silencio en vez de fallar.
+    serverActions: { bodySizeLimit: TOPE_CUERPO },
+    proxyClientMaxBodySize: TOPE_CUERPO,
   },
 };
 
