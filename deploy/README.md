@@ -252,12 +252,20 @@ Del más barato al más caro. Si uno falla, para y arréglalo antes de seguir.
 curl -sS -o /dev/null -w '%{http_code}\n' https://nadie.suarex.app/1
 ```
 
-**Un cuerpo de más de 1MB en `/api/*` da 413.** Usa el host de un cliente real:
-`/api/devices/pair` lee el cuerpo antes que nada. Un 404 aquí significa que el Caddy que corre
-no tiene el tope (falta el `restart` del paso anterior).
+**Las cabeceras de seguridad salen**: `x-frame-options: DENY`, `content-security-policy:
+frame-ancestors 'none'`, HSTS, y ninguna `server:`.
 
 ```bash
-head -c 2000000 /dev/zero | curl -sS -o /dev/null -w '%{http_code}\n' \
+curl -sSI https://<slug>.suarex.app/1
+```
+
+**Un cuerpo de más de 1MB en `/api/*` da 413, con las mismas cabeceras.** Ese 413 lo genera
+Caddy, no la web, así que también prueba que sus errores las llevan. Usa el host de un cliente
+real: `/api/devices/pair` lee el cuerpo antes que nada. Un 404 aquí significa que el Caddy que
+corre no tiene el tope (falta el `restart` del paso anterior).
+
+```bash
+head -c 2000000 /dev/zero | curl -sS -D - -o /dev/null \
   -H 'Content-Type: application/json' --data-binary @- https://<slug>.suarex.app/api/devices/pair
 ```
 

@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   MAX_CANTIDAD_LINEA,
@@ -7,21 +5,12 @@ import {
   MAX_LINEAS_PEDIDO,
   MAX_NOTAS_LINEA,
 } from "../../packages/domain/src/limites-pedido.js";
+import { bloquesDeSitio, leerCaddyfile } from "./helpers/caddyfile.js";
 
 /**
  * Tope al cuerpo de `/api/*` en `deploy/Caddyfile`. Test estructural, como
  * `security-headers.test.ts`: lee el fichero, no levanta Caddy.
  */
-
-const CADDYFILE = path.resolve(import.meta.dirname, "../../deploy/Caddyfile");
-
-/** Bloques de sitio: `cabecera {` ... `}` en la columna 0. Las opciones globales (`{` solo) no. */
-function bloquesDeSitio(caddyfile: string): { cabecera: string; cuerpo: string }[] {
-  return [...caddyfile.matchAll(/^([^#\s{][^\n]*?)[ \t]*\{\r?\n([\s\S]*?)^\}/gm)].map((m) => ({
-    cabecera: m[1] ?? "",
-    cuerpo: m[2] ?? "",
-  }));
-}
 
 /** Unidades de tamaño de Caddy: `MB` es decimal, `MiB` binario. */
 const UNIDADES: Record<string, number> = { KB: 1e3, MB: 1e6, KiB: 1024, MiB: 1024 ** 2 };
@@ -51,7 +40,7 @@ function bytesDelPeorPedido(): number {
 }
 
 describe("deploy/Caddyfile: tope al cuerpo de /api/*", () => {
-  const bloques = bloquesDeSitio(readFileSync(CADDYFILE, "utf8"));
+  const bloques = bloquesDeSitio(leerCaddyfile());
 
   it("los dos bloques de sitio limitan /api/*", () => {
     // Plataforma y dominios propios sirven las mismas rutas: los dos necesitan el tope.
