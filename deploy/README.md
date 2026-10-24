@@ -252,6 +252,15 @@ Del más barato al más caro. Si uno falla, para y arréglalo antes de seguir.
 curl -sS -o /dev/null -w '%{http_code}\n' https://nadie.suarex.app/1
 ```
 
+**Un cuerpo de más de 1MB en `/api/*` da 413.** Usa el host de un cliente real:
+`/api/devices/pair` lee el cuerpo antes que nada. Un 404 aquí significa que el Caddy que corre
+no tiene el tope (falta el `restart` del paso anterior).
+
+```bash
+head -c 2000000 /dev/zero | curl -sS -o /dev/null -w '%{http_code}\n' \
+  -H 'Content-Type: application/json' --data-binary @- https://<slug>.suarex.app/api/devices/pair
+```
+
 **La API responde:**
 
 ```bash
