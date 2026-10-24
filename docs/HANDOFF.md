@@ -93,6 +93,7 @@ Fuera del plan:
 - **#85**: una foto de más de 15MB se avisa al elegirla, con la validación del navegador, y el formulario no se envía.
   - Los cinco campos de foto (alta y edición de producto; logo, bienvenida y textura) usan el mismo `CampoFoto`.
   - El máximo vive en `@suarex/domain` (`MAX_BYTES_IMAGEN`) y lo comparten `storage.ts` y el panel. Las etiquetas de Ajustes decían «máx 5 MB», el tope antiguo.
+- **#86**: `.nvmrc` y `engines` pasan a Node 22.23.4. El CI probaba con la 22.12 (de diciembre de 2024), mientras la imagen de producción (`node:22-alpine`) ya llevaba la última 22.x. Con la app de Renovate instalada, `.nvmrc` se mantiene solo. Esto también permite subir a lint-staged 17, que pide Node ≥ 22.22.1.
 
 ## Pendiente — decisiones abiertas (fuera del plan)
 
