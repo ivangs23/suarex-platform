@@ -1,6 +1,7 @@
 export type { ChannelTotal, DailySummary, SummaryLine, SummaryOrder } from "./daily-summary.js";
 export { summarizeDay } from "./daily-summary.js";
 export { diaEnZona, horaEnZona, limitesDelDia, sumarDias } from "./dia-de-negocio.js";
+export { MAX_BYTES_IMAGEN, MAX_MB_IMAGEN } from "./limites-imagen.js";
 export {
   MAX_CANTIDAD_LINEA,
   MAX_EXTRAS_LINEA,

@@ -1,18 +1,12 @@
+import { MAX_BYTES_IMAGEN } from "@suarex/domain";
 import { catalogBucket } from "./client.js";
 import { MAX_SIDE_BRAND, optimizeImage } from "./image.js";
 
 const ALLOWED_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 
-/**
- * Tope de lo que se ACEPTA, no de lo que se guarda.
- *
- * Eran 5 MB, y con eso una foto normal hecha con un móvil moderno se rechazaba de plano --
- * justo la vía por la que un gestor sube la foto de un plato. Ya no hace falta ser tan
- * estricto: lo que acaba en Storage lo decide `optimizeImage` (900 px de lado, WebP), así que
- * el peso guardado no depende de lo que entre. El límite sigue existiendo para acotar lo que
- * se descarga y se descomprime en memoria, no para acotar el bucket.
- */
-const MAX_BYTES = 15 * 1024 * 1024;
+/** Tope de lo que se ACEPTA, compartido con el campo de foto del panel (ver `@suarex/domain`).
+ *  Acota lo que se descarga y se descomprime en memoria, no el bucket. */
+const MAX_BYTES = MAX_BYTES_IMAGEN;
 
 /** No hay validador de UUID compartido en el resto del paquete (las funciones
  * `tenantScoped`/RPC-bound de `client.ts` confían en que postgrest/la función SQL

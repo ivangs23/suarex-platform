@@ -325,6 +325,45 @@ test.describe("foto de producto", () => {
       filaProducto(page, "Ribera del Duero").getByTestId("admin-product-image"),
     ).toBeVisible({ timeout: 30_000 });
   });
+
+  test("una foto que pasa del máximo se avisa al elegirla y no se envía", async ({ page }) => {
+    // Antes subía entera para acabar en un error genérico. Ahora la frena el navegador.
+    await page.goto("http://garum.localhost:3000/admin/catalogo?cat=tintos");
+    const fila = filaProducto(page, "Ribera del Duero");
+    await fila.getByText("Editar producto").click();
+    const formulario = fila.getByTestId("product-edit-form");
+    const campo = formulario.getByLabel("Sustituir foto");
+
+    const envios: string[] = [];
+    page.on("request", (peticion) => {
+      if (peticion.method() === "POST") envios.push(peticion.url());
+    });
+
+    await campo.setInputFiles({
+      name: "enorme.png",
+      mimeType: "image/png",
+      buffer: Buffer.alloc(16_000_000),
+    });
+    await expect(campo).toHaveJSProperty(
+      "validationMessage",
+      "La foto pesa 15,3 MB y el máximo son 15 MB. Elige otra o redúcela.",
+    );
+    await formulario.getByRole("button", { name: "Guardar cambios" }).click();
+
+    // Con una foto válida el aviso se va y se guarda. Un solo POST en total: el primer clic
+    // no envió nada.
+    await campo.setInputFiles({
+      name: "vino.png",
+      mimeType: "image/png",
+      buffer: Buffer.from(PIXEL_PNG_BASE64, "base64"),
+    });
+    await expect(campo).toHaveJSProperty("validationMessage", "");
+    await formulario.getByRole("button", { name: "Guardar cambios" }).click();
+    await expect(
+      filaProducto(page, "Ribera del Duero").getByTestId("admin-product-image"),
+    ).toBeVisible({ timeout: 15_000 });
+    expect(envios).toHaveLength(1);
+  });
 });
 
 /**

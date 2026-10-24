@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
+import { CampoFoto } from "../CampoFoto";
 import { updateProductAction } from "./actions";
 import { TaxRateField } from "./TaxRateField";
 
@@ -116,18 +117,9 @@ export function ProductEditForm(props: Props) {
           "Sustituir foto" y no "Cambiar imagen": `getByLabel` hace subcadena sin distinguir
           mayúsculas, así que cualquier etiqueta que CONTENGA "Imagen" casaría también con la
           del formulario de alta -- único en la página y localizado así por sus tests -- y
-          con 184 productos ese localizador pasaría de 1 a 185 elementos.
-
-          `accept` lista los tipos EXACTOS que acepta el servidor, no `image/*`: con el
-          comodín, el selector del sistema deja elegir un HEIC (el formato por defecto de las
-          fotos de iPhone) y la subida muere con un error crudo tras esperar a que suba. */}
+          con 184 productos ese localizador pasaría de 1 a 185 elementos. */}
       <label htmlFor={`${formId}-image`}>Sustituir foto</label>
-      <input
-        id={`${formId}-image`}
-        name="image"
-        type="file"
-        accept="image/png,image/jpeg,image/webp"
-      />
+      <CampoFoto id={`${formId}-image`} name="image" />
 
       {props.imageUrl ? (
         <label>
