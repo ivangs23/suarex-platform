@@ -17,9 +17,9 @@ Suite en verde:
 |---|---|
 | lint | ok |
 | typecheck | 10/10 + tests |
-| unit | 9 paquetes; web: 3.959 |
+| unit | 9 paquetes; web: 3.963 |
 | integración | 508 (74 ficheros) |
-| e2e | 150, en Windows, incluidas 14 capturas visuales de la carta |
+| e2e | 151, en Windows, incluidas 14 capturas visuales de la carta |
 
 **CI** (`.github/workflows/ci.yml`), en cada PR:
 - `verificar`: lint, typecheck y unit.
@@ -90,10 +90,11 @@ Fuera del plan:
   - `analiticaDeCarta` cuenta los 30 días desde la medianoche local, igual que `menu_scans.dia`.
 - **#83**: las fotos de catálogo y de marca se suben hasta los 15MB de `storage.ts`. Antes, Next cortaba el cuerpo de las Server Actions en 1MB y el proxy lo truncaba en 10MB, así que una foto de móvil normal fallaba. Ahora los dos topes están en 16MB (ADR 0004). Lo cubre un e2e que sube una foto de ~14,5MB.
 - **#84**: los errores que genera Caddy (502 con la web o Kong caídos, 413 del tope) llevan también las cabeceras de seguridad, y ya no `Server: Caddy`. Las cabeceras viven en un snippet, `(cabeceras)`, que `(seguridad)` aplica en la respuesta normal y en `handle_errors`. Cada sitio solo elige su HSTS.
+- **#85**: una foto de más de 15MB se avisa al elegirla, con la validación del navegador, y el formulario no se envía.
+  - Los cinco campos de foto (alta y edición de producto; logo, bienvenida y textura) usan el mismo `CampoFoto`.
+  - El máximo vive en `@suarex/domain` (`MAX_BYTES_IMAGEN`) y lo comparten `storage.ts` y el panel. Las etiquetas de Ajustes decían «máx 5 MB», el tope antiguo.
 
 ## Pendiente — decisiones abiertas (fuera del plan)
-
-- **Una foto de más de 15MB da un error genérico en el navegador.** No dice "la foto es demasiado grande": a partir de 16MB la corta Next, y entre 15 y 16MB la rechaza `storage.ts`, y en los dos casos la Server Action lanza un error. Si molesta, se puede comprobar el tamaño en el formulario antes de enviar.
 
 - **Validar el agente en hardware real (resto de la 4.3).** En el PC de Iván no hay impresora ESC/POS USB ni datáfono: queda imprimir por USB, el tótem con cobro, reiniciar Windows y ver a ojo que el watchdog no abre ventanas. Hacerlo en la próxima instalación con ese hardware, con `docs/agent-desktop-validacion.md`.
 - **Impresora de red que cierra limpio sin imprimir.** Una impresora que acepta la conexión y la cierra con FIN se da por entregada (`packages/printing/src/print-order.ts`): TCP no lo distingue de un envío correcto. Cerrarlo exige consultar el estado ESC/POS tras enviar.

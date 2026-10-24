@@ -5,8 +5,8 @@ import type { NextConfig } from "next";
 // Las decisiones de este fichero (webpack, `standalone` con la raíz del monorepo, imágenes sin
 // optimizador y el tope del cuerpo) están razonadas en docs/decisions/0004-build-de-la-web.md.
 
-// Tope del cuerpo de Server Actions y proxy: una foto de móvil hasta el `MAX_BYTES` de
-// `packages/db/src/storage.ts` (15MB) más la cabecera del multipart. Lo cubre el e2e de la foto.
+// Tope del cuerpo de Server Actions y proxy: una foto de móvil hasta `MAX_BYTES_IMAGEN`
+// (`@suarex/domain`, 15MB) más la cabecera del multipart. Lo cubre el e2e de la foto.
 const TOPE_CUERPO = "16mb";
 
 // Raíz del monorepo: sin ella, `standalone` deja fuera los `packages/*` y el store de pnpm.

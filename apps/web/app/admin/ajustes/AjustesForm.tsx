@@ -4,8 +4,10 @@ import {
   type LAYOUT_OPTIONS,
   type TOKEN_OPTIONS,
 } from "@suarex/config";
+import { MAX_MB_IMAGEN } from "@suarex/domain";
 import Image from "next/image";
 import { SUPPORTED_LANGS } from "@/lib/i18n";
+import { CampoFoto } from "../CampoFoto";
 import { updateSettingsAction } from "./actions";
 
 /* Cómo se llama en el panel cada valor de los selects. Las claves son los valores que guarda
@@ -171,18 +173,18 @@ export function AjustesForm(props: Props) {
             ))}
           </select>
         </label>
-        <label>
-          Logo (PNG/JPG/WebP, máx 5 MB)
-          <input name="logo" type="file" accept="image/png,image/jpeg,image/webp" />
+        <label htmlFor="ajustes-logo">
+          Logo (PNG/JPG/WebP, máx {MAX_MB_IMAGEN} MB)
+          <CampoFoto id="ajustes-logo" name="logo" />
         </label>
         {branding.logoUrl ? (
           <Image src={branding.logoUrl} alt="Logo actual" width={80} height={80} unoptimized />
         ) : null}
         {/* La pantalla de bienvenida la tienen todos los clientes; lo que cada uno elige es
             esta foto. Sin ella, la carta la resuelve con su marca. */}
-        <label>
-          Foto de bienvenida (PNG/JPG/WebP, máx 5 MB)
-          <input name="hero" type="file" accept="image/png,image/jpeg,image/webp" />
+        <label htmlFor="ajustes-hero">
+          Foto de bienvenida (PNG/JPG/WebP, máx {MAX_MB_IMAGEN} MB)
+          <CampoFoto id="ajustes-hero" name="hero" />
         </label>
         {branding.heroUrl ? (
           <Image
@@ -253,9 +255,9 @@ export function AjustesForm(props: Props) {
             </label>
           );
         })}
-        <label>
-          Textura de fondo (PNG/JPG/WebP, máx 5 MB; se repite por toda la carta)
-          <input name="textura" type="file" accept="image/png,image/jpeg,image/webp" />
+        <label htmlFor="ajustes-textura">
+          Textura de fondo (PNG/JPG/WebP, máx {MAX_MB_IMAGEN} MB; se repite por toda la carta)
+          <CampoFoto id="ajustes-textura" name="textura" />
         </label>
         {branding.background.imageUrl ? (
           <Image

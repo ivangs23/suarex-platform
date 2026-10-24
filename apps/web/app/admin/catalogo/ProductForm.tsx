@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
+import { CampoFoto } from "../CampoFoto";
 import { createProductAction } from "./actions";
 import { TaxRateField } from "./TaxRateField";
 
@@ -19,8 +20,8 @@ type AllergenOption = { id: number; name: string };
  * ya es la cadena unida -- el `<form action={createProductAction}>` sigue siendo un
  * envío nativo normal, sin `preventDefault` ni FormData fabricado a mano.
  *
- * El campo `image` es un `<input type="file">` normal: los ficheros siempre viajan en
- * el FormData nativo, controlados o no, así que no necesita ningún estado de React --
+ * El campo `image` es un `CampoFoto` (un input de fichero nativo): los ficheros siempre
+ * viajan en el FormData nativo, así que no necesita ningún estado de React --
  * `extractImagePath` (`actions.ts`) lo sube con `uploadProductImage` si llega no vacío.
  */
 export function ProductForm({
@@ -64,15 +65,7 @@ export function ProductForm({
       <TaxRateField id={`${formId}-tax-rate`} etiqueta="IVA del producto" heredaDe="la categoría" />
 
       <label htmlFor={`${formId}-image`}>Imagen</label>
-      {/* Los tipos EXACTOS que acepta el servidor, no `image/*`: con el comodín, el
-          selector deja elegir un HEIC (formato por defecto del iPhone) y la subida muere con
-          un error crudo tras esperar a que suba. */}
-      <input
-        id={`${formId}-image`}
-        name="image"
-        type="file"
-        accept="image/png,image/jpeg,image/webp"
-      />
+      <CampoFoto id={`${formId}-image`} name="image" />
 
       <fieldset>
         <legend>Alérgenos</legend>
