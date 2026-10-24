@@ -1,3 +1,4 @@
+import { crc32, deflateSync } from "node:zlib";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import { moverProductoParaTest } from "./helpers/catalog-db";
 
@@ -201,6 +202,33 @@ test("una búsqueda sin resultados lo dice, en vez de dejar la página vacía", 
 const PIXEL_PNG_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
 
+/** PNG válido RGB de `ancho`×`alto` SIN comprimir (deflate de nivel 0): pesa lo que una foto de
+ *  móvil grande, sin depender de un fichero de muestra en el repo. */
+function pngSinComprimir(ancho: number, alto: number): Buffer {
+  const fila = Buffer.alloc(1 + ancho * 3, 0x80);
+  fila[0] = 0; // filtro "None"
+  const datos = deflateSync(Buffer.concat(Array.from({ length: alto }, () => fila)), { level: 0 });
+  const trozo = (tipo: string, contenido: Buffer) => {
+    const cuerpo = Buffer.concat([Buffer.from(tipo, "latin1"), contenido]);
+    const largo = Buffer.alloc(4);
+    largo.writeUInt32BE(contenido.length);
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(crc32(cuerpo));
+    return Buffer.concat([largo, cuerpo, crc]);
+  };
+  const cabecera = Buffer.alloc(13);
+  cabecera.writeUInt32BE(ancho, 0);
+  cabecera.writeUInt32BE(alto, 4);
+  cabecera[8] = 8; // bits por canal
+  cabecera[9] = 2; // RGB
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    trozo("IHDR", cabecera),
+    trozo("IDAT", datos),
+    trozo("IEND", Buffer.alloc(0)),
+  ]);
+}
+
 test.describe("foto de producto", () => {
   /**
    * Deja el producto SIN foto. Se usa antes y después del test.
@@ -273,6 +301,29 @@ test.describe("foto de producto", () => {
     await expect(
       filaProducto(page, "Ribera del Duero").getByTestId("admin-product-image"),
     ).toHaveCount(0, { timeout: 15_000 });
+  });
+
+  test("una foto de móvil grande (~14,5MB) se sube entera", async ({ page }) => {
+    // Cerca del máximo que acepta `storage.ts` (15MB). Antes la Server Action cortaba en 1MB
+    // y el proxy truncaba en 10MB: una foto normal de móvil no se podía subir.
+    const foto = pngSinComprimir(2600, 1950);
+    expect(foto.byteLength).toBeGreaterThan(14 * 1024 * 1024);
+    expect(foto.byteLength).toBeLessThan(15 * 1024 * 1024);
+
+    await page.goto("http://garum.localhost:3000/admin/catalogo?cat=tintos");
+    const fila = filaProducto(page, "Ribera del Duero");
+    await fila.getByText("Editar producto").click();
+    const formulario = fila.getByTestId("product-edit-form");
+    await formulario.getByLabel("Sustituir foto").setInputFiles({
+      name: "foto-movil.png",
+      mimeType: "image/png",
+      buffer: foto,
+    });
+    await formulario.getByRole("button", { name: "Guardar cambios" }).click();
+
+    await expect(
+      filaProducto(page, "Ribera del Duero").getByTestId("admin-product-image"),
+    ).toBeVisible({ timeout: 30_000 });
   });
 });
 
