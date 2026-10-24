@@ -68,6 +68,12 @@
 	# Todo lo demás es la plataforma. `reverse_proxy` conserva el Host original, que es
 	# justo de lo que depende `proxy.ts` para resolver el tenant -- no lo reescribas.
 	handle {
+		# Tope al cuerpo de `/api/*` (pedidos, emparejar, webhooks: JSON de pocos KB). Next no
+		# limita las rutas de API y `request.json()` lee entero lo que llegue: sin esto, un
+		# cuerpo de cientos de MB llega hasta la web. Pasado el tope, Caddy responde 413.
+		request_body /api/* {
+			max_size 1MB
+		}
 		reverse_proxy web:3000
 	}
 }
@@ -93,6 +99,11 @@
 		X-Frame-Options "DENY"
 		Content-Security-Policy "frame-ancestors 'none'"
 		-Server
+	}
+
+	# El mismo tope que en la plataforma: estas rutas son las mismas.
+	request_body /api/* {
+		max_size 1MB
 	}
 
 	# Un Host desconocido llega igualmente hasta aquí, pero no filtra nada: `proxy.ts` no lo

@@ -78,6 +78,7 @@ Fuera del plan:
 - **#78**: el cierre y el informe de ventas cortan el día en la zona de la sede, con el desfase real (`limitesDelDia` en `@suarex/domain`). Antes:
   - el cierre usaba `+02:00` fijo, que falla desde el fin del horario de verano;
   - el informe usaba la hora del servidor (UTC) todo el año.
+- **#81**: Caddy corta en 1MB el cuerpo de `/api/*`, con un 413, en la plataforma y en los dominios propios. El pedido legítimo más grande (todos los límites de `limites-pedido.ts` al máximo) ronda los 255KB. `api.<dominio>` (Kong) queda sin tope, porque por ahí van las subidas a Storage. Lo blinda `tests/integration/caddy-limite-cuerpo.test.ts`.
 
 ## Pendiente — decisiones abiertas (fuera del plan)
 
@@ -85,7 +86,6 @@ Fuera del plan:
 - **La hora de la sede en tickets y analítica.** El cierre y el informe de ventas ya usan la zona de la sede (`zonaHorariaDelTenant`) con su desfase real, también el día del cambio de hora. Quedan dos restos, sin el problema del cambio de hora:
   - los tickets y el recibo (`packages/ticket`) formatean la hora con `Europe/Madrid` fijo, así que en Canarias saldría la hora peninsular;
   - `analiticaDeCarta` empieza su ventana de 30 días a la medianoche del servidor.
-- **Tamaño del cuerpo de las peticiones.** Ni Caddy ni Next lo limitan en `/api/*`, así que `request.json()` lee entero lo que llegue. Propuesta: `request_body { max_size … }` en `deploy/Caddyfile`.
 - **Impresora de red que cierra limpio sin imprimir.** Una impresora que acepta la conexión y la cierra con FIN se da por entregada (`packages/printing/src/print-order.ts`): TCP no lo distingue de un envío correcto. Cerrarlo exige consultar el estado ESC/POS tras enviar.
 - **Avisos de dependencias que solo actúan en build.** Quedan anotados sin tocar:
   - `nanoid` 3.3.16 y `source-map-js` 1.2.1, vía el `postcss` que fija next;
