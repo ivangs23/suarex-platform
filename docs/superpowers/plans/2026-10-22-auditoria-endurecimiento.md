@@ -438,7 +438,7 @@ construye en Windows con los mismos 18 módulos que el de Electron 33. Renovate 
   y seguir `docs/agent-desktop-validacion.md` entero: emparejar, imprimir USB y red, tótem
   con cobro, auto-update desde un feed local, watchdog (matar el proceso y ver que vuelve),
   des-emparejar.
-- [ ] Solo tras eso, mergear.
+- [x] Solo tras eso, mergear. (Mergeado en #73 con el OK de Iván ANTES de las pruebas de hardware, que siguen pendientes en el HANDOFF.)
 
 **Validado en el PC de Iván (2026-10-24, automatizado, a petición suya):** instalador 0.0.1
 silencioso y sin admin; arranque con Electron 44.9.3; impresoras de Windows; winspool vía koffi
@@ -461,7 +461,7 @@ reiniciar Windows, y ver a ojo que el watchdog no abre ventanas y el aviso de Sm
 ~23 % de las líneas de `apps/web` y `packages/*` son comentarios, muchos narrativos ("verificado
 con curl, ver informe"). Son valiosos pero se desincronizan.
 
-- [ ] Crear `docs/decisions/README.md` (formato: contexto / decisión / consecuencias, 20-40
+- [x] Crear `docs/decisions/README.md` (formato: contexto / decisión / consecuencias, 20-40
   líneas) y mover ahí, numerados, los bloques largos de: `apps/web/proxy.ts` (cabeceras
   forjadas, 503 sin override, tls-check fuera del matcher), `packages/db/src/client.ts`
   (exenciones), `deploy/docker-compose.app.yml` (env que llega al proceso),
@@ -470,10 +470,10 @@ con curl, ver informe"). Son valiosos pero se desincronizan.
 - [x] En el código dejar 1-2 líneas + `Ver docs/decisions/0007-....md`.
 - [x] Regla nueva en `CLAUDE.md`: "comentario > 8 líneas → ADR".
 
-**En curso (2026-10-23):** ADRs 0001-0007 escritos y sus bloques recortados (código idéntico sin
-comentarios, comprobado con el printer de TypeScript). Falta `web-panel.ts` (sandbox) → ADR
-0008, después del merge de #73 (Electron 44), que toca ese fichero: la primera casilla se marca
-entonces. `client.ts` (opción A, decidida con Iván): un ADR con la política y el registro de las
+**Hecho (2026-10-23 y 24):** ADRs 0001-0008 escritos y sus bloques recortados (código idéntico sin
+comentarios, comprobado con el printer de TypeScript); el 0008 (`web-panel.ts`, sandbox) tras el
+merge de #73, que tocaba ese fichero.
+`client.ts` (opción A, decidida con Iván): un ADR con la política y el registro de las
 27 exenciones; las seis que no tenían número propio (el tótem y cinco "misma exención que…")
 pasan a ser la 22ª-27ª.
 

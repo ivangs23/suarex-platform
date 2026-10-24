@@ -2,41 +2,9 @@ import { type BrowserWindow, session, shell, WebContentsView } from "electron";
 import { PLATFORM_WEB_ORIGIN } from "./baked-config.js";
 
 /**
- * Panel incrustado con las páginas de la plataforma (catálogo, pedidos), colocado a la
- * derecha de la barra lateral dentro de la ventana principal.
- *
- * No reimplementa esas pantallas. El panel web ya tiene sus validaciones, sus Server
- * Actions y sus comprobaciones de rol; duplicarlas en una interfaz nativa crearía dos
- * juegos de reglas que divergirían con el primer cambio.
- *
- * Se usa `WebContentsView` y no la etiqueta `<webview>`: esa última está desaconsejada por
- * Electron, y además reutilizaría el proceso del renderer -- que SÍ tiene el puente
- * `window.agent`. Una vista aparte mantiene el contenido remoto en su propio `webContents`,
- * que es lo que permite las garantías de abajo.
- *
- * ---
- *
- * SEGURIDAD. Carga contenido REMOTO, así que se trata como hostil:
- *
- * 1. **Sin `preload`.** El renderer principal expone `window.agent.*` (emparejar, imprimir,
- *    des-emparejar) por contextBridge. Si esta vista lo heredara, un XSS en el panel podría
- *    des-emparejar el dispositivo o disparar impresiones. No necesita nada de eso: habla
- *    con su servidor por HTTP.
- * 2. **`sandbox: true`**, además de `contextIsolation` y `nodeIntegration: false`.
- * 3. **Dos particiones, dos sesiones** (ver `PARTICIONES`). Este PC es el de cocina y lo usa
- *    cualquiera que pase por delante, así que no todo se recuerda igual: las Comandas guardan
- *    su sesión en disco, porque es el trabajo de todo el día; Productos y Cierre (cambiar
- *    precios, cerrar caja) van en otra que vive solo en memoria y se borra al cerrar la
- *    ventana, así que piden la cuenta de quien gestiona cada vez que se abre el agente.
- * 4. **La navegación no sale del origen de la plataforma.** Sin esa guarda, un enlace
- *    externo convertiría este panel en un navegador SIN barra de direcciones: el usuario no
- *    podría saber qué sitio mira mientras teclea su contraseña, que es justo la condición
- *    que necesita una página de phishing. Fuera de origen se abre en el navegador del
- *    sistema, donde sí hay barra de direcciones.
- *
- * Los permisos vienen de la PERSONA que inicia sesión (owner/admin), no de la máquina: las
- * credenciales del dispositivo siguen siendo de solo-imprimir y RLS excluye al rol `device`
- * del catálogo. Robar este PC no permite reescribir los precios del negocio.
+ * Panel incrustado con las páginas de la plataforma. Es contenido REMOTO y se trata como hostil:
+ * `WebContentsView` sin `preload`, con `sandbox`, dos sesiones y navegación solo al origen de la
+ * plataforma. Ver docs/decisions/0008-panel-web-aislado-en-el-agente.md.
  */
 
 /** Alto de la cabecera, en píxeles CSS. Debe coincidir con `--topbar` en styles.css: el renderer
@@ -84,13 +52,9 @@ export function panelDe(section: WebSection): Panel {
 }
 
 /**
- * ¿Esta URL pertenece al origen de la plataforma?
- *
- * Compara el ORIGEN completo (esquema + host + puerto), nunca por prefijo de cadena: un
- * `startsWith` dejaría pasar `https://suarex.app.atacante.com` y también degradaría de
- * https a http sin avisar. Una URL malformada se rechaza en vez de lanzar.
- *
- * Función pura y exportada para poder probarla: es la guarda de seguridad del panel.
+ * ¿Esta URL pertenece al origen de la plataforma? Compara el ORIGEN completo (esquema, host y
+ * puerto), nunca por prefijo: un `startsWith` dejaría pasar `https://suarex.app.atacante.com`.
+ * Una URL malformada se rechaza. Es la guarda de seguridad del panel (ADR 0008).
  */
 export function isSameOrigin(url: string, origin: string): boolean {
   if (!origin) return false;
@@ -102,14 +66,9 @@ export function isSameOrigin(url: string, origin: string): boolean {
 }
 
 /**
- * Cuándo merece la pena registrar un fallo de carga.
- *
- * Chromium reporta `ERR_ABORTED` (-3) en cada navegación que se cancela sola: una redirección,
- * un `router.push`, o cerrar la vista a media carga. Son el caso NORMAL, y registrarlos llenaría
- * el registro de líneas rojas que no significan nada -- que es la forma más rápida de que nadie
- * vuelva a mirarlo. `0` es "sin error".
- *
- * Pura y exportada porque es la única decisión con criterio de todo el reenvío de sucesos.
+ * Cuándo merece la pena registrar un fallo de carga. `ERR_ABORTED` (-3) llega en cada
+ * navegación que se cancela sola (redirección, `router.push`): es lo NORMAL, y registrarlo
+ * llenaría el log de rojo hasta que nadie lo mirara. `0` es "sin error".
  */
 export function esFalloDeCargaRelevante(errorCode: number): boolean {
   return errorCode !== 0 && errorCode !== -3;
