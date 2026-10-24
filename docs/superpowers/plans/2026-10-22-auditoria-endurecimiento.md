@@ -402,25 +402,35 @@ se revisan a la vez.
 
 ### Tarea 4.1 — Preparación
 
-- [ ] Leer las notas de ruptura de Electron 34→38 (buscar en la doc oficial, no de memoria)
+- [x] Leer las notas de ruptura de Electron 34→38 (buscar en la doc oficial, no de memoria)
   y listar en un issue las que tocan al proyecto. Candidatos conocidos: cambios en
   `WebContentsView`/`BaseWindow`, `utilityProcess`, deprecaciones de `systemPreferences`, y
   el requisito de Node ABI para `koffi` (comprobar que la versión de `koffi` publica binario
   para el Node que embebe Electron 38).
-- [ ] Comprobar `apps/agent-desktop/src/main/usb-sink-winspool.ts` (koffi + winspool) y
+- [x] Comprobar `apps/agent-desktop/src/main/usb-sink-winspool.ts` (koffi + winspool) y
   `tray-icon.ts`, `watchdog.ts`, `web-panel.ts`, `totem-window.ts`, `updater.ts`
   (`electron-updater` 6.x compatible).
 
 ### Tarea 4.2 — Subida
 
-- [ ] Rama `chore/electron-38`. Subir `electron`, `electron-builder`, `electron-vite`, `vite`
+- [x] Rama `chore/electron-38`. Subir `electron`, `electron-builder`, `electron-vite`, `vite`
   en `apps/agent-desktop/package.json`; `pnpm install`; `pnpm --filter @suarex/agent-desktop
   typecheck test build`.
-- [ ] Corregir lo que rompa manteniendo el comportamiento cubierto por los tests de
+- [x] Corregir lo que rompa manteniendo el comportamiento cubierto por los tests de
   `apps/agent-desktop/src/main/*.test.ts` (son unit con backends falsos: deben pasar sin
   Windows).
-- [ ] Reactivar el grupo `electron` en `renovate.json` (Tarea 0.5) con `minimumReleaseAge:
+- [x] Reactivar el grupo `electron` en `renovate.json` (Tarea 0.5) con `minimumReleaseAge:
   "14 days"`.
+
+**Hecho 4.1 y 4.2 (2026-10-23), con lo que difería (decidido con Iván):** el objetivo es
+**Electron 44.9.x**, no 38: hoy solo tienen soporte 45, 44 y 43, y la 45.0.0 tenía 2 días. Notas
+34→44 en el issue #72. Rama `chore/electron-44`. `koffi` se queda en 2.16.3 (N-API 8, vale para
+cualquier Electron moderno; la 3 cambia la API) y `vite` en 7.3.x (electron-vite 6 admite 6-8).
+Roturas: `console-message` pasa al objeto del evento (`level` es string); electron-builder 26
+aborta sin `UPDATE_FEED_URL`, así que su config pasa a `electron-builder.cjs` con `publish`
+opcional; el CI deja `ELECTRON_SKIP_BINARY_DOWNLOAD` (no existe desde la 42). El instalador se
+construye en Windows con los mismos 18 módulos que el de Electron 33. Renovate agrupa también
+`electron-vite`.
 
 ### Tarea 4.3 — Validación en Windows (Iván)
 
@@ -429,6 +439,18 @@ se revisan a la vez.
   con cobro, auto-update desde un feed local, watchdog (matar el proceso y ver que vuelve),
   des-emparejar.
 - [ ] Solo tras eso, mergear.
+
+**Validado en el PC de Iván (2026-10-24, automatizado, a petición suya):** instalador 0.0.1
+silencioso y sin admin; arranque con Electron 44.9.3; impresoras de Windows; winspool vía koffi
+(contra una impresora inexistente: no hay ESC/POS USB en ese PC); emparejar; tarea del watchdog
+con su XML; arranque con Windows registrado; pedido de punta a punta por impresora de red (la
+falsa de la suite); **matar el proceso → vuelve en ~4 min e imprime** con la sesión DPAPI; un solo
+proceso tras el ciclo; relanzar con la sesión guardada; des-emparejar borra la tarea;
+diagnóstico sin datos sensibles; **auto-update 0.0.1 → 0.0.2** desde un feed local. Encontró un
+fallo latente (también en `main`): con `UPDATE_FEED_URL` horneado el agente moría al arrancar
+(`import { autoUpdater }` de un CommonJS en ESM nativo); arreglado en #73 con test en Node ESM real.
+**Falta, por hardware:** imprimir en una ESC/POS USB real, el tótem con cobro (datáfono Paytef),
+reiniciar Windows, y ver a ojo que el watchdog no abre ventanas y el aviso de SmartScreen.
 
 ---
 

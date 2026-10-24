@@ -1,4 +1,6 @@
-import { autoUpdater } from "electron-updater";
+// Import POR DEFECTO, no `{ autoUpdater }`: electron-updater es CommonJS y en el ESM nativo del
+// proceso principal el import con nombre revienta al arrancar (ver `updater.test.ts`).
+import electronUpdater from "electron-updater";
 import { UPDATE_FEED_URL } from "./baked-config.js";
 
 const SEIS_HORAS_MS = 6 * 60 * 60 * 1000;
@@ -23,6 +25,8 @@ export function startAutoUpdate(
 ): void {
   if (import.meta.env.DEV || !UPDATE_FEED_URL) return;
 
+  // Se lee aquí, tras la guarda: `autoUpdater` es un getter que crea el updater al tocarlo.
+  const { autoUpdater } = electronUpdater;
   autoUpdater.setFeedURL({ provider: "generic", url: UPDATE_FEED_URL });
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;

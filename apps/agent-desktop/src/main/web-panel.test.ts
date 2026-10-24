@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   esFalloDeCargaRelevante,
   isSameOrigin,
+  lineaDeConsola,
   olvidarSesionDeGestion,
   olvidarTodasLasSesiones,
   PARTICION_ANTIGUA,
@@ -146,5 +147,21 @@ describe("esFalloDeCargaRelevante", () => {
     expect(esFalloDeCargaRelevante(-105)).toBe(true); // ERR_NAME_NOT_RESOLVED
     expect(esFalloDeCargaRelevante(-102)).toBe(true); // ERR_CONNECTION_REFUSED
     expect(esFalloDeCargaRelevante(-7)).toBe(true); // ERR_TIMED_OUT
+  });
+});
+
+describe("lineaDeConsola", () => {
+  const evento = { message: "x is undefined", lineNumber: 12, sourceId: "app.js" };
+
+  it("registra los errores de la página, con su origen", () => {
+    expect(lineaDeConsola({ ...evento, level: "error" })).toBe(
+      "Panel: error en la página — x is undefined (app.js:12)",
+    );
+  });
+
+  it("ignora el resto: es ruido de desarrollo de Next", () => {
+    for (const level of ["info", "warning", "debug"]) {
+      expect(lineaDeConsola({ ...evento, level })).toBeNull();
+    }
   });
 });

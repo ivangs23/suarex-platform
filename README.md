@@ -133,9 +133,10 @@ para tapar bugs. Por eso se cuentan:
 
 Renovate (`renovate.json`) abre los PRs de actualización los lunes de madrugada (hora de
 Madrid), con los `@types/*` y Vitest agrupados. `stripe` y `@supabase/*` esperan una semana
-desde que se publican; `electron` y `electron-builder` no se suben solos (es la Fase 4 del plan
-de endurecimiento). **Quien valida esos PRs es el CI** de la sección anterior: se tratan como
-cualquier otro PR, también en lo de pasar el e2e en local antes de mergear.
+desde que se publican; `electron`, `electron-builder` y `electron-vite` van juntos y esperan dos
+semanas, y una mayor nueva de Electron se valida en un PC Windows real antes de mergear
+(`docs/agent-desktop-validacion.md`). **Quien valida esos PRs es el CI** de la sección anterior:
+se tratan como cualquier otro PR, también en lo de pasar el e2e en local antes de mergear.
 
 ## Reglas del repo
 

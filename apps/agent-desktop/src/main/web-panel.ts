@@ -115,6 +115,21 @@ export function esFalloDeCargaRelevante(errorCode: number): boolean {
   return errorCode !== 0 && errorCode !== -3;
 }
 
+/**
+ * La línea de registro de un mensaje de la consola del panel, o `null` si no merece una: solo
+ * los errores; el resto es ruido de desarrollo del propio Next. Los datos vienen en el evento
+ * (los argumentos sueltos están obsoletos desde Electron 35, y ahí `level` era un número).
+ */
+export function lineaDeConsola(evento: {
+  level: string;
+  message: string;
+  lineNumber: number;
+  sourceId: string;
+}): string | null {
+  if (evento.level !== "error") return null;
+  return `Panel: error en la página — ${evento.message} (${evento.sourceId}:${evento.lineNumber})`;
+}
+
 /** A dónde van los sucesos del panel. Lo inyecta `index.ts` con el logger a fichero. */
 export type PanelReporter = (mensaje: string) => void;
 let reportar: PanelReporter = () => {};
@@ -167,10 +182,9 @@ function ensureView(window: BrowserWindow, panel: Panel): Vista {
     reportar(`Panel: no se pudo cargar ${url} (${errorDescription}, ${errorCode})`);
   });
 
-  view.webContents.on("console-message", (_e, level, message, line, sourceId) => {
-    // Solo errores (nivel 3). El resto es ruido de desarrollo del propio Next.
-    if (level !== 3) return;
-    reportar(`Panel: error en la página — ${message} (${sourceId}:${line})`);
+  view.webContents.on("console-message", (evento) => {
+    const linea = lineaDeConsola(evento);
+    if (linea) reportar(linea);
   });
 
   view.webContents.on("render-process-gone", (_e, details) => {

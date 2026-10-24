@@ -16,10 +16,10 @@
       "groupName": "vitest"
     },
     {
-      "description": "Electron no se sube con un PR automático: es un proyecto (Fase 4 del plan de endurecimiento).",
-      "matchPackageNames": ["electron", "electron-builder"],
+      "description": "Electron y su toolchain, juntos (electron-vite trae los targets de cada Electron nuevo) y con dos semanas de rodaje: corre desatendido en el PC de cada cliente. Una mayor nueva se valida en un PC real antes de mergear (docs/agent-desktop-validacion.md).",
+      "matchPackageNames": ["electron", "electron-builder", "electron-vite"],
       "groupName": "electron",
-      "enabled": false
+      "minimumReleaseAge": "14 days"
     },
     {
       "description": "Cobros y base: una semana de margen para que otros encuentren los fallos de una versión nueva.",

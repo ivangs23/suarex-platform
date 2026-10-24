@@ -22,12 +22,12 @@
     "@suarex/payments": "workspace:*",
     "@suarex/printing": "workspace:*",
     "@types/node": "^26.1.1",
-    "electron": "^33.0.0",
-    "electron-builder": "^25.1.8",
-    "electron-vite": "^5.0.0",
+    "electron": "^44.9.3",
+    "electron-builder": "^26.15.3",
+    "electron-vite": "^6.0.0",
     "happy-dom": "^20.11.1",
     "typescript": "^5.9.3",
-    "vite": "^7.3.6",
+    "vite": "^7.3.7",
     "vitest": "^4.1.5",
     "@types/ws": "^8.5.12"
   }
