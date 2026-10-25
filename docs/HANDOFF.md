@@ -104,7 +104,7 @@ Fuera del plan:
   - `vite` 8.1.5 bajo vitest. Sus avisos son del servidor de desarrollo de Vite, que `vitest run` no levanta. `pnpm update` no lo mueve sin tocar el `vite` 7 del agente.
   - `happy-dom` 21: es una versión mayor y solo se usa en los tests del agente.
   - `http-cache-semantics`, en la cadena de electron-builder: no tiene parche.
-- **Ramas remotas ya mergeadas sin borrar.** `gh pr merge --delete-branch` no se permitió en la sesión.
+- **Ramas de PRs ya mergeados.** El 2026-10-25 Iván borró las 70 ramas remotas y solo queda `main`. Claude no puede borrarlas: el clasificador de permisos bloquea `--delete-branch` y `git push --delete`. Para que no se vuelvan a acumular, activa en GitHub *Settings → General → Automatically delete head branches*.
 
 ## Lo mergeado el 15 de octubre (#50-#55)
 
