@@ -22,7 +22,7 @@ Suite en verde:
 | e2e | 151, en Windows, incluidas 14 capturas visuales de la carta |
 
 **CI** (`.github/workflows/ci.yml`), en cada PR:
-- `verificar`: lint, typecheck y unit.
+- `verificar`: lint, typecheck y unit. **Obligatorio**: `main` está protegida y no se mergea sin él en verde. Como admin, Iván puede saltárselo en una emergencia (`enforce_admins` desactivado).
 - `integracion`: contra Supabase en el runner. Todavía no bloquea el merge.
 
 El e2e sigue siendo local.
@@ -59,7 +59,7 @@ Por qué el código es como es: [`docs/decisions/`](decisions/README.md) (ADRs).
 
 | Tarea | PR | Estado |
 |---|---|---|
-| 0.1 CI | #57 | Hecho. **Falta marcar `verificar` como check obligatorio** (main no tiene protección) |
+| 0.1 CI | #57, #90 | Hecho. `verificar` es check obligatorio en `main` desde el 2026-10-25 |
 | 0.2 Integración en CI | #58 | Hecho |
 | 0.3 Clickjacking | #59 | Hecho; falta el `curl -I` en el VPS |
 | 0.4 Backup con fotos | #60 | Hecho; falta el simulacro en el VPS |

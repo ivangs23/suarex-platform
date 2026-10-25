@@ -67,8 +67,9 @@ TypeScript strict · Vitest · Playwright · Biome · Electron (electron-vite + 
     que compilen; si `pnpm install` intenta descargar Electron, fijar
     `ELECTRON_SKIP_BINARY_DOWNLOAD=1` en `env` del job.
 - [x] Añadir `.nvmrc` con `22.12.0`.
-- [ ] En GitHub, marcar `verificar` como check obligatorio para mergear en `main` (lo hace
-  Iván en Settings → Branches; dejarlo anotado en el PR).
+- [x] En GitHub, marcar `verificar` como check obligatorio para mergear en `main` (lo hace
+  Iván en Settings → Branches; dejarlo anotado en el PR). Hecho por API con su permiso
+  (2026-10-25, #90): sin revisiones, sin `strict`, `enforce_admins` desactivado.
 - [x] Documentar en `README.md` → "Verificación": qué corre en CI y qué sigue siendo local
   (integración y e2e hasta la Tarea 0.2).
 

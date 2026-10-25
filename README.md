@@ -111,7 +111,8 @@ de lint que no se arregla solo bloquea el commit. El typecheck no va en el hook 
 el CI.
 
 **En CI** (`.github/workflows/ci.yml`, job `verificar`, en cada PR y en cada push a `main`):
-`pnpm lint`, `pnpm typecheck` y `pnpm test`, con el Node de `.nvmrc`. Tras él, el job
+`pnpm lint`, `pnpm typecheck` y `pnpm test`, con el Node de `.nvmrc`. Es obligatorio:
+`main` está protegida y no se mergea un PR sin `verificar` en verde. Tras él, el job
 `integracion` levanta Supabase en el runner y corre `pnpm test:integration`; de momento no
 bloquea el merge (si falla, sube los logs del stack como artefacto). **Sigue siendo local**:
 `pnpm test:e2e`. Un PR no está listo con CI en verde si no ha pasado también el e2e en local.
