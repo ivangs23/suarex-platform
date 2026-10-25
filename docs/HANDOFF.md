@@ -95,6 +95,10 @@ Fuera del plan:
   - El máximo vive en `@suarex/domain` (`MAX_BYTES_IMAGEN`) y lo comparten `storage.ts` y el panel. Las etiquetas de Ajustes decían «máx 5 MB», el tope antiguo.
 - **#86**: `.nvmrc` y `engines` pasan a Node 22.23.4. El CI probaba con la 22.12 (de diciembre de 2024), mientras la imagen de producción (`node:22-alpine`) ya llevaba la última 22.x. Con la app de Renovate instalada, `.nvmrc` se mantiene solo. Esto también permite subir a lint-staged 17, que pide Node ≥ 22.22.1.
 - **#87**: parches de dependencias refrescando solo el lockfile, dentro de los rangos de siempre. `pnpm audit` baja de 46 avisos a 7, y los de dependencias de producción, de 5 a 0. Lo que va al cliente es `js-yaml` 4.3.2 dentro de `electron-updater`, en el agente; el resto es build y tooling (`nanoid` y `source-map-js` de next, la cadena de electron-builder, vitest).
+- **Ramas**:
+  - GitHub borra la rama de cada PR al mergearlo (*Automatically delete head branches*, activado el 2026-10-25).
+  - Las 70 que se habían acumulado las borró Iván.
+  - Claude no puede borrar ramas a mano: el clasificador de permisos bloquea `--delete-branch` y `git push --delete`.
 
 ## Pendiente — decisiones abiertas (fuera del plan)
 
@@ -104,7 +108,6 @@ Fuera del plan:
   - `vite` 8.1.5 bajo vitest. Sus avisos son del servidor de desarrollo de Vite, que `vitest run` no levanta. `pnpm update` no lo mueve sin tocar el `vite` 7 del agente.
   - `happy-dom` 21: es una versión mayor y solo se usa en los tests del agente.
   - `http-cache-semantics`, en la cadena de electron-builder: no tiene parche.
-- **Ramas de PRs ya mergeados.** El 2026-10-25 Iván borró las 70 ramas remotas y solo queda `main`. Claude no puede borrarlas: el clasificador de permisos bloquea `--delete-branch` y `git push --delete`. Para que no se vuelvan a acumular, activa en GitHub *Settings → General → Automatically delete head branches*.
 
 ## Lo mergeado el 15 de octubre (#50-#55)
 
