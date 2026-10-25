@@ -94,14 +94,16 @@ Fuera del plan:
   - Los cinco campos de foto (alta y edición de producto; logo, bienvenida y textura) usan el mismo `CampoFoto`.
   - El máximo vive en `@suarex/domain` (`MAX_BYTES_IMAGEN`) y lo comparten `storage.ts` y el panel. Las etiquetas de Ajustes decían «máx 5 MB», el tope antiguo.
 - **#86**: `.nvmrc` y `engines` pasan a Node 22.23.4. El CI probaba con la 22.12 (de diciembre de 2024), mientras la imagen de producción (`node:22-alpine`) ya llevaba la última 22.x. Con la app de Renovate instalada, `.nvmrc` se mantiene solo. Esto también permite subir a lint-staged 17, que pide Node ≥ 22.22.1.
+- **#87**: parches de dependencias refrescando solo el lockfile, dentro de los rangos de siempre. `pnpm audit` baja de 46 avisos a 7, y los de dependencias de producción, de 5 a 0. Lo que va al cliente es `js-yaml` 4.3.2 dentro de `electron-updater`, en el agente; el resto es build y tooling (`nanoid` y `source-map-js` de next, la cadena de electron-builder, vitest).
 
 ## Pendiente — decisiones abiertas (fuera del plan)
 
 - **Validar el agente en hardware real (resto de la 4.3).** En el PC de Iván no hay impresora ESC/POS USB ni datáfono: queda imprimir por USB, el tótem con cobro, reiniciar Windows y ver a ojo que el watchdog no abre ventanas. Hacerlo en la próxima instalación con ese hardware, con `docs/agent-desktop-validacion.md`.
 - **Impresora de red que cierra limpio sin imprimir.** Una impresora que acepta la conexión y la cierra con FIN se da por entregada (`packages/printing/src/print-order.ts`): TCP no lo distingue de un envío correcto. Cerrarlo exige consultar el estado ESC/POS tras enviar.
-- **Avisos de dependencias que solo actúan en build.** Quedan anotados sin tocar:
-  - `nanoid` 3.3.16 y `source-map-js` 1.2.1, vía el `postcss` que fija next;
-  - la cadena de electron-builder.
+- **Avisos de dependencias que quedan (todos de desarrollo o build, ninguno en producción).** Los resolverá Renovate cuando esté instalado:
+  - `vite` 8.1.5 bajo vitest. Sus avisos son del servidor de desarrollo de Vite, que `vitest run` no levanta. `pnpm update` no lo mueve sin tocar el `vite` 7 del agente.
+  - `happy-dom` 21: es una versión mayor y solo se usa en los tests del agente.
+  - `http-cache-semantics`, en la cadena de electron-builder: no tiene parche.
 - **Ramas remotas ya mergeadas sin borrar.** `gh pr merge --delete-branch` no se permitió en la sesión.
 
 ## Lo mergeado el 15 de octubre (#50-#55)
