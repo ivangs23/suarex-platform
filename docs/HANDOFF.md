@@ -99,6 +99,9 @@ Fuera del plan:
   - GitHub borra la rama de cada PR al mergearlo (*Automatically delete head branches*, activado el 2026-10-25).
   - Las 70 que se habían acumulado las borró Iván.
   - Claude no puede borrar ramas a mano: el clasificador de permisos bloquea `--delete-branch` y `git push --delete`.
+- **#91**: herramientas de desarrollo.
+  - `happy-dom` 21.0.4 cierra su aviso alto. Solo lo usa un test del agente, y su cambio incompatible (no carga CSS ni iframes externos) no le afecta.
+  - `lint-staged` 17.6.0, posible desde #86.
 
 ## Pendiente — decisiones abiertas (fuera del plan)
 
@@ -106,7 +109,6 @@ Fuera del plan:
 - **Impresora de red que cierra limpio sin imprimir.** Una impresora que acepta la conexión y la cierra con FIN se da por entregada (`packages/printing/src/print-order.ts`): TCP no lo distingue de un envío correcto. Cerrarlo exige consultar el estado ESC/POS tras enviar.
 - **Avisos de dependencias que quedan (todos de desarrollo o build, ninguno en producción).** Los resolverá Renovate cuando esté instalado:
   - `vite` 8.1.5 bajo vitest. Sus avisos son del servidor de desarrollo de Vite, que `vitest run` no levanta. `pnpm update` no lo mueve sin tocar el `vite` 7 del agente.
-  - `happy-dom` 21: es una versión mayor y solo se usa en los tests del agente.
   - `http-cache-semantics`, en la cadena de electron-builder: no tiene parche.
 
 ## Lo mergeado el 15 de octubre (#50-#55)
