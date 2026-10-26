@@ -99,7 +99,8 @@
 #
 # No hay que tocar este fichero al dar de alta un cliente con dominio propio: basta con
 # guardarlo en el panel (queda en `tenants.custom_domain`) y que apunte su registro A aquí.
-# El resto lo resuelven `on_demand_tls` y `findTenantByHost`.
+# El resto lo resuelven `on_demand_tls` y `findTenantByHost`. Si también apunta `www.`, la
+# web lo redirige al dominio (`proxy.ts`), y `tls-check` autoriza su certificado.
 :443 {
 	tls {
 		on_demand

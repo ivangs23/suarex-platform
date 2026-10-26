@@ -79,3 +79,14 @@ test("el dominio propio se acepta sin importar mayúsculas", async ({ request })
   const res = await ask(request, "?domain=GARUM-DEMO.test");
   expect(res.status()).toBe(200);
 });
+
+test("el www de un dominio propio activo SÍ autoriza el certificado", async ({ request }) => {
+  // Sin certificado para `www.`, la redirección al dominio (`proxy.ts`) no respondería por HTTPS.
+  const res = await ask(request, "?domain=www.garum-demo.test");
+  expect(res.status()).toBe(200);
+});
+
+test("el www de un dominio que no es de nadie deniega", async ({ request }) => {
+  const res = await ask(request, "?domain=www.no-es-de-nadie.ejemplo.com");
+  expect(res.status()).toBe(403);
+});
