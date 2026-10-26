@@ -15,7 +15,8 @@ import {
 
 /**
  * Dominios propios de cliente (`tenants.custom_domain`): la vía por la que
- * `garumvinoteca.com` puede servirse desde la plataforma conservando sus QR ya impresos.
+ * `garumvinoteca.com` puede servirse desde la plataforma. Sus QR viejos (`/1`) abren la carta
+ * en consulta; para pedir hace falta el QR con token (`/m/{token}`).
  *
  * Lo que se guarda aquí decide DOS cosas delicadas -- qué tenant sirve un `Host` y por qué
  * dominios pide Caddy certificados a Let's Encrypt (`/api/tls-check`) -- así que estas

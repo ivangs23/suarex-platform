@@ -19,7 +19,7 @@ Suite en verde:
 | typecheck | 10/10 + tests |
 | unit | 9 paquetes; web: 3.963 |
 | integración | 519 (75 ficheros) |
-| e2e | 151, en Windows, incluidas 14 capturas visuales de la carta |
+| e2e | 156, en Windows, incluidas 14 capturas visuales de la carta |
 
 **CI** (`.github/workflows/ci.yml`), en cada PR:
 - `verificar`: lint, typecheck y unit. **Obligatorio**: `main` está protegida y no se mergea sin él en verde. Como admin, Iván puede saltárselo en una emergencia (`enforce_admins` desactivado).
@@ -103,6 +103,10 @@ Fuera del plan:
   - `happy-dom` 21.0.4 cierra su aviso alto. Solo lo usa un test del agente, y su cambio incompatible (no carga CSS ni iframes externos) no le afecta.
   - `lint-staged` 17.6.0, posible desde #86.
 - **#92**: `pnpm arrancar` levanta todo para probar en local (Docker, Supabase con el arreglo de Kong, web, `stripe listen` con la clave de test sin `stripe login`, y la app de escritorio en modo desarrollo) e imprime URLs y cuentas. `pnpm arrancar:comprobar` solo comprueba. `pnpm dev` existe por fin: lo citaba CLAUDE.md, pero no había ese script en la raíz.
+- **#93**: `www.<dominio propio>` redirige (308) al dominio propio, conservando la ruta.
+  - Lo hace `proxy.ts` y no Caddy, porque solo la base sabe qué dominio guardó cada cliente.
+  - `tls-check` autoriza también `www.X` si X es de un cliente activo.
+  - Para pasar un cliente a su dominio (Garum → garumvinoteca.com): guardar el dominio en Ajustes, apuntar al VPS el registro A del dominio y el de `www`, y reimprimir los QR desde el panel abierto en ese dominio. Los QR viejos (`/1`) solo dejan consultar la carta.
 
 ## Pendiente — decisiones abiertas (fuera del plan)
 

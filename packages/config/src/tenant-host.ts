@@ -118,6 +118,18 @@ export function normalizeCustomDomain(value: string, rootDomains: string[]): str
 }
 
 /**
+ * `www.garumvinoteca.com` -> `garumvinoteca.com`: el dominio propio al que redirigir un Host
+ * con `www`, o `null` si no lo es. Pasa la misma validación que un dominio propio, así que
+ * nunca devuelve un host de la plataforma (`www.suarex.app`).
+ */
+export function dominioSinWww(host: string, rootDomains: string[]): string | null {
+  const clean = host.trim().toLowerCase().split(":")[0] ?? "";
+  if (!clean.startsWith("www.")) return null;
+  const resto = normalizeCustomDomain(clean.slice(4), rootDomains);
+  return resto && !resto.startsWith("www.") ? resto : null;
+}
+
+/**
  * Resuelve `TENANT_ROOT_DOMAINS` a partir de las env vars del proceso, cerrando dos
  * modos de fallo silencioso (fail-closed, no de aislamiento -- pero con un coste de
  * diagnóstico alto):

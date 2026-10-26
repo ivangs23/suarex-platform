@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  dominioSinWww,
   isPlatformHost,
   normalizeCustomDomain,
   parseTenantHost,
@@ -157,6 +158,31 @@ describe("normalizeCustomDomain", () => {
     const largo = `${Array.from({ length: 11 }, () => "a".repeat(24)).join(".")}.com`;
     expect(largo.length).toBeGreaterThan(253);
     expect(normalizeCustomDomain(largo, ROOTS)).toBeNull();
+  });
+});
+
+describe("dominioSinWww", () => {
+  it("quita el www de un dominio propio, con mayúsculas y puerto", () => {
+    expect(dominioSinWww("www.garumvinoteca.com", ROOTS)).toBe("garumvinoteca.com");
+    expect(dominioSinWww("WWW.GarumVinoteca.com:443", ROOTS)).toBe("garumvinoteca.com");
+  });
+
+  it("sin www no hay nada que redirigir", () => {
+    expect(dominioSinWww("garumvinoteca.com", ROOTS)).toBeNull();
+    expect(dominioSinWww("wwwgarum.com", ROOTS)).toBeNull();
+  });
+
+  it("nunca devuelve un host de la plataforma", () => {
+    // Esos los cubre el comodín, y redirigirlos no le corresponde a un dominio propio.
+    expect(dominioSinWww("www.suarex.app", ROOTS)).toBeNull();
+    expect(dominioSinWww("www.garum.suarex.app", ROOTS)).toBeNull();
+    expect(dominioSinWww("www.localhost", ROOTS)).toBeNull();
+  });
+
+  it("rechaza lo que no sería un dominio propio válido", () => {
+    expect(dominioSinWww("www.com", ROOTS)).toBeNull();
+    expect(dominioSinWww("www.www.garum.com", ROOTS)).toBeNull();
+    expect(dominioSinWww("www.192.168.1.10", ROOTS)).toBeNull();
   });
 });
 

@@ -1,4 +1,4 @@
-import { isPlatformHost, resolveRootDomains } from "@suarex/config";
+import { dominioSinWww, isPlatformHost, resolveRootDomains } from "@suarex/config";
 import { findTenantByHost } from "@suarex/db";
 import { createServerClient } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
@@ -119,6 +119,20 @@ export async function proxy(request: NextRequest) {
   }
 
   if (!tenant) {
+    // `www.<dominio propio>` -> el dominio, si es de un cliente: solo se guarda uno de los dos.
+    const sinWww = dominioSinWww(host, ROOT_DOMAINS);
+    if (sinWww) {
+      let destino: Awaited<ReturnType<typeof findTenantByHost>>;
+      try {
+        destino = await findTenantByHost(sinWww, ROOT_DOMAINS);
+      } catch {
+        return new NextResponse("Servicio no disponible", { status: 503 });
+      }
+      if (destino) {
+        const url = new URL(`${pathname}${request.nextUrl.search}`, `https://${sinWww}`);
+        return NextResponse.redirect(url, 308);
+      }
+    }
     return NextResponse.rewrite(new URL("/not-found", request.url), {
       status: 404,
       request: { headers: stripForgedTenantHeaders(request) },

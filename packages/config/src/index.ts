@@ -14,6 +14,7 @@ export type { SalesChannel, TenantSettings } from "./settings.schema.js";
 export { hasChannel, tenantSettingsSchema } from "./settings.schema.js";
 export type { TenantHostRef } from "./tenant-host.js";
 export {
+  dominioSinWww,
   isPlatformHost,
   normalizeCustomDomain,
   parseTenantHost,

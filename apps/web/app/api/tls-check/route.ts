@@ -1,4 +1,4 @@
-import { normalizeCustomDomain, resolveRootDomains } from "@suarex/config";
+import { dominioSinWww, normalizeCustomDomain, resolveRootDomains } from "@suarex/config";
 import { isActiveCustomDomain } from "@suarex/db";
 import { NextResponse } from "next/server";
 import { log } from "@/lib/log";
@@ -38,7 +38,12 @@ export async function GET(request: Request) {
   if (!normalized) return new NextResponse(null, { status: 403 });
 
   try {
-    const known = await isActiveCustomDomain(normalized);
+    // `www.X` también, si X es de un cliente activo: sin certificado, la redirección a X que
+    // hace `proxy.ts` nunca llegaría a responder por HTTPS.
+    const sinWww = dominioSinWww(normalized, ROOT_DOMAINS);
+    const known =
+      (await isActiveCustomDomain(normalized)) ||
+      (sinWww !== null && (await isActiveCustomDomain(sinWww)));
     return new NextResponse(null, { status: known ? 200 : 403 });
   } catch (error) {
     // Falla CERRADO. Si la base no responde, negar el certificado solo retrasa una emisión
