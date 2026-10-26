@@ -4,13 +4,37 @@ Plataforma multitenant para hostelería. Un despliegue, N negocios.
 
 ## Arranque
 
+Día a día, una sola orden:
+
+```bash
+pnpm arrancar
+```
+
+Hace esto, y Ctrl+C lo para todo:
+- comprueba Docker (en Windows abre Docker Desktop si no responde);
+- levanta Supabase y, si Auth da 502 tras un reset, reinicia Kong;
+- avisa de los hosts `*.localhost` que falten;
+- deja `STRIPE_WEBHOOK_SECRET` al día;
+- levanta la web y `stripe listen` a la vez. Usa la `STRIPE_SECRET_KEY` de test de `.env.local`, así que no hace falta `stripe login`, y no escucha nunca con una clave live;
+- cuando la web responde, abre la app de escritorio (el agente de impresión) en modo desarrollo, apuntando a `garum.localhost:3000`. En ese modo no registra el arranque con Windows ni el watchdog. Si la cierras, lo demás sigue;
+- al terminar, imprime las URLs y las cuentas demo.
+
+Otras variantes:
+- `pnpm arrancar:comprobar` hace solo las comprobaciones, sin levantar nada.
+- `pnpm arrancar -- --sin-stripe` arranca sin webhook, pero así los pagos no pasan a «pagado».
+- `pnpm arrancar -- --sin-escritorio` arranca sin la app de escritorio.
+- `pnpm dev` levanta solo la web.
+
+La primera vez en una máquina:
+
 ```bash
 pnpm install
 supabase start
 pnpm db:env
 pnpm seed:staff
-cp .env.test apps/web/.env.local
-pnpm --filter @suarex/web dev
+cp .env.test apps/web/.env.local   # solo la primera vez: pisa las claves de Stripe
+# añade a apps/web/.env.local STRIPE_SECRET_KEY y NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY (test)
+pnpm arrancar
 ```
 
 `pnpm seed:staff` es parte del arranque estándar, no un paso aparte que haya

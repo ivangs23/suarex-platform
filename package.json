@@ -6,6 +6,9 @@
     "node": ">=22.23.4"
   },
   "scripts": {
+    "arrancar": "node scripts/arrancar.mjs",
+    "arrancar:comprobar": "node scripts/arrancar.mjs --comprobar",
+    "dev": "pnpm --filter @suarex/web dev",
     "build": "turbo build",
     "test": "turbo test",
     "typecheck": "turbo typecheck && pnpm typecheck:tests",

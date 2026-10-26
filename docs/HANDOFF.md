@@ -102,6 +102,7 @@ Fuera del plan:
 - **#91**: herramientas de desarrollo.
   - `happy-dom` 21.0.4 cierra su aviso alto. Solo lo usa un test del agente, y su cambio incompatible (no carga CSS ni iframes externos) no le afecta.
   - `lint-staged` 17.6.0, posible desde #86.
+- **#92**: `pnpm arrancar` levanta todo para probar en local (Docker, Supabase con el arreglo de Kong, web, `stripe listen` con la clave de test sin `stripe login`, y la app de escritorio en modo desarrollo) e imprime URLs y cuentas. `pnpm arrancar:comprobar` solo comprueba. `pnpm dev` existe por fin: lo citaba CLAUDE.md, pero no había ese script en la raíz.
 
 ## Pendiente — decisiones abiertas (fuera del plan)
 
