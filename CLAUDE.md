@@ -59,7 +59,9 @@ pnpm db:reset           # reset a migraciones + seed
 pnpm db:types           # tras una migración: db:reset && db:types (database.types.ts va en git)
 pnpm db:env && pnpm seed:staff            # .env.test + cuentas demo
 node scripts/seed-platform-admin.mjs --email x@y.z   # primer superadmin de plataforma
-pnpm dev  (o preview_start name:"web")   # nunca levantar el dev server con bash
+pnpm arrancar           # todo: Docker, Supabase, web, webhook de Stripe y app de escritorio. Lo lanza Iván, no Claude
+pnpm arrancar:comprobar # solo comprueba el entorno, no levanta nada (Claude sí puede)
+pnpm dev  (o preview_start name:"web")   # solo la web; nunca levantar el dev server con bash
 pnpm typecheck          # turbo typecheck + tests tsconfig
 pnpm lint  /  pnpm lint:fix   # el pre-commit ya pasa biome --write por lo staged
 pnpm test               # unit (turbo, por paquete)
