@@ -1,6 +1,6 @@
 # Handoff — estado del proyecto
 
-_Última actualización: 2026-10-24. Punto de continuidad entre sesiones y máquinas: una
+_Última actualización: 2026-10-28. Punto de continuidad entre sesiones y máquinas: una
 conversación de Claude no se transfiere sola. Para retomar, lee esto, `git log` y `CLAUDE.md`._
 
 > **Si retomas desde otra máquina, empieza por [`RETOMAR-EN-WINDOWS.md`](RETOMAR-EN-WINDOWS.md).**
@@ -18,7 +18,7 @@ Suite en verde:
 | lint | ok |
 | typecheck | 10/10 + tests |
 | unit | 9 paquetes; web: 3.963 |
-| integración | 523 (76 ficheros) |
+| integración | 527 (77 ficheros) |
 | e2e | 159, en Windows, incluidas 14 capturas visuales de la carta |
 
 **CI** (`.github/workflows/ci.yml`), en cada PR:
@@ -29,31 +29,44 @@ El e2e sigue siendo local.
 
 Por qué el código es como es: [`docs/decisions/`](decisions/README.md) (ADRs).
 
-## Lo primero al desplegar (Iván)
+## Producción
 
-1. **URGENTE, seguridad.** Reconstruye la imagen de la web con `deploy/scripts/deploy.sh`. Hasta entonces, producción lleva versiones vulnerables:
-   - **#75**: next 16.4.3 (DoS por Server Actions; RCE y SSRF de imagen, no explotables aquí por `images.unoptimized`), sharp 0.35.5 (procesa las fotos subidas) y dompurify;
-   - **#76**: zod 4.6.7 (agotamiento de memoria en `/api/orders`).
+Hasta el 2026-10-28 **no había plataforma en producción**: el VPS tenía una copia del repo de julio sin git, un Supabase vacío con el esquema de julio, Traefik y un n8n. Ese día se limpió y se desplegó de cero según `deploy/README.md`. Las copias de lo que había están en `/home/suarex/backups/limpieza-2026-10-28` y en el PC de Iván.
 
-   En la misma reconstrucción van:
-   - **#78**: el cierre y el informe de ventas, en la hora del local. **Antes del 25 de octubre**, cuando acaba el horario de verano.
-   - **#83**: las fotos de más de 1MB ya se pueden subir. Hoy, en producción, una foto de móvil falla al subirla.
+**Qué hay:**
+- **Servidor:** VPS de Hostinger `srv1121554`, IP 72.61.106.185, Ubuntu 24.04. Usuario `suarex` (sudo con contraseña, grupo `docker`).
+- **Dominio provisional:** `srv1121554.hstgr.cloud`, con `PLATFORM_TLS=bajo_demanda` (#94). Consola de plataforma en `admin.`, API en `api.` y cada cliente en `<slug>.`.
+- **Supabase:** en `/opt/suarex-supabase`, con secretos nuevos y las 47 migraciones aplicadas. El hook de token está verificado. El gateway es Envoy (alias `kong`), atado a loopback.
+- **Web y Caddy:** en `/opt/suarex`, con git, desplegados desde `main`. Para actualizar: `./deploy/scripts/deploy.sh`.
+- **Tareas programadas** (crontab de `suarex`):
+  - copias a las 3:30, en `/var/backups/suarex`;
+  - resumen de errores a las 8:00;
+  - expirar pedidos, salud de dispositivos y uptime, cada 5 min;
+  - purga a las 4:15;
+  - suspensión de impagos a las 5:00.
 
-   No hay variables de entorno nuevas.
-2. **Migraciones de octubre:**
-   - `20261022000001_stripe_events.sql`: tabla nueva.
-   - `20261022000002_branding_temas_en_datos.sql`: **reescribe la marca de Garum y Manuela**, incluidos `colors` y `logoUrl`. Antes, mira qué hay en producción:
+  Los logs van a `/var/log/suarex-*.log`.
+- **Datos:**
+  - superadmin, con el correo de Iván;
+  - Garum (`garum`), con su marca, `garumvinoteca.com` como dominio propio y la carta importada de su web (184 platos, 35 fotos);
+  - su primer owner, `ivangonzalezsuarezesp+garum@gmail.com`.
 
-     ```sql
-     select t.slug, s.theme, s.branding from tenant_settings s
-       join tenants t on t.id = s.tenant_id where t.slug in ('garum','manuela');
-     ```
-   - `20261024000001_device_zonas_horarias.sql` (#82): solo crea una función. Aplícala **antes** de publicar una versión nueva del agente. Si no, el agente nuevo imprime con la hora peninsular, como hasta ahora, y avisa una vez en su log.
-3. **Caddy (#59, #81, #84):** reinicia Caddy para que lea el `Caddyfile` y comprueba (los dos `curl` de `deploy/README.md` §7):
-   - con `curl -I`, que salen `X-Frame-Options: DENY` y `frame-ancestors 'none'` (tarea 0.3);
-   - que un cuerpo de 2MB en `/api/*` da 413, y con esas mismas cabeceras.
-4. **Copias (#60):** el backup ya lleva las fotos. Haz el simulacro de restauración de `deploy/README.md` (tarea 0.4).
-5. **Cron diario de errores (#69):** añade `alertas-log.sh` al `crontab` con tu `AVISO_A` (`deploy/README.md` §8).
+  Las contraseñas están en `/home/suarex/credenciales-iniciales.txt` y en el PC de Iván, nunca en git.
+
+**Pendiente (Iván), por orden:**
+1. **Webhook de Stripe:** crear en el panel de Stripe (modo test) el endpoint `https://garum.srv1121554.hstgr.cloud/api/webhook/stripe`, con los tres eventos de `.env.app.example`. Pegar su `whsec_` en `STRIPE_WEBHOOK_SECRET` de `/opt/suarex/deploy/.env.app` y aplicar con `docker compose -f deploy/docker-compose.app.yml --env-file deploy/.env.app up -d web`. Sin esto, un pago no pasa a «pagado».
+2. **`ACME_EMAIL`:** cambiar el provisional del `.env.app` por un correo real y reiniciar Caddy.
+3. **Garum en su dominio:**
+   - en el panel, crear sus mesas y revisar alérgenos, barra/cocina e IVA;
+   - apuntar los registros A de `garumvinoteca.com` y de `www` a 72.61.106.185 (hoy van a Vercel);
+   - reimprimir los QR desde `https://garumvinoteca.com/admin/mesas`;
+   - emparejar el agente de la cocina.
+4. **Antes de cobrar de verdad:** claves live de Stripe. Hoy está en modo test.
+5. **SSH:** sigue con `PermitRootLogin yes` y `PasswordAuthentication yes`. Las claves de root y de `suarex` son las de Iván. Pasar a `prohibit-password` y `no` en cuanto se confirme que la terminal del navegador de Hostinger no usa la contraseña de root.
+6. **Copias fuera del VPS:** `RCLONE_REMOTE` en `backup-db.sh`. Hoy solo viven en el mismo disco.
+7. **Correo saliente (SMTP):** para Auth (recuperar contraseña, invitaciones) y `AVISO_A`.
+8. **Dominio definitivo de la plataforma:** pasar a `PLATFORM_DOMAIN` propio en Cloudflare, con `PLATFORM_TLS=cloudflare` y el token. Hay que reconstruir la web y regenerar los instaladores del agente que apunten a la plataforma.
+9. **Revocar el acceso de Claude al VPS** cuando no haga falta: borrar la línea `claude-code@nitropc` de `/home/suarex/.ssh/authorized_keys`.
 
 ## Plan de endurecimiento (2026-10-22): dónde está
 
@@ -153,8 +166,9 @@ Fuera del plan:
 ## Pendiente — infra (Iván, no código)
 
 - Rotar o borrar `/root/.git-credentials` en el VPS.
-- Dominio `suarex.app` y token de Cloudflare.
+- Dominio definitivo de la plataforma y token de Cloudflare (ver «Producción»).
 - Credenciales SMTP.
+- **Webhooks por el host de la consola** (código): `proxy.ts` solo deja pasar `/plataforma` y `/api/internal/*` por `admin.`, así que el webhook de Stripe tiene que apuntar al host de un cliente. Si ese cliente quedara suspendido, los webhooks de todos fallarían. Conviene permitir `/api/webhook/*` en `admin.`, como el cron.
 - **Auto-update en producción:**
   - montar el feed estático, por ejemplo `updates.suarex.app` sirviendo `latest.yml` y el instalador;
   - pasar `UPDATE_FEED_URL` al build del agente (opcional: sin él no hay auto-update; con él, desde #73 ya no se cae al arrancar);

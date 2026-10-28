@@ -29,6 +29,13 @@ services:
     ports: !override
       - "127.0.0.1:6543:6543"
 
+  # El gateway de la API (desde octubre de 2026 es Envoy, `supabase-envoy`, con alias de red
+  # `kong` para que lo que apuntaba a Kong siga funcionando) se publica en 0.0.0.0:8000: la
+  # API entera por HTTP en claro, saltándose Caddy y el TLS. Caddy llega por la red de Docker.
+  api-gw:
+    ports: !override
+      - "127.0.0.1:8000:8000"
+
   auth:
     environment:
       # EL HOOK. Todo el modelo multi-cliente depende de que el JWT lleve tenant_id y

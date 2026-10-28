@@ -5,8 +5,8 @@
 #
 #   ./deploy/scripts/deploy.sh
 #
-# No toca la stack de Supabase ni la base: solo trae el código, aplica las migraciones
-# pendientes y reconstruye la web.
+# No toca la stack de Supabase: trae el código, hace una copia de la base, aplica las
+# migraciones pendientes y reconstruye la web (y reinicia Caddy si cambió su Caddyfile).
 
 set -euo pipefail
 
@@ -20,20 +20,28 @@ if [[ ! -f "${ENV_FILE}" ]]; then
 fi
 
 echo "==> Trayendo cambios"
+ANTES="$(git rev-parse HEAD)"
 git pull --ff-only
 
+echo "==> Copia de seguridad antes de migrar"
+"${REPO_ROOT}/deploy/scripts/backup-db.sh"
+
 echo "==> Aplicando migraciones pendientes"
-# `db push` aplica solo las migraciones que aún no constan en supabase_migrations, así que
-# es idempotente: relanzar el despliegue no reejecuta nada.
-#
-# NO se ejecuta supabase/seed.sql: crea los tenants de demostración (garum, manuela) con
-# datos de muestra. En producción los clientes se dan de alta desde el panel.
-supabase db push --db-url "${SUPABASE_DB_URL:?exporta SUPABASE_DB_URL con la cadena de conexión a Postgres}"
+# Solo las que no constan en supabase_migrations: relanzar no reejecuta nada. No es
+# `supabase db push`: el CLI exige TLS contra el Postgres del compose y falla (README §5).
+# NO se ejecuta supabase/seed.sql: crea los clientes de demostración.
+"${REPO_ROOT}/deploy/scripts/apply-migrations.sh"
 
 echo "==> Reconstruyendo la web"
 # --build fuerza reconstruir la imagen: las NEXT_PUBLIC_* se hornean en tiempo de build, así
 # que sin esto un cambio de dominio o una rotación de la anon key no llegaría al navegador.
 docker compose -f deploy/docker-compose.app.yml --env-file "${ENV_FILE}" up -d --build web
+
+# El Caddyfile va montado: un cambio no se aplica hasta reiniciar Caddy (README §6).
+if ! git diff --quiet "${ANTES}" HEAD -- deploy/Caddyfile; then
+	echo "==> El Caddyfile cambió: reiniciando Caddy"
+	docker compose -f deploy/docker-compose.app.yml --env-file "${ENV_FILE}" restart caddy
+fi
 
 echo "==> Esperando a que responda"
 for i in $(seq 1 30); do
