@@ -15,6 +15,7 @@ export { hasChannel, tenantSettingsSchema } from "./settings.schema.js";
 export type { TenantHostRef } from "./tenant-host.js";
 export {
   dominioSinWww,
+  hostDePlataforma,
   isPlatformHost,
   normalizeCustomDomain,
   parseTenantHost,

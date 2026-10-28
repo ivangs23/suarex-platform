@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   dominioSinWww,
+  hostDePlataforma,
   isPlatformHost,
   normalizeCustomDomain,
   parseTenantHost,
@@ -158,6 +159,31 @@ describe("normalizeCustomDomain", () => {
     const largo = `${Array.from({ length: 11 }, () => "a".repeat(24)).join(".")}.com`;
     expect(largo.length).toBeGreaterThan(253);
     expect(normalizeCustomDomain(largo, ROOTS)).toBeNull();
+  });
+});
+
+describe("hostDePlataforma", () => {
+  const R = ["srv1.hstgr.cloud"];
+
+  it("api y admin son fijos", () => {
+    expect(hostDePlataforma("api.srv1.hstgr.cloud", R)).toEqual({ tipo: "fijo" });
+    expect(hostDePlataforma("ADMIN.srv1.hstgr.cloud:443", R)).toEqual({ tipo: "fijo" });
+  });
+
+  it("un subdominio de un nivel es el de un cliente", () => {
+    expect(hostDePlataforma("garum.srv1.hstgr.cloud", R)).toEqual({
+      tipo: "cliente",
+      slug: "garum",
+    });
+  });
+
+  it("ni el dominio desnudo, ni los reservados, ni lo anidado, ni lo ajeno", () => {
+    expect(hostDePlataforma("srv1.hstgr.cloud", R)).toBeNull();
+    expect(hostDePlataforma("studio.srv1.hstgr.cloud", R)).toBeNull();
+    expect(hostDePlataforma("www.srv1.hstgr.cloud", R)).toBeNull();
+    expect(hostDePlataforma("x.garum.srv1.hstgr.cloud", R)).toBeNull();
+    expect(hostDePlataforma("garumvinoteca.com", R)).toBeNull();
+    expect(hostDePlataforma("srv1.hstgr.cloud.evil.com", R)).toBeNull();
   });
 });
 

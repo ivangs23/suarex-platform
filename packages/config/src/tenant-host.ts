@@ -118,6 +118,27 @@ export function normalizeCustomDomain(value: string, rootDomains: string[]): str
 }
 
 /**
+ * Un host de la PLATAFORMA que puede necesitar certificado propio cuando no hay comodín
+ * (`PLATFORM_TLS=bajo_demanda`): `api.` y `admin.` (fijos) o el subdominio de un cliente.
+ * `null` para todo lo demás: el dominio desnudo, `www`/`app`/`studio` y lo anidado.
+ */
+export function hostDePlataforma(
+  host: string,
+  rootDomains: string[],
+): { tipo: "fijo" } | { tipo: "cliente"; slug: string } | null {
+  const clean = host.trim().toLowerCase().split(":")[0] ?? "";
+  for (const root of rootDomains) {
+    const raiz = root.trim().toLowerCase();
+    if (!raiz || !clean.endsWith(`.${raiz}`)) continue;
+    const prefijo = clean.slice(0, -(raiz.length + 1));
+    if (prefijo === "api" || prefijo === PLATFORM_SUBDOMAIN) return { tipo: "fijo" };
+    const ref = parseTenantHost(clean, rootDomains);
+    return ref?.kind === "subdomain" ? { tipo: "cliente", slug: ref.slug } : null;
+  }
+  return null;
+}
+
+/**
  * `www.garumvinoteca.com` -> `garumvinoteca.com`: el dominio propio al que redirigir un Host
  * con `www`, o `null` si no lo es. Pasa la misma validación que un dominio propio, así que
  * nunca devuelve un host de la plataforma (`www.suarex.app`).
