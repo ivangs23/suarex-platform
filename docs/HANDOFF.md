@@ -18,8 +18,8 @@ Suite en verde:
 | lint | ok |
 | typecheck | 10/10 + tests |
 | unit | 9 paquetes; web: 3.963 |
-| integración | 519 (75 ficheros) |
-| e2e | 156, en Windows, incluidas 14 capturas visuales de la carta |
+| integración | 523 (76 ficheros) |
+| e2e | 159, en Windows, incluidas 14 capturas visuales de la carta |
 
 **CI** (`.github/workflows/ci.yml`), en cada PR:
 - `verificar`: lint, typecheck y unit. **Obligatorio**: `main` está protegida y no se mergea sin él en verde. Como admin, Iván puede saltárselo en una emergencia (`enforce_admins` desactivado).
@@ -107,6 +107,11 @@ Fuera del plan:
   - Lo hace `proxy.ts` y no Caddy, porque solo la base sabe qué dominio guardó cada cliente.
   - `tls-check` autoriza también `www.X` si X es de un cliente activo.
   - Para pasar un cliente a su dominio (Garum → garumvinoteca.com): guardar el dominio en Ajustes, apuntar al VPS el registro A del dominio y el de `www`, y reimprimir los QR desde el panel abierto en ese dominio. Los QR viejos (`/1`) solo dejan consultar la carta.
+- **#94**: la plataforma puede arrancar sin acceso al DNS, con `PLATFORM_TLS=bajo_demanda`.
+  - Caddy saca un certificado por subdominio en lugar del comodín por Cloudflare.
+  - `tls-check` autoriza `api.`, `admin.` y `<slug>.` de un cliente activo.
+  - Sirve con el dominio que da Hostinger (`*.srv1121554.hstgr.cloud`, que está en la Public Suffix List y tiene su propio cupo de Let's Encrypt) mientras no haya un dominio propio en Cloudflare.
+  - `cloudflare` sigue siendo el valor por defecto.
 
 ## Pendiente — decisiones abiertas (fuera del plan)
 

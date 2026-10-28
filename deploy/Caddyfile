@@ -52,12 +52,25 @@
 	}
 }
 
-# El comodín NO cubre el dominio desnudo (`*.suarex.app` no incluye `suarex.app`), así que
-# se declaran los dos. Caddy pide un certificado que cubra ambos.
-*.{$PLATFORM_DOMAIN}, {$PLATFORM_DOMAIN} {
+# Certificados de la plataforma, según `PLATFORM_TLS` (.env.app):
+#   cloudflare    UN comodín por DNS-01 (necesita CLOUDFLARE_API_TOKEN). El de producción.
+#   bajo_demanda  uno por subdominio, autorizado por `/api/tls-check`. Para un dominio cuyo DNS
+#                 no controlas (el de Hostinger, `srvNNN.hstgr.cloud`).
+(tls_cloudflare) {
 	tls {
 		dns cloudflare {$CLOUDFLARE_API_TOKEN}
 	}
+}
+(tls_bajo_demanda) {
+	tls {
+		on_demand
+	}
+}
+
+# El comodín NO cubre el dominio desnudo (`*.suarex.app` no incluye `suarex.app`), así que
+# se declaran los dos. Caddy pide un certificado que cubra ambos.
+*.{$PLATFORM_DOMAIN}, {$PLATFORM_DOMAIN} {
+	import tls_{$PLATFORM_TLS:cloudflare}
 
 	# HSTS incluye subdominios porque cada cliente vive en uno: sin `includeSubDomains` un
 	# `garum.suarex.app` en claro seguiría siendo un objetivo de downgrade.

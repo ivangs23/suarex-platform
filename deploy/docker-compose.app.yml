@@ -83,6 +83,7 @@ services:
       PLATFORM_DOMAIN: ${PLATFORM_DOMAIN}
       ACME_EMAIL: ${ACME_EMAIL}
       CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN}
+      PLATFORM_TLS: ${PLATFORM_TLS:-cloudflare}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       # Persistir los certificados es obligatorio: sin esto, cada `up` vuelve a pedirlos y

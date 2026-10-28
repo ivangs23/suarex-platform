@@ -1,5 +1,10 @@
-import { dominioSinWww, normalizeCustomDomain, resolveRootDomains } from "@suarex/config";
-import { isActiveCustomDomain } from "@suarex/db";
+import {
+  dominioSinWww,
+  hostDePlataforma,
+  normalizeCustomDomain,
+  resolveRootDomains,
+} from "@suarex/config";
+import { findTenantBySlug, isActiveCustomDomain } from "@suarex/db";
 import { NextResponse } from "next/server";
 import { log } from "@/lib/log";
 
@@ -27,24 +32,37 @@ const ROOT_DOMAINS = resolveRootDomains(process.env);
  * endpoint es alcanzable desde internet y contestar distinto lo convertiría en un oráculo
  * para enumerar qué clientes tiene la plataforma y cuáles están suspendidos.
  */
+/** `api.` y `admin.` siempre; el subdominio de un cliente, solo si está ACTIVO. */
+async function esHostDePlataformaActivo(
+  host: NonNullable<ReturnType<typeof hostDePlataforma>>,
+): Promise<boolean> {
+  if (host.tipo === "fijo") return true;
+  return (await findTenantBySlug(host.slug))?.status === "active";
+}
+
+/** El dominio propio de un cliente activo, o su `www.`: sin certificado para `www.`, la
+ *  redirección al dominio que hace `proxy.ts` nunca llegaría a responder por HTTPS. */
+async function esDominioPropioActivo(dominio: string): Promise<boolean> {
+  if (await isActiveCustomDomain(dominio)) return true;
+  const sinWww = dominioSinWww(dominio, ROOT_DOMAINS);
+  return sinWww !== null && (await isActiveCustomDomain(sinWww));
+}
+
 export async function GET(request: Request) {
   const domain = new URL(request.url).searchParams.get("domain");
   if (!domain) return new NextResponse(null, { status: 403 });
 
-  // Misma normalización que en el borde de escritura: si Caddy pregunta por `EJEMPLO.com`
-  // y en la base está `ejemplo.com`, tiene que casar. Y un host bajo un dominio raíz de la
-  // plataforma se rechaza aquí también -- esos los cubre el comodín, no on-demand.
+  // Un host de la plataforma solo llega aquí sin comodín (`PLATFORM_TLS=bajo_demanda`, ver
+  // deploy/Caddyfile). Todo lo demás tiene que ser un dominio propio bien formado.
+  const plataforma = hostDePlataforma(domain, ROOT_DOMAINS);
   const normalized = normalizeCustomDomain(domain, ROOT_DOMAINS);
-  if (!normalized) return new NextResponse(null, { status: 403 });
+  if (!plataforma && !normalized) return new NextResponse(null, { status: 403 });
 
   try {
-    // `www.X` también, si X es de un cliente activo: sin certificado, la redirección a X que
-    // hace `proxy.ts` nunca llegaría a responder por HTTPS.
-    const sinWww = dominioSinWww(normalized, ROOT_DOMAINS);
-    const known =
-      (await isActiveCustomDomain(normalized)) ||
-      (sinWww !== null && (await isActiveCustomDomain(sinWww)));
-    return new NextResponse(null, { status: known ? 200 : 403 });
+    const autorizado = plataforma
+      ? await esHostDePlataformaActivo(plataforma)
+      : normalized !== null && (await esDominioPropioActivo(normalized));
+    return new NextResponse(null, { status: autorizado ? 200 : 403 });
   } catch (error) {
     // Falla CERRADO. Si la base no responde, negar el certificado solo retrasa una emisión
     // (Caddy reintenta); autorizarla a ciegas abriría exactamente el agujero que este

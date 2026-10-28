@@ -108,7 +108,19 @@ comodines por challenge **DNS-01**, que necesita crear un registro TXT vía API.
 
 Cambia el módulo en `Dockerfile.caddy` por el de tu proveedor
 ([caddy-dns](https://github.com/caddy-dns): DigitalOcean, OVH, Namecheap, Route53…) y ajusta
-el bloque `tls` del `Caddyfile`. Si tu proveedor no tiene módulo, mueve el DNS a uno que sí.
+el snippet `tls_cloudflare` del `Caddyfile`. Si tu proveedor no tiene módulo, mueve el DNS a
+uno que sí.
+
+**Sin acceso al DNS: `PLATFORM_TLS=bajo_demanda`.** Para un dominio cuyo DNS no controlas
+pero que ya resuelve en comodín a tu VPS. Es el caso de Hostinger: `*.srvNNN.hstgr.cloud`
+apunta a su IP. Caddy saca un certificado por subdominio la primera vez que alguien entra, y
+solo si `/api/tls-check` lo autoriza: `api.` y `admin.` siempre, y `<slug>.` si es de un
+cliente activo. No necesitas `CLOUDFLARE_API_TOKEN`.
+
+El límite es el de Let's Encrypt: 50 certificados por dominio registrado y semana. Un
+dominio que está en la [Public Suffix List](https://publicsuffix.org) cuenta aparte;
+`hstgr.cloud` lo está, así que `srvNNN.hstgr.cloud` tiene su propio cupo. Para producción
+con muchos clientes, usa un dominio propio y `cloudflare`.
 
 ---
 

@@ -34,11 +34,28 @@ test("un dominio desconocido deniega", async ({ request }) => {
   expect(res.status()).toBe(403);
 });
 
-test("un host bajo el dominio de la plataforma deniega (lo cubre el comodín)", async ({
-  request,
-}) => {
+// Hosts de la plataforma: con comodín (`PLATFORM_TLS=cloudflare`) Caddy no pregunta por ellos;
+// bajo demanda, sí. Se autorizan solo los que la plataforma sirve de verdad.
+test("el subdominio de un cliente activo autoriza el certificado", async ({ request }) => {
   const res = await ask(request, "?domain=garum.localhost");
+  expect(res.status()).toBe(200);
+});
+
+test("api. y admin. de la plataforma autorizan el certificado", async ({ request }) => {
+  for (const host of ["api.localhost", "admin.localhost"]) {
+    expect((await ask(request, `?domain=${host}`)).status(), host).toBe(200);
+  }
+});
+
+test("el subdominio de un slug que no existe deniega", async ({ request }) => {
+  const res = await ask(request, "?domain=no-es-de-nadie.localhost");
   expect(res.status()).toBe(403);
+});
+
+test("reservados, anidados y el dominio desnudo de la plataforma deniegan", async ({ request }) => {
+  for (const host of ["studio.localhost", "www.localhost", "x.garum.localhost", "localhost"]) {
+    expect((await ask(request, `?domain=${host}`)).status(), host).toBe(403);
+  }
 });
 
 test("un valor mal formado deniega y nunca da 500", async ({ request }) => {
