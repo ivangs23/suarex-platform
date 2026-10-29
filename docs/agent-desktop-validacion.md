@@ -20,7 +20,7 @@ paso falla, captura lo que se indica y pégalo para diagnosticar.
    avisará (app sin firmar): pulsa **Más información → Ejecutar de todas formas**. Instala.
    - ✅ Esperado: se instala sin pedir admin y crea acceso directo. El instalador, el acceso
      directo, la barra de tareas y la ventana llevan el icono de SuarEx (la «S» blanca sobre
-     índigo), no el de Electron.
+     índigo), no el de Electron. La ventana no tiene barra de menú (File, Edit, View...).
    - ❌ Si falla: captura el mensaje del instalador.
 
 2. **Arranque.** La app se abre y aparece en la bandeja del sistema.
@@ -128,6 +128,15 @@ si en el local resulta un problema.
 **4. Al des-emparejar se limpia.** Des-empareja el dispositivo desde la app y repite la
 consulta del paso 1: la tarea ya no debe existir. Si se quedara, el PC seguiría reabriendo
 cada cinco minutos una app que ya no pertenece a ningún restaurante.
+
+**5. Al desinstalar no queda nada que arranque.** Desinstala y comprueba que el Administrador
+de tareas, en «Aplicaciones de arranque», ya no lista SuarEx Agente, o en PowerShell:
+
+```powershell
+Get-ItemProperty HKCU:\Software\Microsoft\Windows\CurrentVersion\Run | Select-Object app.suarex.agent
+```
+
+Tiene que salir vacío. Si no, Windows intentaría abrir en cada inicio un programa que ya no existe.
 
 ## Validar la bandeja
 

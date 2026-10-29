@@ -276,6 +276,9 @@ if (!gotLock) {
     // en dev registraría el `electron.exe` de node_modules para arrancar con cada sesión.
     if (app.isPackaged) app.setLoginItemSettings(opcionesDeInicioConWindows());
 
+    // Sin el menú por defecto de Electron (File, Edit, View...): en inglés y con atajos para
+    // recargar o abrir las DevTools. En dev se queda, oculto tras Alt, para depurar.
+    if (app.isPackaged) Menu.setApplicationMenu(null);
     createWindow();
     createTray();
     registerIpc(
@@ -475,6 +478,7 @@ function createWindow(): void {
     minWidth: 900,
     minHeight: 600,
     show: false,
+    autoHideMenuBar: true,
     // Empaquetada, Windows ya toma el del .exe; esto cubre dev y la barra de título.
     icon: nativeImage.createFromDataURL(`data:image/png;base64,${ICONO_APP_PNG}`),
     webPreferences: {
