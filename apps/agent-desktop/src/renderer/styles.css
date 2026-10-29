@@ -1,100 +1,94 @@
-/* Estilos del agente de impresión.
- *
- * Es una herramienta de fondo, no una web: vive minimizada en la bandeja de un PC que está
- * en la barra de un bar y solo se abre cuando algo va mal o hay que configurar. El diseño
- * se ordena en consecuencia -- lo primero y más grande es el ESTADO ("¿está imprimiendo?"),
- * que es a lo que se viene el 90% de las veces; lo demás son acciones puntuales. La aspiración
- * es que la herramienta desaparezca en la tarea: densidad tranquila, cero decoración gratuita.
- *
- * Sigue el tema del sistema (`prefers-color-scheme`). En una barra iluminada el modo claro
- * se lee mejor, y en una cocina a media luz el oscuro cansa menos: imponer uno solo obliga
- * a la mitad de las instalaciones a la opción mala.
- *
- * Color en OKLCH: los neutros llevan una pizca de la tinta de marca (índigo, hue 274) en vez
- * de gris puro, para que el conjunto se sienta de una pieza y no de plantilla.
- */
+/* Estilos de la app de escritorio. Contexto y decisiones: apps/agent-desktop/PRODUCT.md y
+ * DESIGN.md. Herramienta de fondo: lo primero y más grande es el ESTADO («¿imprime?»), y el
+ * resto son acciones puntuales. Sigue el tema de Windows (claro u oscuro). */
 
 :root {
-  /* Escala de espaciado: todo el layout sale de aquí, sin números sueltos. */
   --space-1: 0.25rem;
   --space-2: 0.5rem;
   --space-3: 0.75rem;
   --space-4: 1rem;
   --space-5: 1.5rem;
   --space-6: 2rem;
+  --space-7: 2.75rem;
 
-  --radius-sm: 7px;
-  --radius: 10px;
+  --radius-sm: 6px;
+  --radius: 9px;
   --radius-lg: 14px;
 
-  /* Deceleración exponencial, sin rebote: propio de una herramienta, no de un juguete. */
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
-  --transition: 160ms var(--ease);
+  --t: 160ms var(--ease);
 
-  /* --- Tema claro (por defecto) --- */
-  --bg: oklch(0.972 0.004 274);
+  --font: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --mono: "Cascadia Mono", Consolas, ui-monospace, monospace;
+
+  /* Tema claro. Neutros con una pizca del índigo de marca (hue 274), nunca gris puro. */
+  --bg: oklch(0.975 0.004 274);
   --surface: oklch(0.995 0.002 274);
-  --surface-alt: oklch(0.948 0.005 274);
-  --border: oklch(0.9 0.007 274);
-  --border-strong: oklch(0.84 0.01 274);
-  --text: oklch(0.27 0.014 274);
-  --text-muted: oklch(0.52 0.017 274);
+  --surface-2: oklch(0.955 0.006 274);
+  --border: oklch(0.905 0.007 274);
+  --border-strong: oklch(0.83 0.011 274);
+  --text: oklch(0.26 0.016 274);
+  --text-2: oklch(0.47 0.017 274);
+  --text-3: oklch(0.6 0.014 274);
 
-  --accent: oklch(0.53 0.18 274);
-  --accent-hover: oklch(0.48 0.18 274);
-  --accent-text: oklch(0.99 0.005 274);
-  --accent-ring: oklch(0.53 0.18 274 / 35%);
+  --accent: oklch(0.52 0.19 274);
+  --accent-hover: oklch(0.47 0.19 274);
+  --accent-text: oklch(0.985 0.005 274);
+  --ring: oklch(0.52 0.19 274 / 40%);
 
-  --ok: oklch(0.54 0.13 155);
-  --ok-bg: oklch(0.95 0.04 155);
-  --warn: oklch(0.58 0.11 72);
-  --warn-bg: oklch(0.95 0.05 82);
-  --danger: oklch(0.55 0.19 27);
-  --danger-bg: oklch(0.95 0.04 27);
+  --ok: oklch(0.52 0.13 155);
+  --ok-bg: oklch(0.96 0.03 155);
+  --warn: oklch(0.55 0.12 70);
+  --warn-bg: oklch(0.965 0.04 85);
+  --warn-border: oklch(0.86 0.08 82);
+  --danger: oklch(0.53 0.19 27);
+  --danger-bg: oklch(0.965 0.025 27);
+  --danger-border: oklch(0.86 0.07 27);
 
-  --shadow: 0 1px 2px oklch(0.27 0.03 274 / 6%), 0 2px 6px oklch(0.27 0.03 274 / 8%);
+  --shadow: 0 1px 2px oklch(0.26 0.03 274 / 6%);
 
-  /* Debe coincidir con HEADER_HEIGHT en main/web-panel.ts: la vista incrustada de la
-     plataforma se coloca en píxeles justo debajo de la cabecera. Si divergen, la tapa o deja
-     una franja muerta. */
+  /* Debe coincidir con HEADER_HEIGHT (main/web-panel.ts). */
   --topbar: 56px;
-  /* Carbón tintado de índigo (no negro): separa la navegación del contenido -- que en
-     Productos y Pedidos es la web de la plataforma, con su propio fondo claro -- y de paso la
-     ata a la marca. Igual en ambos temas a propósito. */
-  --side-bg: oklch(0.24 0.026 274);
-  --side-text: oklch(0.93 0.01 274);
-  --side-muted: oklch(0.68 0.02 274);
-  --side-active: oklch(0.32 0.03 274);
-  --side-hair: oklch(1 0 0 / 8%);
+  /* Franja oscura en los dos temas: separa la app de la web incrustada, que tiene fondo propio. */
+  --bar-bg: oklch(0.225 0.024 274);
+  --bar-text: oklch(0.94 0.01 274);
+  --bar-muted: oklch(0.7 0.02 274);
+  --bar-hover: oklch(0.29 0.028 274);
+  --bar-active: oklch(0.33 0.032 274);
+  --bar-hair: oklch(1 0 0 / 9%);
+  /* El índigo de marca, aclarado para que se lea sobre la franja oscura en los dos temas. */
+  --bar-accent: oklch(0.78 0.12 274);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: oklch(0.18 0.012 274);
-    --surface: oklch(0.225 0.015 274);
-    --surface-alt: oklch(0.27 0.016 274);
-    --border: oklch(0.33 0.016 274);
-    --border-strong: oklch(0.4 0.018 274);
+    --bg: oklch(0.185 0.012 274);
+    --surface: oklch(0.225 0.014 274);
+    --surface-2: oklch(0.265 0.016 274);
+    --border: oklch(0.31 0.016 274);
+    --border-strong: oklch(0.39 0.018 274);
     --text: oklch(0.94 0.008 274);
-    --text-muted: oklch(0.68 0.016 274);
+    --text-2: oklch(0.74 0.014 274);
+    --text-3: oklch(0.6 0.014 274);
 
     --accent: oklch(0.7 0.15 274);
     --accent-hover: oklch(0.76 0.15 274);
-    --accent-text: oklch(0.17 0.02 274);
-    --accent-ring: oklch(0.7 0.15 274 / 45%);
+    --accent-text: oklch(0.18 0.02 274);
+    --ring: oklch(0.7 0.15 274 / 50%);
 
-    --ok: oklch(0.76 0.15 158);
-    --ok-bg: oklch(0.29 0.06 158);
+    --ok: oklch(0.76 0.14 158);
+    --ok-bg: oklch(0.26 0.04 158);
     --warn: oklch(0.82 0.13 82);
-    --warn-bg: oklch(0.3 0.05 82);
-    --danger: oklch(0.72 0.16 25);
-    --danger-bg: oklch(0.3 0.07 25);
+    --warn-bg: oklch(0.27 0.04 82);
+    --warn-border: oklch(0.42 0.07 82);
+    --danger: oklch(0.73 0.16 25);
+    --danger-bg: oklch(0.27 0.05 25);
+    --danger-border: oklch(0.43 0.09 25);
 
-    --shadow: 0 1px 2px oklch(0 0 0 / 24%), 0 2px 8px oklch(0 0 0 / 30%);
-
-    --side-bg: oklch(0.155 0.014 274);
-    --side-active: oklch(0.26 0.02 274);
-    --side-hair: oklch(1 0 0 / 6%);
+    --shadow: 0 1px 2px oklch(0 0 0 / 30%);
+    --bar-bg: oklch(0.15 0.014 274);
+    --bar-hover: oklch(0.22 0.018 274);
+    --bar-active: oklch(0.26 0.022 274);
   }
 }
 
@@ -111,17 +105,38 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-family: var(--font);
   font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
 }
 
-/* Scrollbar discreta y a tono, no la del navegador chillona sobre fondo oscuro. */
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--border-strong) transparent;
+}
+
+.sprite {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+.icono {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .shell {
@@ -130,494 +145,726 @@ body {
   height: 100%;
 }
 
-/* --- Cabecera ------------------------------------------------------------------------- */
+/* --- Cabecera -------------------------------------------------------------------------- */
 
-/* Una franja y no una columna: lo que se mira todo el día son las comandas, y cada píxel que
-   no gasta la navegación es una comanda más en pantalla. */
 .topbar {
   height: var(--topbar);
   flex: none;
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-5);
   padding: 0 var(--space-4);
-  background: var(--side-bg);
-  color: var(--side-text);
+  background: var(--bar-bg);
+  color: var(--bar-text);
 }
 
-.topbar-title {
-  margin: 0;
-  font-size: 1.0625rem;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-}
-
-.back {
-  padding: 0.4rem 0.8rem;
-  border: 1px solid var(--side-hair);
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--side-text);
-  font: inherit;
-  font-size: 0.9375rem;
-  cursor: pointer;
-  transition: background 160ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.back:hover {
-  background: var(--side-active);
-}
-
-.back:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-/* --- Pantalla de inicio ---------------------------------------------------------------- */
-
-/* Botones grandes: el PC de un mostrador se usa de pie y con prisa, a veces con pantalla
-   táctil. Se reparten solos según el ancho en vez de fijar columnas, para que la ventana se
-   pueda estrechar sin que nada se corte. */
-.menu {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: var(--space-4);
-  align-content: start;
-}
-
-.brand {
+.identidad {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-1) var(--space-2) var(--space-2);
+  min-width: 0;
+  flex: none;
 }
 
-.brand-mark {
-  width: 28px;
-  height: 28px;
-  flex: none;
+.marca {
+  width: 30px;
+  height: 30px;
   display: grid;
   place-items: center;
-  border-radius: var(--radius-sm);
+  border-radius: 8px;
   background: var(--accent);
   color: var(--accent-text);
   font-weight: 700;
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   letter-spacing: -0.02em;
 }
 
-.brand-text {
+.identidad-texto {
   display: flex;
   flex-direction: column;
-  line-height: 1.15;
+  line-height: 1.2;
+  min-width: 0;
 }
 
-.brand-text strong {
-  font-size: 0.925rem;
-  letter-spacing: -0.01em;
-}
-
-.brand-text span {
+.producto {
   font-size: 0.72rem;
-  color: var(--side-muted);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--bar-muted);
 }
 
-.nav {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  /* Empuja el estado al fondo de la barra. */
-  flex: 1;
+.negocio {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  max-width: 16rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.nav-item {
-  width: 100%;
+.tabs {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-  padding: 0.55rem var(--space-3);
+  gap: 2px;
+  min-width: 0;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 0.7rem;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: 8px;
   background: transparent;
-  color: var(--side-muted);
+  color: var(--bar-muted);
   font: inherit;
-  text-align: left;
+  font-size: 0.875rem;
+  font-weight: 500;
+  white-space: nowrap;
   cursor: pointer;
   transition:
-    background var(--transition),
-    color var(--transition);
+    background var(--t),
+    color var(--t);
 }
 
-.nav-item:hover {
-  background: var(--side-active);
-  color: var(--side-text);
+.tab:hover {
+  background: var(--bar-hover);
+  color: var(--bar-text);
 }
 
-.nav-item[aria-selected="true"] {
-  background: var(--side-active);
-  color: oklch(0.99 0.005 274);
-  font-weight: 600;
+.tab[aria-current="page"] {
+  background: var(--bar-active);
+  color: var(--bar-text);
 }
 
-.nav-icon {
-  font-size: 1rem;
-  line-height: 1;
-  width: 1.1rem;
-  text-align: center;
+.tab[aria-current="page"] .icono {
+  color: var(--bar-accent);
 }
 
-.menu .nav-item {
-  flex-direction: column;
-  gap: var(--space-2);
-  min-height: 128px;
-  justify-content: center;
-  border: 1px solid var(--hair);
-  border-radius: var(--radius-lg);
-  background: var(--surface);
-  color: var(--fg);
-  font-size: 1.0625rem;
-  font-weight: 600;
-  box-shadow: var(--shadow);
-}
-
-.menu .nav-item:hover {
-  background: var(--surface);
-  border-color: var(--accent);
-}
-
-.menu .nav-icon {
-  font-size: 2rem;
-}
-
-/* Estado siempre visible, se esté en la sección que se esté: es el dato por el que se abre
-   la app. Compacto aquí para no competir con el contenido. */
-.side-status {
-  /* Al extremo contrario del título: el estado se busca siempre en el mismo sitio. */
+/* La píldora repite el estado en cualquier sección. El color nunca va solo: lleva la palabra. */
+.pildora {
   margin-left: auto;
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-2);
-  padding: var(--space-3);
-  border-radius: var(--radius-sm);
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 0.8rem 0 0.7rem;
+  border: 1px solid var(--bar-hair);
+  border-radius: 999px;
   background: oklch(1 0 0 / 5%);
-  border: 1px solid var(--side-hair);
-  font-size: 0.78rem;
+  color: var(--bar-text);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--t);
 }
 
-/* --- Contenido ------------------------------------------------------------------------ */
+.pildora:hover {
+  background: oklch(1 0 0 / 10%);
+}
+
+.punto {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--bar-muted);
+}
+
+.pildora[data-nivel="ok"] .punto {
+  background: oklch(0.78 0.16 155);
+  box-shadow: 0 0 0 3px oklch(0.78 0.16 155 / 22%);
+}
+
+.pildora[data-nivel="aviso"] .punto {
+  background: oklch(0.83 0.15 82);
+}
+
+.pildora[data-nivel="aviso"] {
+  color: oklch(0.9 0.1 85);
+}
+
+.pildora[data-nivel="error"] .punto {
+  background: oklch(0.7 0.19 27);
+}
+
+.pildora[data-nivel="error"] {
+  color: oklch(0.86 0.09 27);
+  border-color: oklch(0.7 0.19 27 / 45%);
+}
+
+/* Con la ventana estrecha se quitan primero los iconos y luego el texto de la marca, para que
+   las pestañas quepan siempre en una línea. */
+@media (max-width: 1100px) {
+  .tab .icono {
+    display: none;
+  }
+}
+
+@media (max-width: 980px) {
+  .identidad-texto {
+    display: none;
+  }
+  .topbar {
+    gap: var(--space-3);
+  }
+}
+
+/* --- Contenido ------------------------------------------------------------------------- */
 
 .content {
   flex: 1;
   min-width: 0;
   overflow: auto;
-  padding: var(--space-6) var(--space-5);
+  padding: var(--space-6) var(--space-6) var(--space-7);
+}
+
+.panel {
+  max-width: 920px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
 }
 
 .panel[hidden] {
   display: none;
 }
 
-.panel-head {
-  margin-bottom: var(--space-5);
-}
-
-.panel-head h1 {
-  font-size: 1.375rem;
-  font-weight: 640;
-  margin: 0;
-  letter-spacing: -0.02em;
-}
-
-.panel-head p {
-  margin: var(--space-1) 0 0;
-  color: var(--text-muted);
-  font-size: 0.875rem;
-  max-width: 60ch;
-}
-
-/* Solo se ve si la vista incrustada no pudo cargarse: normalmente queda tapada por ella. */
 .web-fallback {
-  color: var(--text-muted);
+  margin: 0;
+  max-width: 60ch;
+  color: var(--text-2);
 }
 
-/* --- Estado -------------------------------------------------------------------------- */
+/* --- Estado ---------------------------------------------------------------------------- */
 
-/* El punto lleva ADEMÁS el texto de al lado: el color por sí solo no comunica el estado a
-   quien no distingue rojo y verde, que es ~8% de los hombres. */
-.dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  flex: none;
-  background: var(--text-muted);
+.estado {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-4);
+  align-items: start;
+  padding: var(--space-5) var(--space-6);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow);
 }
 
-.side-status[data-state="running"] .dot {
-  background: var(--ok);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ok) 24%, transparent);
+.estado-icono {
+  width: 28px;
+  height: 28px;
+  margin-top: 2px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  color: var(--accent);
 }
 
-.side-status[data-state="paired"] .dot {
-  background: var(--warn);
-}
-
-.side-status[data-state="error"] .dot {
-  background: var(--danger);
-}
-
-.status-text {
-  display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
-  min-width: 0;
-}
-
-.status-title {
-  font-weight: 600;
-}
-
-.side-status[data-state="running"] .status-title {
+.estado[data-nivel="ok"] .estado-icono {
   color: var(--ok);
 }
 
-.side-status[data-state="paired"] .status-title {
+.estado[data-nivel="aviso"] {
+  background: var(--warn-bg);
+  border-color: var(--warn-border);
+}
+
+.estado[data-nivel="aviso"] .estado-icono {
   color: var(--warn);
 }
 
-.side-status[data-state="error"] .status-title {
+.estado[data-nivel="error"] {
+  background: var(--danger-bg);
+  border-color: var(--danger-border);
+}
+
+.estado[data-nivel="error"] .estado-icono {
   color: var(--danger);
 }
 
-.status-detail {
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  /* El id del dispositivo es un UUID: no debe romper el ancho de la ventana. */
-  overflow-wrap: anywhere;
+.estado-titulo {
+  margin: 0;
+  font-size: 1.375rem;
+  font-weight: 650;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
 }
 
-/* Ajustes del estado cuando vive en la barra lateral (fondo oscuro, menos espacio). Van
-   aquí, después de las reglas base, y no arriba en el bloque de la barra: una sobrescritura
-   colocada antes de la regla que sobrescribe solo gana por orden de fichero, y eso se
-   rompe en cuanto alguien reordena. */
-.side-status .dot {
-  margin-top: 0.35rem;
-}
-
-.side-status .status-detail {
-  color: var(--side-muted);
-  font-size: 0.72rem;
-}
-
-/* --- Tarjetas ------------------------------------------------------------------------ */
-
-.card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  padding: var(--space-4) 1.125rem;
-  margin-bottom: var(--space-4);
-}
-
-.card h2 {
-  font-size: 0.72rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: var(--text-muted);
-  margin: 0 0 var(--space-3);
-}
-
-.hint {
-  font-size: 0.8rem;
-  color: var(--text-muted);
+.estado-detalle {
   margin: var(--space-2) 0 0;
-  max-width: 60ch;
+  max-width: 64ch;
+  color: var(--text-2);
 }
 
-.row {
+.estado .acciones:not(:empty) {
+  margin-top: var(--space-4);
+}
+
+/* --- Vincular -------------------------------------------------------------------------- */
+
+.vincular {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: var(--space-2);
-  align-items: center;
-}
-
-.grow {
-  flex: 1 1 12rem;
-  min-width: 0;
-}
-
-/* --- Controles ----------------------------------------------------------------------- */
-
-input,
-select {
-  font: inherit;
-  color: var(--text);
-  background: var(--surface-alt);
+  padding: var(--space-5) var(--space-6);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 0.5rem 0.7rem;
-  transition:
-    border-color var(--transition),
-    box-shadow var(--transition);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
 }
 
-input:hover:not(:disabled),
-select:hover:not(:disabled) {
-  border-color: var(--border-strong);
-}
-
-input:focus-visible,
-select:focus-visible,
-button:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-/* Anillo suave también en :focus (no solo :focus-visible) para inputs: refuerza dónde
-   estás escribiendo sin depender de la heurística de teclado del navegador. */
-input:focus,
-select:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-ring);
-}
-
-button {
-  font: inherit;
-  font-weight: 550;
-  color: var(--text);
-  background: var(--surface-alt);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  padding: 0.5rem 0.9rem;
-  cursor: pointer;
-  transition:
-    background var(--transition),
-    border-color var(--transition),
-    transform var(--transition);
-}
-
-button:hover:not(:disabled) {
-  border-color: var(--accent);
-  background: color-mix(in oklab, var(--accent) 8%, var(--surface-alt));
-}
-
-button:active:not(:disabled) {
-  transform: translateY(0.5px);
-}
-
-button.primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-text);
-}
-
-button.primary:hover:not(:disabled) {
-  background: var(--accent-hover);
-  border-color: var(--accent-hover);
-}
-
-button.danger {
-  color: var(--danger);
-  border-color: color-mix(in oklab, var(--danger) 40%, var(--border));
-  background: var(--surface-alt);
-}
-
-button.danger:hover:not(:disabled) {
-  border-color: var(--danger);
-  background: color-mix(in oklab, var(--danger) 10%, var(--surface-alt));
-}
-
-/* Los botones deshabilitados se ven claramente inertes: en esta app un botón que no
-   funciona casi siempre significa "todavía no has emparejado", y eso hay que poder
-   deducirlo mirando, no pulsando. */
-button:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-/* --- Avisos -------------------------------------------------------------------------- */
-
-.note {
-  display: flex;
-  gap: var(--space-3);
-  padding: 0.7rem 0.85rem;
-  background: var(--warn-bg);
-  border: 1px solid color-mix(in oklab, var(--warn) 28%, transparent);
-  border-radius: var(--radius-sm);
-  font-size: 0.82rem;
-  color: var(--text);
-  margin-bottom: var(--space-3);
-}
-
-.note[hidden] {
+.vincular[hidden] {
   display: none;
 }
 
-/* Variante roja: algo que exige atención ahora (impresora caída, sin conexión), frente al
-   aviso ámbar informativo. */
-.note.danger {
-  background: var(--danger-bg);
-  border-color: color-mix(in oklab, var(--danger) 38%, transparent);
-  color: var(--danger);
+.etiqueta {
+  font-weight: 600;
 }
 
-/* --- Impresoras de red (estado del sondeo) ------------------------------------------- */
-
-/* Resultados del "Probar impresoras de red": una fila por impresora, con el emoji de estado
-   al principio (el color NO va solo). Los mensajes sueltos (sin impresoras / agente parado)
-   son texto directo en el contenedor. */
-#network-status {
-  margin-top: var(--space-3);
-  font-size: 0.82rem;
-  color: var(--text-muted);
+.campo-y-boton {
+  display: flex;
+  gap: var(--space-2);
 }
 
-#network-status p {
+.codigo {
+  flex: 1;
+  font-family: var(--mono);
+  font-size: 0.95rem;
+  letter-spacing: 0.02em;
+}
+
+.pasos {
+  margin: var(--space-2) 0 0;
+  padding-left: 1.2rem;
+  color: var(--text-2);
+  display: grid;
+  gap: 2px;
+}
+
+/* --- Bloques --------------------------------------------------------------------------- */
+
+.bloque {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* `hidden` pierde contra cualquier `display` de clase: cada componente que se oculta lo repite. */
+.bloque[hidden],
+.boton[hidden] {
+  display: none;
+}
+
+.bloque-cabecera h2 {
   margin: 0;
-  padding: 0.45rem var(--space-1);
-  color: var(--text);
-  overflow-wrap: anywhere;
+  font-size: 0.9375rem;
+  font-weight: 650;
 }
 
-#network-status p + p {
+.bloque-cabecera p {
+  margin: 2px 0 0;
+  max-width: 64ch;
+  color: var(--text-2);
+}
+
+.bloque-cabecera.con-accion {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.resumen {
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Listas de impresoras -------------------------------------------------------------- */
+
+.impresoras,
+.windows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.impresora,
+.windows li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-height: 56px;
+  padding: var(--space-3) var(--space-4);
+}
+
+.impresora + .impresora,
+.windows li + li {
   border-top: 1px solid var(--border);
 }
 
-/* --- Registro ------------------------------------------------------------------------ */
+.impresora-estado {
+  flex: none;
+  width: 7.5rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 0.8125rem;
+}
 
-.log {
+.impresora[data-estado="ok"] .impresora-estado {
+  color: var(--ok);
+}
+
+.impresora[data-estado="ok"] .punto {
+  background: var(--ok);
+}
+
+.impresora[data-estado="caida"] .impresora-estado {
+  color: var(--danger);
+}
+
+.impresora[data-estado="caida"] .punto {
+  background: var(--danger);
+}
+
+.impresora[data-estado="sin-datos"] .impresora-estado {
+  color: var(--text-3);
+}
+
+.impresora[data-estado="sin-datos"] .punto {
+  background: var(--border-strong);
+}
+
+.impresora-texto {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.impresora-nombre {
+  font-weight: 600;
+}
+
+.impresora-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-2);
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+}
+
+.impresora-meta .icono {
+  width: 14px;
+  height: 14px;
+}
+
+.impresora-accion {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.resultado {
+  font-size: 0.8125rem;
+  color: var(--text-2);
+  max-width: 22rem;
+  text-align: right;
+}
+
+.resultado[data-tipo="ok"] {
+  color: var(--ok);
+}
+
+.resultado[data-tipo="error"] {
+  color: var(--danger);
+}
+
+.vacio {
+  padding: var(--space-5) var(--space-4);
+  color: var(--text-2);
+}
+
+.windows-nombre {
+  flex: 1;
+  min-width: 0;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+/* --- Botones y campos ------------------------------------------------------------------ */
+
+.acciones {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.boton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 0.85rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background var(--t),
+    border-color var(--t),
+    color var(--t);
+}
+
+.boton:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+.boton:active:not(:disabled) {
+  background: var(--border);
+}
+
+.boton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.boton[aria-busy="true"] {
+  cursor: progress;
+}
+
+.primario {
+  border-color: transparent;
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.primario:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.primario:active:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.peligro {
+  color: var(--danger);
+  border-color: var(--danger-border);
+}
+
+.peligro:hover:not(:disabled) {
+  background: var(--danger-bg);
+}
+
+.fantasma {
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-2);
+}
+
+.fantasma:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.campo {
+  height: 38px;
+  padding: 0 0.75rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  transition:
+    border-color var(--t),
+    box-shadow var(--t);
+}
+
+.campo::placeholder {
+  color: var(--text-3);
+}
+
+.campo:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--ring);
+}
+
+.campo[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
+.campo-y-boton .boton {
+  height: 38px;
+}
+
+.mensaje {
+  margin: 0;
+  min-height: 1.5em;
+  color: var(--text-2);
+}
+
+.mensaje:empty {
+  display: none;
+}
+
+.mensaje[data-tipo="ok"] {
+  color: var(--ok);
+}
+
+.mensaje[data-tipo="error"] {
+  color: var(--danger);
+}
+
+.nota {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--warn-border);
+  border-radius: var(--radius);
+  background: var(--warn-bg);
+}
+
+.nota[hidden] {
+  display: none;
+}
+
+.segmentado {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.segmentado button {
+  height: 28px;
+  padding: 0 0.7rem;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background var(--t),
+    color var(--t);
+}
+
+.segmentado button[aria-pressed="true"] {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+
+/* --- Ajustes --------------------------------------------------------------------------- */
+
+.ficha {
+  margin: 0;
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-2) var(--space-5);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.ficha dt {
+  color: var(--text-2);
+}
+
+.ficha dd {
+  margin: 0;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.registro {
+  list-style: none;
+  margin: 0;
+  padding: var(--space-2) 0;
+  max-height: 22rem;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-size: 0.8125rem;
+}
+
+.registro li {
+  display: grid;
+  grid-template-columns: 9.5rem 3.75rem 1fr;
+  gap: var(--space-3);
+  padding: 5px var(--space-4);
+}
+
+.registro li:hover {
+  background: var(--surface-2);
+}
+
+.registro .cuando {
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.registro .nivel {
+  font-weight: 600;
+  color: var(--text-3);
+}
+
+.registro [data-nivel="aviso"] .nivel {
+  color: var(--warn);
+}
+
+.registro [data-nivel="error"] .nivel {
+  color: var(--danger);
+}
+
+.registro .traza {
+  grid-column: 3;
+  margin: 2px 0 0;
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  color: var(--text-3);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  background: var(--surface-alt);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  color: var(--text);
-  padding: 0.7rem 0.85rem;
-  height: 11rem;
-  overflow: auto;
-  font-family: ui-monospace, "Cascadia Mono", SFMono-Regular, Menlo, monospace;
-  font-size: 0.78rem;
-  line-height: 1.55;
 }
 
-.log:empty::before {
-  content: "Sin actividad todavía.";
-  color: var(--text-muted);
+.registro .vacio {
+  display: block;
 }
 
-/* Nadie está mirando la app para disfrutar de la animación; el movimiento solo comunica
-   estado. Quien lo desactiva a nivel de sistema no debe ver ninguno. Se apagan las
-   transiciones en los únicos elementos que las tienen (sin `!important`: mismo o mayor peso
-   que las reglas que anulan). */
+.version {
+  margin: 0;
+  color: var(--text-3);
+  font-size: 0.8125rem;
+}
+
+/* Sin animaciones si Windows lo pide: todas las transiciones usan --t. */
 @media (prefers-reduced-motion: reduce) {
-  .nav-item,
-  input,
-  select,
-  button {
-    transition: none;
+  :root {
+    --t: 0ms;
   }
 }

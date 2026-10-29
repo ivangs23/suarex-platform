@@ -61,10 +61,28 @@ export type AgentTickResult = {
    * es una avería) o cuando aún no hay evidencia de ninguna.
    */
   receiptStatus: PrinterStatus;
+  /** Las impresoras que saca ESTE equipo, para que la ventana las liste con su estado. Ausente
+   *  si el tick reventó antes de leerlas: la ventana conserva las que ya tenía. */
+  printers?: TickPrinter[];
+  /** Nombre comercial del cliente (su marca), o `null` si no tiene: la ventana lo muestra. */
+  businessName?: string | null;
+};
+
+/** Una impresora de este equipo tal como la enseña la ventana: lo que el dueño reconoce. */
+export type TickPrinter = {
+  id: string;
+  name: string;
+  destination: "cocina" | "barra" | "all" | "recibo";
+  conexion: "usb" | "red";
+  /** El nombre de la impresora en Windows (USB), para la prueba de impresión. */
+  printerName?: string;
+  host?: string;
+  port?: number;
 };
 
 type PrinterRowDb = {
   id: string;
+  name: string;
   venue_id: string;
   device_id: string | null;
   destination: "cocina" | "barra" | "all" | "recibo";
@@ -73,6 +91,7 @@ type PrinterRowDb = {
 
 type ResolvedPrinter = {
   id: string;
+  name: string;
   venueId: string;
   destination: "cocina" | "barra" | "all" | "recibo";
   config: PrinterConfig;
@@ -151,7 +170,7 @@ async function ownDeviceId(client: SupabaseClient): Promise<string | null> {
 async function enabledPrinterRows(client: SupabaseClient): Promise<PrinterRowDb[]> {
   const { data, error } = await client
     .from("printers")
-    .select("id, venue_id, device_id, destination, connection")
+    .select("id, name, venue_id, device_id, destination, connection")
     .eq("enabled", true);
   if (error) throw error;
   return data as unknown as PrinterRowDb[];
@@ -185,6 +204,7 @@ export function resolvePrintersFromRows(
     if (conn.type === "network" && (p.device_id === null || p.device_id === deviceId)) {
       resolved.push({
         id: p.id,
+        name: p.name,
         venueId: p.venue_id,
         destination: p.destination,
         config: {
@@ -200,6 +220,7 @@ export function resolvePrintersFromRows(
       // Sin cambios: una USB siempre ha exigido dueño, por el motivo físico de arriba.
       resolved.push({
         id: p.id,
+        name: p.name,
         venueId: p.venue_id,
         destination: p.destination,
         config: {
@@ -213,6 +234,13 @@ export function resolvePrintersFromRows(
     }
   }
   return resolved;
+}
+
+function aTickPrinter(p: ResolvedPrinter): TickPrinter {
+  const base = { id: p.id, name: p.name, destination: p.destination };
+  return p.config.adapter === "escpos-usb"
+    ? { ...base, conexion: "usb", printerName: p.config.printerName }
+    : { ...base, conexion: "red", host: p.config.host, port: p.config.port };
 }
 
 /** Estado de una impresora de RED tras sondear su conexión (#12): `ok` si aceptó la conexión. */
@@ -466,7 +494,15 @@ export async function runAgentTick(
     // informativo: un fallo aquí no debe derribar el tick de impresión.
   }
 
-  return { printed, failed, succeeded: [...succeeded], failures, receiptStatus };
+  return {
+    printed,
+    failed,
+    succeeded: [...succeeded],
+    failures,
+    receiptStatus,
+    printers: printers.map(aTickPrinter),
+    businessName: branding.header || null,
+  };
 }
 
 /**

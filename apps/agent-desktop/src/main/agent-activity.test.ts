@@ -20,6 +20,34 @@ describe("reduceActivity", () => {
     expect(activity.lastTickAt).toBe(T);
   });
 
+  it("guarda las impresoras y el nombre del negocio, y no los pierde si un tick revienta", () => {
+    const cocina = {
+      id: "p1",
+      name: "Cocina",
+      destination: "cocina" as const,
+      conexion: "red" as const,
+      host: "10.0.0.5",
+      port: 9100,
+    };
+    const conDatos = reduceActivity(
+      INITIAL_ACTIVITY,
+      tick({ printers: [cocina], businessName: "Garum Vinoteca" }),
+      T,
+    ).activity;
+    expect(conDatos.printers).toEqual([cocina]);
+    expect(conDatos.businessName).toBe("Garum Vinoteca");
+
+    // Un tick sin red no trae ni impresoras ni marca: la ventana sigue enseñando las que había.
+    const sinRed = reduceActivity(conDatos, tick({ error: "fetch failed" }), T).activity;
+    expect(sinRed.printers).toEqual([cocina]);
+    expect(sinRed.businessName).toBe("Garum Vinoteca");
+
+    // Y si el cliente borra su marca, se refleja (null no es "no lo sé").
+    expect(reduceActivity(conDatos, tick({ businessName: null }), T).activity.businessName).toBe(
+      null,
+    );
+  });
+
   it("marca una impresora caída y la avisa una sola vez", () => {
     const fallo = {
       printerId: "p1",

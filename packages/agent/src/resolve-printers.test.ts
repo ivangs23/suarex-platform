@@ -22,6 +22,7 @@ type Fila = Parameters<typeof resolvePrintersFromRows>[0][number];
 function red(id: string, deviceId: string | null, destination: Fila["destination"]): Fila {
   return {
     id,
+    name: id,
     venue_id: VENUE,
     device_id: deviceId,
     destination,
@@ -32,6 +33,7 @@ function red(id: string, deviceId: string | null, destination: Fila["destination
 function usb(id: string, deviceId: string | null): Fila {
   return {
     id,
+    name: id,
     venue_id: VENUE,
     device_id: deviceId,
     destination: "recibo",
@@ -106,6 +108,7 @@ describe("filas que no se entienden", () => {
   it("un tipo de conexión desconocido se ignora en vez de romper el tick", () => {
     const rara = {
       id: "x",
+      name: "x",
       venue_id: VENUE,
       device_id: MOSTRADOR,
       destination: "cocina" as const,

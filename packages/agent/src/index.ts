@@ -17,5 +17,6 @@ export type {
   AgentTickResult,
   NetworkPrinterProbe,
   PrintFailure,
+  TickPrinter,
 } from "./run-agent.js";
 export { probeNetworkPrinters, runAgent, runAgentTick, toTicketOrder } from "./run-agent.js";

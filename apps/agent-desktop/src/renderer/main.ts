@@ -1,24 +1,20 @@
+import type { TickPrinter } from "@suarex/agent";
 import type { AgentActivity } from "../main/agent-activity.js";
-import { mensajeDeConfigIncompleta } from "../main/config-check.js";
 import type {
   ExportDiagnosticsResult,
   PairIpcResult,
   ProbeNetworkPrintersResult,
 } from "../main/ipc.js";
 import type { ShowWebPanelResult } from "../main/web-panel.js";
+import {
+  type AgentStatus,
+  type EstadoGeneral,
+  estadoGeneral,
+  nombreDeDestino,
+  resumenDeImpresion,
+} from "./estado.js";
 import { setupNavigation } from "./navigation.js";
-
-type AgentStatus = {
-  paired: boolean;
-  running: boolean;
-  /** Arrancando, o esperando a que vuelva la red. */
-  conectando?: boolean;
-  deviceId: string | null;
-  platform: string;
-  /** Variables que faltaban al generar este ejecutable. Vacío en un build sano. */
-  configFaltante?: string[];
-  activity: AgentActivity;
-};
+import { type Entrada, entradasDelRegistro, type Filtro, filtrar } from "./registro.js";
 
 type AgentApi = {
   listPrinters(): Promise<string[]>;
@@ -28,6 +24,8 @@ type AgentApi = {
   confirmUnpair(): Promise<boolean>;
   unpair(): Promise<{ ok: boolean }>;
   exportDiagnostics(): Promise<ExportDiagnosticsResult>;
+  showLastDiagnostics(): Promise<boolean>;
+  copyText(texto: string): Promise<boolean>;
   probeNetworkPrinters(): Promise<ProbeNetworkPrintersResult>;
   showSection(section: string): Promise<ShowWebPanelResult>;
   readLog(maxLines?: number): Promise<string[]>;
@@ -37,282 +35,513 @@ type AgentApi = {
 };
 
 /**
- * El puente lo instala el preload (contextBridge). Puede faltar en dos situaciones reales:
- * si el preload falla al cargar, y al abrir este mismo HTML en un navegador para revisar
- * los estilos. En ambas, una app que revienta con "cannot read property of undefined" y se
- * queda en blanco no dice nada útil; degradar deja la interfaz visible y explica qué pasa.
+ * El puente lo instala el preload (contextBridge). Puede faltar si el preload falla al cargar o
+ * al abrir este HTML en un navegador para revisar los estilos: entonces la interfaz se queda
+ * visible y explica qué pasa, en vez de quedarse en blanco.
  */
 const agent = (window as unknown as { agent?: AgentApi }).agent ?? null;
 
-const $ = (id: string): HTMLElement => document.getElementById(id) as HTMLElement;
-const logEl = $("log");
+const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
 
-function log(msg: string): void {
-  logEl.textContent += `${new Date().toLocaleTimeString()}  ${msg}\n`;
-  logEl.scrollTop = logEl.scrollHeight;
+/* --- Pequeños constructores de DOM. El texto entra siempre como texto, nunca como HTML: los
+       nombres de impresora y las líneas del registro vienen de fuera. --------------------- */
+
+const SVG = "http://www.w3.org/2000/svg";
+
+function icono(id: string, clase = "icono"): SVGSVGElement {
+  const svg = document.createElementNS(SVG, "svg");
+  svg.setAttribute("class", clase);
+  svg.setAttribute("aria-hidden", "true");
+  const use = document.createElementNS(SVG, "use");
+  use.setAttribute("href", `#${id}`);
+  svg.appendChild(use);
+  return svg;
 }
 
-function setDisabled(ids: string[], disabled: boolean): void {
-  for (const id of ids) ($(id) as HTMLButtonElement).disabled = disabled;
+function el<K extends keyof HTMLElementTagNameMap>(
+  tag: K,
+  props: Partial<HTMLElementTagNameMap[K]> & { dataset?: Record<string, string> } = {},
+  ...hijos: (Node | string | null)[]
+): HTMLElementTagNameMap[K] {
+  const nodo = document.createElement(tag);
+  const { dataset, ...resto } = props;
+  Object.assign(nodo, resto);
+  if (dataset) Object.assign(nodo.dataset, dataset);
+  for (const h of hijos) if (h !== null) nodo.append(h);
+  return nodo;
 }
 
-/**
- * Pinta el estado. Tres estados con significado distinto, y el color NUNCA va solo: el
- * título dice lo mismo en palabras, porque en torno al 8% de los hombres no distingue rojo
- * de verde y este es justo el dato por el que se abre la app.
- */
-function renderStatus(status: AgentStatus): void {
-  /* Un ejecutable incompleto se dice ANTES que cualquier otra cosa, y pisa al resto del estado.
-     "Sin emparejar" sería verdad, pero mandaría a pedir un código de emparejamiento que no puede
-     funcionar: el problema no es este equipo, es el instalador. */
-  const faltante = status.configFaltante ?? [];
-  if (faltante.length > 0) {
-    $("status").dataset.state = "error";
-    $("status-title").textContent = "Instalación incompleta";
-    $("status-detail").textContent = mensajeDeConfigIncompleta(faltante);
-    setDisabled(["pair", "unpair", "refresh", "test"], true);
-    return;
+function boton(
+  texto: string,
+  opciones: { icono?: string; clase?: string } = {},
+): HTMLButtonElement {
+  return el(
+    "button",
+    { type: "button", className: `boton ${opciones.clase ?? ""}`.trim() },
+    opciones.icono ? icono(opciones.icono) : null,
+    texto,
+  );
+}
+
+/** Mientras dura una acción, el botón lo dice y no admite otro clic. */
+async function conEspera<T>(
+  b: HTMLButtonElement,
+  texto: string,
+  accion: () => Promise<T>,
+): Promise<T> {
+  const antes = [...b.childNodes];
+  b.disabled = true;
+  b.setAttribute("aria-busy", "true");
+  b.textContent = texto;
+  try {
+    return await accion();
+  } finally {
+    b.replaceChildren(...antes);
+    b.disabled = false;
+    b.removeAttribute("aria-busy");
   }
-
-  const state = status.running ? "running" : status.paired ? "paired" : "idle";
-  // Conectando se pinta como "parado" (color de aviso) pero con otro texto: sin red al arrancar,
-  // decir "agente parado" mandaba a re-emparejar a quien solo tenía que esperar.
-  const conectando = state === "paired" && status.conectando === true;
-  $("status").dataset.state = state;
-
-  const titulo =
-    state === "running"
-      ? "Imprimiendo pedidos"
-      : conectando
-        ? "Conectando con la plataforma…"
-        : state === "paired"
-          ? "Emparejado, agente parado"
-          : "Sin emparejar";
-
-  const detalle =
-    state === "running"
-      ? `Dispositivo ${status.deviceId}. Puedes cerrar esta ventana: sigue funcionando en segundo plano.`
-      : conectando
-        ? `Dispositivo ${status.deviceId}. Si no hay conexión, se reintenta solo: no hace falta re-emparejar ni reiniciar.`
-        : state === "paired"
-          ? `Dispositivo ${status.deviceId}. La sesión de este equipo ya no vale: genera un código nuevo en el panel y vuelve a emparejar.`
-          : "Introduce el código de emparejamiento que genera el panel de administración.";
-
-  $("status-title").textContent = titulo;
-  $("status-detail").textContent = detalle;
-
-  // Sin emparejar no hay nada que des-emparejar. Deshabilitarlo evita el clic que solo
-  // produce un error.
-  setDisabled(["unpair"], !status.paired);
-
-  // La impresión USB usa winspool: fuera de Windows no hay nada que listar ni a donde
-  // imprimir, así que se avisa y se desactivan en vez de dejar que falle al pulsar.
-  const esWindows = status.platform === "win32";
-  ($("platform-note") as HTMLElement).hidden = esWindows;
-  setDisabled(["refresh", "test"], !esWindows);
 }
 
-const DESTINO_NOMBRE: Record<string, string> = {
-  cocina: "cocina",
-  barra: "barra",
-  all: "cocina y barra",
+/* --- Estado ------------------------------------------------------------------------------- */
+
+let status: AgentStatus | null = null;
+/** Cuándo empezó el corte de red en curso: el estado no lo anuncia hasta pasado un margen. */
+let sinConexionDesde: number | null = null;
+
+const ICONO_DE_NIVEL: Record<EstadoGeneral["nivel"], string> = {
+  ok: "i-ok",
+  aviso: "i-aviso",
+  error: "i-error",
+  neutro: "i-vincular",
 };
 
-/**
- * Pinta el estado de impresión: cuántos tickets van y, sobre todo, un banner rojo si algo va
- * mal (impresora caída o sin conexión). Es lo que convierte la app de caja negra en algo que
- * el owner puede mirar y saber si la cocina está recibiendo las comandas.
- */
-function renderActivity(a: AgentActivity): void {
-  const summary = $("activity-summary");
-  if (!a.lastTickAt) {
-    summary.textContent = "Aún no ha llegado ningún pedido.";
-  } else {
-    const hora = new Date(a.lastTickAt).toLocaleTimeString();
-    const n = a.printedTotal;
-    const impresos = `${n} ticket${n === 1 ? "" : "s"} impreso${n === 1 ? "" : "s"}`;
-    const fallos = a.failedTotal > 0 ? ` · ${a.failedTotal} con problemas` : "";
-    summary.textContent = `${impresos}${fallos}. Última comprobación a las ${hora}.`;
+function seguirCorteDeRed(activity: AgentActivity): void {
+  if (!activity.lastError) sinConexionDesde = null;
+  else if (sinConexionDesde === null) sinConexionDesde = Date.now();
+}
+
+function pintar(): void {
+  if (!status) return;
+  const estado = estadoGeneral(status, Date.now(), sinConexionDesde);
+
+  $("pildora").dataset.nivel = estado.nivel;
+  $("pildora-texto").textContent = estado.etiqueta;
+  $("pildora").title = estado.titulo;
+
+  $("estado").dataset.nivel = estado.nivel;
+  $("estado-icono").setAttribute("href", `#${estado.icono ?? ICONO_DE_NIVEL[estado.nivel]}`);
+  $("estado-titulo").textContent = estado.titulo;
+  $("estado-detalle").textContent = estado.detalle;
+  $("estado-acciones").replaceChildren(
+    ...(estado.accion
+      ? [
+          el(
+            "button",
+            { type: "button", className: "boton", dataset: { irA: estado.accion.seccion } },
+            estado.accion.texto,
+          ),
+        ]
+      : []),
+  );
+
+  const sinVincular = !status.paired && (status.configFaltante ?? []).length === 0;
+  $("vincular").hidden = !sinVincular;
+  $("bloque-impresoras").hidden = !status.paired;
+
+  const negocio = status.activity.businessName;
+  $("negocio").textContent = negocio ?? (status.paired ? "Vinculado" : "Sin vincular");
+  document.title = negocio ? `${negocio} · SuarEx Agente` : "SuarEx Agente";
+
+  $("resumen").textContent = resumenDeImpresion(status);
+  pintarImpresoras($("impresoras-estado"), false);
+  pintarImpresoras($("impresoras-equipo"), true);
+  pintarVinculacion();
+  $("version").textContent = status.version ? `SuarEx Agente, versión ${status.version}` : "";
+
+  const esWindows = status.platform === "win32";
+  $("nota-plataforma").hidden = esWindows;
+  $<HTMLButtonElement>("refrescar-windows").disabled = !esWindows;
+}
+
+/* --- Impresoras ----------------------------------------------------------------------------- */
+
+/** Lo último que dijo la prueba de cada impresora, para que sobreviva a los repintados. */
+const resultados = new Map<string, { tipo: "ok" | "error" | "info"; texto: string }>();
+
+function estadoDeImpresora(p: TickPrinter): { clave: string; texto: string } {
+  if (!status?.running) return { clave: "sin-datos", texto: "Sin datos" };
+  if (status.activity.downPrinters.some((d) => d.printerId === p.id)) {
+    return { clave: "caida", texto: "No responde" };
   }
+  return { clave: "ok", texto: "Lista" };
+}
 
-  const alerta = $("activity-alert");
-  if (a.lastError) {
-    alerta.textContent = "Sin conexión con la plataforma. Reintentando automáticamente.";
-    alerta.hidden = false;
-  } else if (a.downPrinters.length > 0) {
-    const destinos = [
-      ...new Set(a.downPrinters.map((p) => DESTINO_NOMBRE[p.destination] ?? p.destination)),
-    ];
-    alerta.textContent = `Impresora de ${destinos.join(" y ")} sin responder. Comprueba que esté encendida y conectada.`;
-    alerta.hidden = false;
-  } else {
-    alerta.hidden = true;
-    alerta.textContent = "";
+function conexionDe(p: TickPrinter): Node {
+  return p.conexion === "usb"
+    ? el(
+        "span",
+        { className: "impresora-meta" },
+        icono("i-usb"),
+        `USB · ${p.printerName ?? "sin nombre"}`,
+      )
+    : el("span", { className: "impresora-meta" }, icono("i-red"), `Red · ${p.host}:${p.port}`);
+}
+
+function pintarImpresoras(lista: HTMLElement, conAcciones: boolean): void {
+  if (!status) return;
+  const impresoras = status.activity.printers;
+  if (impresoras.length === 0) {
+    lista.replaceChildren(
+      el(
+        "li",
+        { className: "vacio" },
+        status.running
+          ? "Este equipo no tiene impresoras asignadas. Dalas de alta en el panel de administración, en Impresoras."
+          : "Las impresoras aparecen en cuanto el equipo conecta con la plataforma.",
+      ),
+    );
+    return;
   }
+  lista.replaceChildren(
+    ...impresoras.map((p) => {
+      const e = estadoDeImpresora(p);
+      const fila = el(
+        "li",
+        { className: "impresora", dataset: { estado: e.clave } },
+        el("span", { className: "impresora-estado" }, el("span", { className: "punto" }), e.texto),
+        el(
+          "span",
+          { className: "impresora-texto" },
+          el("span", { className: "impresora-nombre" }, p.name),
+          el(
+            "span",
+            { className: "impresora-meta" },
+            `${capitaliza(nombreDeDestino(p.destination))} · `,
+            conexionDe(p),
+          ),
+        ),
+      );
+      if (conAcciones) fila.append(accionesDeImpresora(p));
+      return fila;
+    }),
+  );
 }
 
-function renderSinPuente(): void {
-  $("status").dataset.state = "error";
-  $("status-title").textContent = "No se pudo iniciar";
-  $("status-detail").textContent =
-    "El puente interno de la aplicación no está disponible. Cierra y vuelve a abrirla; si sigue igual, reinstálala.";
-  setDisabled(["pair", "unpair", "refresh", "test"], true);
+function capitaliza(texto: string): string {
+  return texto.charAt(0).toUpperCase() + texto.slice(1);
 }
 
-async function refreshStatus(): Promise<void> {
-  if (!agent) return;
-  const status = await agent.getStatus();
-  renderStatus(status);
-  renderActivity(status.activity);
-}
+function accionesDeImpresora(p: TickPrinter): HTMLElement {
+  const previo = resultados.get(p.id);
+  const resultado = el(
+    "span",
+    { className: "resultado", dataset: previo ? { tipo: previo.tipo } : {} },
+    previo?.texto ?? "",
+  );
+  const decir = (tipo: "ok" | "error" | "info", texto: string) => {
+    resultados.set(p.id, { tipo, texto });
+    resultado.dataset.tipo = tipo;
+    resultado.textContent = texto;
+  };
 
-async function refreshPrinters(): Promise<void> {
-  if (!agent) return;
-  const printers = await agent.listPrinters();
-  const sel = $("printers") as HTMLSelectElement;
-  sel.innerHTML = "";
-  for (const name of printers) {
-    const opt = document.createElement("option");
-    opt.value = name;
-    opt.textContent = name;
-    sel.appendChild(opt);
-  }
-  log(`Impresoras detectadas: ${printers.length ? printers.join(", ") : "(ninguna)"}`);
-}
+  const b =
+    p.conexion === "usb"
+      ? boton("Imprimir prueba", { icono: "i-impresora" })
+      : boton("Comprobar conexión", { icono: "i-red" });
+  b.disabled = !agent || (p.conexion === "usb" && status?.platform !== "win32");
 
-// Navegación. Se instala FUERA de la comprobación del puente a propósito: cambiar de
-// sección es interfaz pura y tiene que funcionar aunque el IPC no esté disponible (ver el
-// docstring de `setupNavigation` y su test de regresión).
-//
-// Productos y Pedidos los pinta una vista incrustada del panel de la plataforma
-// (`main/web-panel.ts`), que se superpone a esta zona: mismas validaciones y mismos
-// permisos que en el navegador, y la sesión es de la PERSONA que entra, no del dispositivo
-// -- que solo puede imprimir. Config e Impresoras son locales.
-const { irA } = setupNavigation(document, agent ? (s) => agent.showSection(s) : undefined);
-// Se arranca en el MENÚ, no en una sección: quien abre la app no siempre viene a lo mismo, y
-// aterrizar en Configuración hacía que pareciera lo principal cuando es lo que menos se toca.
-void irA("menu");
-// Y se vuelve a él al cerrar la ventana: el proceso principal acaba de cerrar la sesión de
-// gestión, y reabrir en Productos enseñaría una página vacía en vez del menú.
-agent?.onVolverAlMenu(() => void irA("menu"));
-
-/* El registro se lee al entrar y con el botón, no en bucle: se viene aquí a mirar algo concreto
-   que ya ha pasado, y un refresco automático moviendo las líneas bajo el cursor estorba más que
-   ayuda mientras se busca. */
-async function pintaRegistro(): Promise<void> {
-  const destino = $("logs-content");
-  if (!agent) return;
-  const lineas = await agent.readLog();
-  destino.textContent = lineas.length > 0 ? lineas.join("\n") : "Todavía no hay nada registrado.";
-}
-$("logs-refresh")?.addEventListener("click", () => void pintaRegistro());
-document
-  .querySelector<HTMLButtonElement>('.nav-item[data-section="logs"]')
-  ?.addEventListener("click", () => void pintaRegistro());
-
-if (!agent) {
-  renderSinPuente();
-} else {
-  $("pair").addEventListener("click", async () => {
-    const code = ($("code") as HTMLInputElement).value.trim();
-    if (!code) {
-      log("Escribe primero el código de emparejamiento.");
+  b.addEventListener("click", async () => {
+    if (!agent) return;
+    if (p.conexion === "usb") {
+      await conEspera(b, "Imprimiendo…", async () => {
+        try {
+          await agent.testPrint(p.printerName ?? "");
+          decir("info", "Prueba enviada. ¿Ha salido el ticket?");
+        } catch (e) {
+          decir("error", `No se pudo imprimir: ${(e as Error).message}`);
+        }
+      });
       return;
     }
-    try {
-      const r = await agent.pair(code);
-      if (r.ok) {
-        log(`Emparejado: dispositivo ${r.deviceId}, tenant ${r.tenantId}`);
-        ($("code") as HTMLInputElement).value = "";
-        await refreshStatus();
-      } else {
-        const msg =
-          r.kind === "invalid-code"
-            ? "código inválido o caducado"
-            : r.kind === "rate-limited"
-              ? "demasiados intentos, espera"
-              : "fallo de red";
-        log(`Error al emparejar: ${msg}`);
+    await conEspera(b, "Comprobando…", async () => {
+      try {
+        const r = await agent.probeNetworkPrinters();
+        if (!r.ok) {
+          decir("error", "El equipo aún no ha conectado con la plataforma.");
+          return;
+        }
+        const sonda = r.printers.find((x) => x.id === p.id);
+        if (!sonda) decir("error", "El panel ya no la tiene asignada.");
+        else if (sonda.ok) decir("ok", "Responde.");
+        else decir("error", `No responde (${sonda.reason ?? "sin detalle"}).`);
+      } catch (e) {
+        decir("error", `No se pudo comprobar: ${(e as Error).message}`);
       }
-    } catch (e) {
-      // Fallo inesperado (no un PairError discriminado): p.ej. no se pudo guardar la
-      // credencial o arrancar el agente tras un emparejamiento válido.
-      log(`Error inesperado al emparejar: ${(e as Error).message}`);
-    }
+    });
   });
 
-  $("unpair").addEventListener("click", async () => {
-    // Confirmación nativa: des-emparejar corta la impresión hasta re-emparejar.
-    if (!(await agent.confirmUnpair())) return;
+  return el("span", { className: "impresora-accion" }, resultado, b);
+}
+
+async function pintarImpresorasDeWindows(): Promise<void> {
+  const lista = $("impresoras-windows");
+  if (!agent || status?.platform !== "win32") {
+    lista.replaceChildren();
+    return;
+  }
+  const nombres = await agent.listPrinters();
+  if (nombres.length === 0) {
+    lista.replaceChildren(
+      el("li", { className: "vacio" }, "Windows no tiene ninguna impresora instalada."),
+    );
+    return;
+  }
+  lista.replaceChildren(
+    ...nombres.map((nombre) => {
+      const copiar = boton("Copiar nombre", { icono: "i-copiar", clase: "fantasma" });
+      copiar.addEventListener("click", async () => {
+        if (await agent.copyText(nombre)) {
+          copiar.replaceChildren(icono("i-ok"), "Copiado");
+          setTimeout(() => copiar.replaceChildren(icono("i-copiar"), "Copiar nombre"), 1600);
+        }
+      });
+      const probar = boton("Imprimir prueba", { icono: "i-impresora" });
+      const resultado = el("span", { className: "resultado" });
+      probar.addEventListener("click", () =>
+        conEspera(probar, "Imprimiendo…", async () => {
+          try {
+            await agent.testPrint(nombre);
+            resultado.dataset.tipo = "info";
+            resultado.textContent = "Prueba enviada. ¿Ha salido el ticket?";
+          } catch (e) {
+            resultado.dataset.tipo = "error";
+            resultado.textContent = `No se pudo imprimir: ${(e as Error).message}`;
+          }
+        }),
+      );
+      return el(
+        "li",
+        {},
+        el("span", { className: "windows-nombre" }, nombre),
+        el("span", { className: "impresora-accion" }, resultado, copiar, probar),
+      );
+    }),
+  );
+}
+
+/* --- Vinculación ---------------------------------------------------------------------------- */
+
+const ERROR_AL_VINCULAR: Record<string, string> = {
+  "invalid-code":
+    "Código no válido o caducado. Genera uno nuevo en el panel, en Dispositivos, y pégalo aquí.",
+  "rate-limited": "Demasiados intentos seguidos. Espera un minuto y vuelve a probar.",
+  network: "No hay conexión con la plataforma. Revisa la red de este equipo y vuelve a probar.",
+};
+
+function pintarVinculacion(): void {
+  if (!status) return;
+  const ficha = $("ficha-vinculacion");
+  const acciones = $("acciones-vinculacion");
+  if (!status.paired) {
+    ficha.replaceChildren(
+      el("dt", {}, "Estado"),
+      el("dd", {}, "Este equipo no está vinculado a ningún negocio."),
+    );
+    acciones.replaceChildren(
+      el(
+        "button",
+        { type: "button", className: "boton primario", dataset: { irA: "estado" } },
+        "Vincular",
+      ),
+    );
+    return;
+  }
+  ficha.replaceChildren(
+    el("dt", {}, "Negocio"),
+    el("dd", {}, status.activity.businessName ?? "Pendiente de la primera conexión"),
+    el("dt", {}, "Equipo"),
+    el("dd", { title: status.deviceId ?? "" }, (status.deviceId ?? "").slice(0, 8)),
+  );
+  const desvincular = boton("Desvincular este equipo", { clase: "peligro" });
+  desvincular.addEventListener("click", async () => {
+    if (!agent || !(await agent.confirmUnpair())) return;
     await agent.unpair();
-    log("Des-emparejado.");
-    await refreshStatus();
+    await refrescar();
+    void irA("estado");
   });
+  acciones.replaceChildren(desvincular);
+}
 
-  $("refresh").addEventListener("click", refreshPrinters);
-
-  $("test").addEventListener("click", async () => {
-    const name = ($("printers") as HTMLSelectElement).value;
-    if (!name) {
-      log("Selecciona una impresora primero.");
-      return;
-    }
-    log(`Imprimiendo ticket de prueba en "${name}"…`);
+$("vincular").addEventListener("submit", async (evento) => {
+  evento.preventDefault();
+  if (!agent) return;
+  const campo = $<HTMLInputElement>("codigo");
+  const mensaje = $("vincular-mensaje");
+  const codigo = campo.value.trim();
+  if (!codigo) {
+    campo.setAttribute("aria-invalid", "true");
+    mensaje.dataset.tipo = "error";
+    mensaje.textContent = "Pega primero el código que genera el panel.";
+    campo.focus();
+    return;
+  }
+  await conEspera($<HTMLButtonElement>("vincular-boton"), "Vinculando…", async () => {
     try {
-      await agent.testPrint(name);
-      log("Ticket de prueba enviado. ¿Salió por la impresora?");
-    } catch (e) {
-      log(`Error al imprimir la prueba: ${(e as Error).message}`);
-    }
-  });
-
-  $("probe-network").addEventListener("click", async () => {
-    const box = $("network-status");
-    box.textContent = "Probando la conexión de las impresoras de red…";
-    try {
-      const r = await agent.probeNetworkPrinters();
-      if (!r.ok) {
-        box.textContent =
-          "El agente no está en marcha: empareja el equipo para poder probar las impresoras de red.";
+      const r = await agent.pair(codigo);
+      if (r.ok) {
+        campo.value = "";
+        campo.removeAttribute("aria-invalid");
+        mensaje.textContent = "";
+        await refrescar();
         return;
       }
-      if (r.printers.length === 0) {
-        box.textContent = "Este negocio no tiene impresoras de red configuradas.";
-        return;
-      }
-      box.textContent = "";
-      for (const p of r.printers) {
-        const line = document.createElement("p");
-        line.textContent = p.ok
-          ? `✅ ${p.label} (${p.host}:${p.port}) — responde`
-          : `⚠️ ${p.label} (${p.host}:${p.port}) — sin respuesta: ${p.reason ?? "desconocido"}`;
-        box.appendChild(line);
-      }
+      campo.setAttribute("aria-invalid", "true");
+      mensaje.dataset.tipo = "error";
+      mensaje.textContent = ERROR_AL_VINCULAR[r.kind] ?? ERROR_AL_VINCULAR.network ?? "";
     } catch (e) {
-      box.textContent = `Error al probar las impresoras de red: ${(e as Error).message}`;
+      // Fallo que no es del código: p. ej. no se pudo guardar la credencial o arrancar el agente.
+      mensaje.dataset.tipo = "error";
+      mensaje.textContent = `No se pudo completar la vinculación: ${(e as Error).message}`;
     }
   });
+});
 
-  $("export-diagnostics").addEventListener("click", async () => {
+$("codigo").addEventListener("input", () => {
+  $("codigo").removeAttribute("aria-invalid");
+  $("vincular-mensaje").textContent = "";
+});
+
+/* --- Registro y soporte --------------------------------------------------------------------- */
+
+let filtro: Filtro = "todo";
+let entradas: Entrada[] = [];
+
+const NIVEL: Record<Entrada["nivel"], string> = { info: "Info", aviso: "Aviso", error: "Error" };
+
+function pintarRegistro(): void {
+  const visibles = filtrar(entradas, filtro);
+  const lista = $("registro");
+  if (visibles.length === 0) {
+    lista.replaceChildren(
+      el(
+        "li",
+        { className: "vacio" },
+        entradas.length === 0
+          ? "Todavía no hay nada registrado."
+          : "Nada que mostrar con este filtro.",
+      ),
+    );
+    return;
+  }
+  lista.replaceChildren(
+    ...visibles.map((e) =>
+      el(
+        "li",
+        { dataset: { nivel: e.nivel } },
+        el(
+          "span",
+          { className: "cuando" },
+          e.cuando
+            ? e.cuando.toLocaleString("es-ES", {
+                day: "numeric",
+                month: "short",
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+              })
+            : "",
+        ),
+        el("span", { className: "nivel" }, NIVEL[e.nivel]),
+        el("span", {}, e.mensaje),
+        e.detalle.length > 0 ? el("pre", { className: "traza" }, e.detalle.join("\n")) : null,
+      ),
+    ),
+  );
+}
+
+async function cargarRegistro(): Promise<void> {
+  if (!agent) return;
+  entradas = entradasDelRegistro(await agent.readLog());
+  pintarRegistro();
+}
+
+for (const b of document.querySelectorAll<HTMLButtonElement>("[data-filtro]")) {
+  b.addEventListener("click", () => {
+    filtro = b.dataset.filtro as Filtro;
+    for (const otro of document.querySelectorAll<HTMLButtonElement>("[data-filtro]")) {
+      otro.setAttribute("aria-pressed", String(otro === b));
+    }
+    pintarRegistro();
+  });
+}
+
+$("refrescar-registro").addEventListener("click", () => void cargarRegistro());
+$("refrescar-windows").addEventListener("click", () => void pintarImpresorasDeWindows());
+
+$("exportar").addEventListener("click", async () => {
+  if (!agent) return;
+  const mensaje = $("exportar-mensaje");
+  await conEspera($<HTMLButtonElement>("exportar"), "Exportando…", async () => {
     try {
       const r = await agent.exportDiagnostics();
       if (r.ok) {
-        log(`Diagnóstico guardado en: ${r.path}`);
-      } else if ("canceled" in r) {
-        log("Exportación cancelada.");
-      } else {
-        log(`No se pudo guardar el diagnóstico: ${r.error}`);
+        mensaje.dataset.tipo = "ok";
+        mensaje.textContent = `Guardado en ${r.path}`;
+        $("mostrar-diagnostico").hidden = false;
+      } else if (!("canceled" in r)) {
+        mensaje.dataset.tipo = "error";
+        mensaje.textContent = `No se pudo guardar: ${r.error}`;
       }
     } catch (e) {
-      log(`Error al exportar el diagnóstico: ${(e as Error).message}`);
+      mensaje.dataset.tipo = "error";
+      mensaje.textContent = `No se pudo exportar: ${(e as Error).message}`;
     }
   });
+});
 
-  // Empuje en vivo: cada tick del agente repinta el estado de impresión sin sondear.
-  agent.onActivity(renderActivity);
-  // Y cuando el estado cambia solo (empieza o termina de conectar al arrancar), se vuelve a pedir.
-  agent.onEstadoCambiado(() => void refreshStatus());
+$("mostrar-diagnostico").addEventListener("click", () => void agent?.showLastDiagnostics());
 
-  void refreshStatus();
-  void refreshPrinters();
+/* --- Arranque ------------------------------------------------------------------------------- */
+
+async function refrescar(): Promise<void> {
+  if (!agent) return;
+  status = await agent.getStatus();
+  seguirCorteDeRed(status.activity);
+  pintar();
+}
+
+// La navegación se instala FUERA de la comprobación del puente: cambiar de sección es
+// interfaz pura y tiene que funcionar aunque el IPC falle (ver `setupNavigation`).
+const { irA } = setupNavigation(document, agent ? (s) => agent.showSection(s) : undefined, (s) => {
+  if (s === "ajustes") void cargarRegistro();
+});
+void irA("estado");
+// Al cerrar la ventana se cierra la sesión de gestión: al reabrirla se vuelve a Estado.
+agent?.onVolverAlMenu(() => void irA("estado"));
+
+if (!agent) {
+  $("pildora").dataset.nivel = "error";
+  $("pildora-texto").textContent = "Error";
+  $("negocio").textContent = "SuarEx Agente";
+  $("estado").dataset.nivel = "error";
+  $("estado-icono").setAttribute("href", "#i-error");
+  $("estado-titulo").textContent = "La aplicación no ha podido iniciarse";
+  $("estado-detalle").textContent =
+    "Falta una pieza interna de la aplicación. Ciérrala y vuelve a abrirla; si sigue igual, reinstálala.";
+} else {
+  // Cada tick del agente llega empujado: el estado se repinta sin sondear.
+  agent.onActivity((activity) => {
+    if (!status) return;
+    status = { ...status, activity };
+    seguirCorteDeRed(activity);
+    pintar();
+  });
+  // Y cuando cambia solo (empieza o termina de conectar al arrancar), se vuelve a pedir.
+  agent.onEstadoCambiado(() => void refrescar());
+  // El margen de un corte de red vence aunque no llegue ningún tick nuevo.
+  setInterval(() => {
+    if (sinConexionDesde !== null) pintar();
+  }, 5000);
+
+  void refrescar().then(() => pintarImpresorasDeWindows());
 }

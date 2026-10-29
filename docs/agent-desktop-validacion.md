@@ -22,30 +22,32 @@ paso falla, captura lo que se indica y pégalo para diagnosticar.
    - ❌ Si falla: captura el mensaje del instalador.
 
 2. **Arranque.** La app se abre y aparece en la bandeja del sistema.
-   - ✅ Esperado: ventana "SuarEx — Agente de impresión", estado "sin emparejar".
-   - ❌ Si el panel de log muestra "no se pudo cargar el binding de impresión": el `.node`
-     de koffi no se empaquetó/cargó — captura el log completo.
+   - ✅ Esperado: ventana "SuarEx Agente" en la pestaña **Estado**, con «Vincula este equipo
+     con tu negocio» y la píldora de la cabecera en «Sin vincular».
+   - ❌ Si **Ajustes → Registro** muestra "no se pudo cargar el binding de impresión": el
+     `.node` de koffi no se empaquetó o no cargó. Exporta el diagnóstico (ver abajo).
 
-3. **Impresoras.** Pulsa "Actualizar lista".
-   - ✅ Esperado: aparece tu impresora ESC/POS por su nombre de Windows. Anota ese nombre
-     EXACTO (lo necesitas en el panel cloud).
-   - ❌ Si la lista está vacía: captura el log.
+3. **Impresoras.** En la pestaña **Impresoras**, bloque «Instaladas en Windows», pulsa
+   «Actualizar».
+   - ✅ Esperado: aparece tu impresora ESC/POS por su nombre de Windows. Pulsa «Copiar nombre»:
+     lo necesitas EXACTO en el panel cloud.
+   - ❌ Si la lista está vacía: exporta el diagnóstico.
 
-4. **Ticket de prueba (lo más importante).** Selecciona la impresora y pulsa "Imprimir
-   ticket de prueba".
-   - ✅ Esperado: sale un ticket "SUAREX / Ticket de prueba / <fecha>" por la impresora.
-   - ❌ Si no sale nada o el log da error: captura el log (aquí es donde el binding
+4. **Ticket de prueba (lo más importante).** En esa misma fila, pulsa «Imprimir prueba».
+   - ✅ Esperado: sale un ticket "SUAREX / Ticket de prueba / <fecha>" por la impresora, y la
+     fila dice «Prueba enviada».
+   - ❌ Si no sale nada o la fila da error: exporta el diagnóstico (aquí es donde el binding
      winspool puede necesitar ajuste). Esto valida el camino RAW sin depender de la nube.
 
 5. **Alta en el panel cloud.** En el panel de administración (web), crea una impresora de
    tipo **USB** con el nombre EXACTO del paso 3, atada a este dispositivo, con su destino
    (cocina/barra).
 
-6. **Emparejar.** En el panel, genera un código de emparejamiento para este dispositivo.
-   En la app, pégalo y pulsa "Emparejar".
-   - ✅ Esperado: log "Emparejado: dispositivo …", estado pasa a "emparejado · agente
-     corriendo".
-   - ❌ "código inválido": el código caducó o se tecleó mal. "demasiados intentos": espera.
+6. **Vincular.** En el panel, genera un código de emparejamiento para este dispositivo.
+   En la pestaña **Estado** de la app, pégalo y pulsa «Vincular».
+   - ✅ Esperado: la cabecera pasa a «Imprimiendo» con el nombre del negocio, y Estado lista
+     las impresoras de este equipo como «Lista».
+   - ❌ «Código no válido o caducado»: genera otro. «Demasiados intentos»: espera un minuto.
 
 7. **Pedido real de punta a punta.** Haz un pedido QR de prueba y págalo.
    - ✅ Esperado: en pocos segundos, el ticket sale por la impresora, con la app minimizada
@@ -129,7 +131,7 @@ cada cinco minutos una app que ya no pertenece a ningún restaurante.
 
 No se puede probar fuera de Windows empaquetado, así que va aquí con el resto.
 
-1. En **Ayuda**, pulsa **Guardar diagnóstico**. Debe abrirse el diálogo nativo con un nombre
+1. En **Ajustes → Soporte**, pulsa **Exportar diagnóstico**. Debe abrirse el diálogo nativo con un nombre
    tipo `suarex-diagnostico-2026-09-24T16-30-12-345Z.txt`. La hora va en UTC, como todas las
    de dentro del fichero: a las 18:30 de Madrid en verano pone `16-30`, y no es un error.
 2. Guarda y ábrelo. Arriba tiene que estar la versión, el sistema, si está emparejado y en
@@ -140,11 +142,11 @@ No se puede probar fuera de Windows empaquetado, así que va aquí con el resto.
 4. Debajo de `--- Registro ---` tiene que haber líneas con fecha ISO y nivel. Si pone
    `(sin entradas)` en una instalación que lleva días funcionando, el log no se está
    escribiendo: comprueba `%APPDATA%\@suarex\agent-desktop\logs\agent.log`.
-5. Pulsa el botón y **cancela** el diálogo: el panel de registro no debe decir nada (cancelar
-   no es un error).
+5. Pulsa el botón y **cancela** el diálogo: no debe aparecer ningún mensaje (cancelar no es un
+   error). Tras guardar, «Mostrar en la carpeta» abre el Explorador con el fichero seleccionado.
 
 ## Qué capturar si algo falla
-- El **fichero de diagnóstico** (Ayuda → Guardar diagnóstico). Sustituye a copiar el panel a
+- El **fichero de diagnóstico** (Ajustes → Soporte → Exportar diagnóstico). Sustituye a copiar el panel a
   mano y trae además el registro de los días anteriores.
 - El nombre exacto de la impresora (paso 3).
 - Si es el instalador: el mensaje de error de Windows.
