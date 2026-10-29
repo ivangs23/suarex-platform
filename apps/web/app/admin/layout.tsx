@@ -1,9 +1,13 @@
 import { getTenantBillingState } from "@suarex/db";
+import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { requireManager } from "@/lib/require-manager";
 import { AdminTabs } from "./AdminTabs";
 import styles from "./admin.module.css";
 import { BillingBanner } from "./BillingBanner";
+
+// El panel no es contenido público: fuera de los buscadores.
+export const metadata: Metadata = { robots: { index: false } };
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   const session = await requireManager(); // redirige si no es gestor; nada se renderiza para un staff

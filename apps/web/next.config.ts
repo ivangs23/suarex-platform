@@ -19,6 +19,9 @@ const config: NextConfig = {
   output: "standalone",
   outputFileTracingRoot: repoRoot,
   transpilePackages: ["@suarex/config", "@suarex/db", "@suarex/realtime"],
+  // Metadatos siempre en el <head>, también para quien no ejecuta JS (asistentes, curl). Sin
+  // Suspense ni loading.tsx en la app, el streaming de metadatos no adelantaba ningún byte.
+  htmlLimitedBots: /.*/,
   // Imports NodeNext (`./x.js` -> `./x.ts`) de los paquetes sin compilar: solo webpack.
   experimental: {
     extensionAlias: { ".js": [".ts", ".tsx", ".js"] },

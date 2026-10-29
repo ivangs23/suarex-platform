@@ -1,6 +1,17 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { requireTenant } from "@/lib/tenant-context";
-import { type QueryDeLaCarta, renderCarta } from "./[mesa]/Carta";
+import { metadatosDeLaPagina, type QueryDeLaCarta, renderCarta } from "./[mesa]/Carta";
+
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<QueryDeLaCarta>;
+}): Promise<Metadata> {
+  const tenant = await requireTenant().catch(() => null);
+  if (!tenant) return {};
+  return metadatosDeLaPagina({ tenant, mesa: null, query: await searchParams });
+}
 
 /**
  * Portada del cliente: su carta, en consulta (sin mesa no se pide). Ver

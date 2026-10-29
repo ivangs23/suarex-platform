@@ -29,6 +29,13 @@ export type DatosLegales = {
 
 export type Seccion = { titulo: string; parrafos: string[] };
 
+/** El título de cada documento: la página lo pinta y el `<title>` lo repite. */
+export const TITULOS_LEGALES: Record<DocumentoLegal, string> = {
+  privacidad: "Política de privacidad",
+  "aviso-legal": "Aviso legal",
+  condiciones: "Condiciones del servicio",
+};
+
 export function esDocumentoLegal(valor: string): valor is DocumentoLegal {
   return (DOCUMENTOS_LEGALES as readonly string[]).includes(valor);
 }
@@ -54,7 +61,7 @@ export function documentoLegal(
 
   if (slug === "privacidad") {
     return {
-      titulo: "Política de privacidad",
+      titulo: TITULOS_LEGALES.privacidad,
       secciones: [
         {
           titulo: "Responsable del tratamiento",
@@ -104,7 +111,7 @@ export function documentoLegal(
 
   if (slug === "aviso-legal") {
     return {
-      titulo: "Aviso legal",
+      titulo: TITULOS_LEGALES["aviso-legal"],
       secciones: [
         {
           titulo: "Titular",
@@ -131,7 +138,7 @@ export function documentoLegal(
   }
 
   return {
-    titulo: "Condiciones del servicio",
+    titulo: TITULOS_LEGALES.condiciones,
     secciones: [
       {
         titulo: "Qué es este servicio",

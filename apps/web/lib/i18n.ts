@@ -89,6 +89,8 @@ export function availableLangs(
 export type Strings = {
   enter: string;
   menuTitle: string;
+  /** Título de la pestaña y de la vista previa de la carta: «{nombre} · Carta». */
+  cartaTitle: string;
   explore: string;
   backToCategories: string;
   /** El logo de la barra lleva de vuelta a la bienvenida: es su nombre accesible. */
@@ -195,6 +197,7 @@ export type Strings = {
 const ES: Strings = {
   enter: "Toca para empezar",
   menuTitle: "Menú",
+  cartaTitle: "Carta",
   explore: "¿Qué te apetece hoy?",
   backToCategories: "← Explorar otras categorías",
   backToStart: "Volver al inicio",
@@ -286,6 +289,7 @@ const ES: Strings = {
 const EN: Strings = {
   enter: "Tap to start",
   menuTitle: "Menu",
+  cartaTitle: "Menu",
   explore: "What do you fancy today?",
   backToCategories: "← Browse other categories",
   backToStart: "Back to start",
@@ -377,6 +381,7 @@ const EN: Strings = {
 const PT: Strings = {
   enter: "Toque para começar",
   menuTitle: "Menu",
+  cartaTitle: "Menu",
   explore: "O que lhe apetece hoje?",
   backToCategories: "← Ver outras categorias",
   backToStart: "Voltar ao início",

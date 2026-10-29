@@ -127,7 +127,7 @@ dominio propio si existe y no es desarrollo; si no, el Host de la petición.
 
 ### Tarea 0.3 — Títulos, descripción, canonical y vista previa
 
-- [ ] Función pura `metadatosDeLaCarta({ businessName, tagline, lang, idiomas, categoria,
+- [x] Función pura `metadatosDeLaCarta({ businessName, tagline, lang, idiomas, categoria,
   origen, heroUrl, mesa })` en `apps/web/lib/metadatos.ts`. Devuelve el `Metadata` de Next:
   - `title`: `{nombre} · Carta`, o `{categoría} · {nombre}` dentro de una categoría;
   - `description`: el lema del cliente en el idioma de la página. Sin lema, se omite: no se
@@ -135,23 +135,34 @@ dominio propio si existe y no es desarrollo; si no, el Host de la petición.
   - `alternates.canonical`: `{origen}/` o `{origen}/?cat={slug}`, **también desde
     `/{mesa}`**. Así 30 mesas no son 30 copias de la carta;
   - `alternates.languages`: solo los idiomas de `availableLangs`, con `?lang=`;
+  - *(Ajustado: la función no recibe `mesa`, que es lo que garantiza que el canonical no
+    dependa de ella, y sí `porDefecto`. En otro idioma, el canonical conserva `?lang=`:
+    si no, la versión en inglés se declararía copia de la española y contradiría
+    `languages`. El idioma del cliente va sin `?lang=`, como en los enlaces de la página.
+    «Carta» va traducida: `cartaTitle` en `lib/i18n.ts`.)*
   - `openGraph`: `title`, `description`, `url` canónica, `type: "website"` e `images: [heroUrl]`
     si hay foto de bienvenida.
-- [ ] `generateMetadata` en `app/page.tsx` y `app/[mesa]/page.tsx` usando esa función. Leen los
+- [x] `generateMetadata` en `app/page.tsx` y `app/[mesa]/page.tsx` usando esa función. Leen los
   mismos datos cacheados que el render: `leerCarta` y `settingsDeLaCarta` ya están en caché por
   cliente, así que no hay lectura doble.
-- [ ] `app/layout.tsx`: `metadata` por defecto con `title.template: "%s · {nombre}"` para el
+- [x] `app/layout.tsx`: `metadata` por defecto con `title.template: "%s · {nombre}"` para el
   resto de páginas del cliente.
-- [ ] Páginas legales: `generateMetadata` con el título del documento («Aviso legal ·
+- [x] Páginas legales: `generateMetadata` con el título del documento («Aviso legal ·
   Garum Vinoteca»).
-- [ ] `robots: { index: false }` en los layouts de `/admin`, `/staff`, `/pedido`, `/totem`,
-  `/plataforma` y en `/m/[token]`.
-- [ ] Tests unitarios de `metadatosDeLaCarta`:
+- [x] `robots: { index: false }` en los layouts de `/admin`, `/staff`, `/pedido`, `/totem`,
+  `/plataforma` y en `/m/[token]`. *(Ajustado: `/m/[token]` es una ruta, no una página; lleva
+  la cabecera `X-Robots-Tag: noindex`.)*
+- [x] *(Añadido)* `htmlLimitedBots: /.*/` en `next.config.ts`. Next 16 manda los metadatos en
+  streaming al final del `<body>` a todo lo que no esté en su lista de bots, y esa lista no
+  incluye ni a Googlebot ni a los rastreadores de asistentes. La app no tiene `Suspense` ni
+  `loading.tsx`, así que el streaming no adelantaba nada. Así, título y canonical van en el
+  `<head>` para todos.
+- [x] Tests unitarios de `metadatosDeLaCarta`:
   - sin lema no hay `description`;
   - el canonical de `/7?cat=tapas` es `{origen}/?cat=tapas`;
   - solo salen los idiomas disponibles;
   - sin `heroUrl` no hay `images`.
-- [ ] e2e en `carta-publica.spec.ts`: `/` tiene `<title>` con el nombre, y `/1` tiene
+- [x] e2e en `carta-publica.spec.ts`: `/` tiene `<title>` con el nombre, y `/1` tiene
   `<link rel="canonical">` a `/`.
 
 ### Tarea 0.4 — `robots.txt` y `sitemap.xml` por cliente
@@ -186,7 +197,7 @@ Tras desplegar, desde cualquier terminal:
 H=https://garum.srv1121554.hstgr.cloud
 curl -sI $H/ | head -1                                     # 200
 curl -s $H/ | grep -o '<title>[^<]*'                       # <title>Garum Vinoteca · Carta
-curl -s $H/1 | grep -o 'rel="canonical"[^>]*'              # apunta a /
+curl -s $H/1 | tr -d '\n' | sed 's#</head>.*##' | grep -o 'rel="canonical"[^>]*'  # a /, en el <head>
 curl -s $H/robots.txt                                      # Disallow: /m/ + Sitemap
 curl -s $H/sitemap.xml | grep -c '<loc>'                   # 1 + categorías + 3 legales
 curl -s https://admin.srv1121554.hstgr.cloud/robots.txt    # Disallow: /

@@ -1,9 +1,12 @@
 import { hasChannel, parseBranding } from "@suarex/config";
 import { findTableByToken } from "@suarex/db";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { leerCarta, settingsDeLaCarta } from "@/lib/carta-cache";
 import { availableLangs, LANG_LABELS, resolveLang, strings } from "@/lib/i18n";
 import { readMesaToken } from "@/lib/mesa-cookie";
+import { metadatosDeLaCarta } from "@/lib/metadatos";
+import { origenPublicoDeLaPeticion } from "@/lib/origen-publico-peticion";
 import type { ResolvedTenant } from "@/lib/tenant-context";
 import { CartPanelHost } from "./cart/CartPanelHost";
 import { CartProvider } from "./cart/CartProvider";
@@ -14,28 +17,10 @@ import { resolveTheme } from "./themes";
 
 export type QueryDeLaCarta = Record<string, string | string[] | undefined>;
 
-/**
- * La carta pública, con dos entradas sobre este mismo render: `/{mesa}` (la del QR, que puede
- * pedir) y `/` (consulta, sin mesa). Ver docs/decisions/0009-carta-publica-en-la-raiz.md.
- *
- * Hace UNA sola carga de datos y delega toda la presentación al tema del tenant
- * (`tenant_settings.theme`, resuelto por `resolveTheme`): hoy solo `generic`, que se pinta
- * entero con el branding del cliente. Todo tema consume el mismo contrato `MenuThemeProps`.
- *
- * La carta se navega por NIVELES: `?cat=<slug>` elige el nodo del árbol de categorías y
- * `buildMenuView` resuelve qué pintar (hijos, productos y rastro de vuelta). Sin `cat` se
- * está en la raíz. Es un enlace normal, no estado de cliente: la carta sigue siendo
- * server-only y compartible/atrás-adelante sin JS.
- */
-export async function renderCarta({
-  tenant,
-  mesa,
-  query,
-}: {
-  tenant: ResolvedTenant;
-  mesa: string | null;
-  query: QueryDeLaCarta;
-}) {
+type EntradaDeLaCarta = { tenant: ResolvedTenant; mesa: string | null; query: QueryDeLaCarta };
+
+/** Lo que la carta carga y resuelve: lo comparten el render y sus metadatos. */
+async function prepararCarta({ tenant, mesa, query }: EntradaDeLaCarta) {
   // Cacheados por tenant (`lib/carta-cache.ts`); las franjas y el agotado se aplican aquí, a
   // la hora de esta petición. Si los alérgenos fallaran, la carta revienta en vez de decir
   // "sin alérgenos" sobre un plato con gluten.
@@ -85,6 +70,67 @@ export async function renderCarta({
     allergens,
     lang,
   });
+
+  return {
+    settings,
+    branding,
+    businessName,
+    basePath,
+    currentSlug,
+    lang,
+    porDefecto,
+    idiomas,
+    view,
+  };
+}
+
+/** Título, canonical y vista previa de la carta: solo con lo que la página pinta. */
+export async function metadatosDeLaPagina(entrada: EntradaDeLaCarta): Promise<Metadata> {
+  const [carta, { origen }] = await Promise.all([
+    prepararCarta(entrada),
+    origenPublicoDeLaPeticion(entrada.tenant.id),
+  ]);
+  const { branding, currentSlug, lang, view } = carta;
+  return metadatosDeLaCarta({
+    businessName: carta.businessName,
+    // Mismo criterio que el tema: el lema es por idioma y, sin traducción, no hay.
+    tagline: branding.tagline[lang] ?? null,
+    lang,
+    porDefecto: carta.porDefecto,
+    idiomas: carta.idiomas,
+    categoria:
+      currentSlug && view.currentName ? { slug: currentSlug, nombre: view.currentName } : null,
+    origen,
+    heroUrl: branding.heroUrl,
+  });
+}
+
+/**
+ * La carta pública, con dos entradas sobre este mismo render: `/{mesa}` (la del QR, que puede
+ * pedir) y `/` (consulta, sin mesa). Ver docs/decisions/0009-carta-publica-en-la-raiz.md.
+ *
+ * Hace UNA sola carga de datos y delega toda la presentación al tema del tenant
+ * (`tenant_settings.theme`, resuelto por `resolveTheme`): hoy solo `generic`, que se pinta
+ * entero con el branding del cliente. Todo tema consume el mismo contrato `MenuThemeProps`.
+ *
+ * La carta se navega por NIVELES: `?cat=<slug>` elige el nodo del árbol de categorías y
+ * `buildMenuView` resuelve qué pintar (hijos, productos y rastro de vuelta). Sin `cat` se
+ * está en la raíz. Es un enlace normal, no estado de cliente: la carta sigue siendo
+ * server-only y compartible/atrás-adelante sin JS.
+ */
+export async function renderCarta(entrada: EntradaDeLaCarta) {
+  const { tenant, mesa, query } = entrada;
+  const {
+    settings,
+    branding,
+    businessName,
+    basePath,
+    currentSlug,
+    lang,
+    porDefecto,
+    idiomas,
+    view,
+  } = await prepararCarta(entrada);
 
   // Paso de bienvenida: activo solo en la raíz de la carta y mientras no se haya entrado.
   // Es la página quien lo calcula y el tema quien decide si lo usa (ver `MenuThemeProps`).
