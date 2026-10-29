@@ -323,14 +323,17 @@ correcto: es el origen público del cliente aunque el DNS aún no apunte aquí.
 
 ### Tarea 2.1 — La lista de instalación avisa de lo que falta
 
-- [ ] `app/admin/instalacion/checklist.ts`, paso «Datos del titular»: `falta` si no hay razón
+- [x] `app/admin/instalacion/checklist.ts`, paso «Datos del titular»: `falta` si no hay razón
   social, NIF o domicilio fiscal (`tenant_settings.fiscal`). Texto: «El aviso legal de tu web
   tiene que identificar al titular (LSSI, art. 10). Rellénalo en Ajustes.» Enlaza a
-  `/admin/ajustes`.
-- [ ] Paso «Ficha pública del local»: `aviso` (no `falta`) si la sede por defecto no tiene
-  dirección u horario, porque sin ellos los buscadores no saben dónde está el local.
-- [ ] Ampliar `SetupFacts` y su construcción en `instalacion/page.tsx`. Tests en
-  `checklist.test.ts`, uno por estado.
+  `/admin/ajustes`. *(El texto va precedido de qué falta: «Falta el NIF. El aviso legal…». Se
+  pide a todos los clientes, también a los de solo totem: identifica al negocio en sus tickets.)*
+- [x] Paso «Ficha pública del local»: `aviso` (no `falta`) si la sede por defecto no tiene
+  dirección u horario, porque sin ellos los buscadores no saben dónde está el local. *(Solo con
+  carta por QR, que es donde se publica. «Dirección» es la calle.)*
+- [x] Ampliar `SetupFacts` y su construcción en `instalacion/page.tsx`. Tests en
+  `checklist.test.ts`, uno por estado. *(Y el e2e de la puesta en marcha comprueba los dos pasos
+  con el seed, que no trae ni datos fiscales ni ficha.)*
 
 ### Tarea 2.2 — Aviso legal con los datos del titular
 

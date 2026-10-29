@@ -62,6 +62,10 @@ export type SetupFacts = {
   };
   /** IVA por defecto del negocio (`tenant_settings.fiscal.taxRate`), o `null` si nadie lo puso. */
   fiscalTaxRate: number | null;
+  /** Qué datos del titular hay en `tenant_settings.fiscal` (si están, no su valor). */
+  titular: { razonSocial: boolean; nif: boolean; domicilio: boolean };
+  /** Si la sede por defecto publica dirección y horario (`venues`, la ficha que pinta la carta). */
+  ficha: { direccion: boolean; horario: boolean };
   /**
    * Credenciales de Stripe de ESTE cliente, por presencia y nunca por valor: los secretos
    * guardados no salen de la base, así que aquí solo llega si están o no.
@@ -145,6 +149,8 @@ export function buildSetupChecklist(facts: SetupFacts): CheckItem[] {
   }
 
   items.push(comprobarIva(facts));
+  items.push(comprobarTitular(facts));
+  if (tieneQr) items.push(comprobarFicha(facts));
   if (tieneQr) items.push(comprobarStripe(facts));
 
   items.push(...comprobarDispositivos(facts));
@@ -177,6 +183,51 @@ function comprobarIva(facts: SetupFacts): CheckItem {
   }
   const porcentaje = `${(facts.fiscalTaxRate * 100).toFixed((facts.fiscalTaxRate * 100) % 1 === 0 ? 0 : 1)} %`;
   return item("iva", "IVA por defecto", "ok", porcentaje, "/admin/ajustes");
+}
+
+/**
+ * Quién es el titular: razón social, NIF y domicilio fiscal. El aviso legal de la web los
+ * necesita (LSSI, art. 10) y, sin ellos, solo puede decir el nombre comercial. Es falta para
+ * todos los clientes, también los de solo totem: son los mismos datos que identifican al
+ * negocio en sus tickets.
+ */
+function comprobarTitular(facts: SetupFacts): CheckItem {
+  const { razonSocial, nif, domicilio } = facts.titular;
+  const faltan = [
+    razonSocial ? null : "la razón social",
+    nif ? null : "el NIF",
+    domicilio ? null : "el domicilio fiscal",
+  ].filter((campo): campo is string => campo !== null);
+  if (faltan.length === 0)
+    return item("titular", "Datos del titular", "ok", undefined, "/admin/ajustes");
+  return item(
+    "titular",
+    "Datos del titular",
+    "falta",
+    `Falta ${faltan.join(", ").replace(/, ([^,]*)$/, " y $1")}. El aviso legal de tu web tiene que identificar al titular (LSSI, art. 10). Rellénalo en Ajustes.`,
+    "/admin/ajustes",
+  );
+}
+
+/**
+ * La ficha pública del local: dirección y horario de la sede por defecto. Aviso y no falta: la
+ * carta funciona sin ella, pero sin dirección ni horario los buscadores no saben dónde está el
+ * local ni cuándo abre. Solo con carta por QR, que es donde se publica.
+ */
+function comprobarFicha(facts: SetupFacts): CheckItem {
+  const { direccion, horario } = facts.ficha;
+  if (direccion && horario) {
+    return item("ficha", "Ficha pública del local", "ok", undefined, "/admin/ajustes");
+  }
+  const falta =
+    !direccion && !horario ? "dirección ni horario" : direccion ? "horario" : "dirección";
+  return item(
+    "ficha",
+    "Ficha pública del local",
+    "aviso",
+    `Sin ${falta}, los buscadores no saben dónde está tu local ni cuándo abre. Rellénala en Ajustes.`,
+    "/admin/ajustes",
+  );
 }
 
 /**
