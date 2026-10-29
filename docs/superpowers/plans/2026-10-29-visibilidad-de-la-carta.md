@@ -167,24 +167,26 @@ dominio propio si existe y no es desarrollo; si no, el Host de la petición.
 
 ### Tarea 0.4 — `robots.txt` y `sitemap.xml` por cliente
 
-- [ ] `app/robots.ts` (dinámico: usa `headers()`):
+- [x] `app/robots.ts` (dinámico: usa `headers()`):
   - **host de cliente:** `Allow: /` y `Disallow` de `/admin`, `/staff`, `/api/`, `/pedido/`,
     `/m/` y `/totem/`. `/m/` es importante porque el token de la mesa nunca debe indexarse.
     Más `Sitemap: {origen}/sitemap.xml`;
-  - **host de plataforma** (`admin.`, `api.`): `Disallow: /`;
+  - **host de plataforma** (`admin.`, `api.`): `Disallow: /`. *(Nota: `api.` no llega a la web:
+    Caddy lo manda al gateway de Supabase. Solo `admin.` sirve este `robots.txt`.)*;
   - crawlers de asistentes (ClaudeBot, GPTBot, OAI-SearchBot, PerplexityBot, Google-Extended):
     se rigen por la regla general (permitidos). Bloquearlos es una decisión de negocio de Iván:
     si la toma, un ajuste de plataforma, no de cliente.
-- [ ] `proxy.ts`: en el host de plataforma, dejar pasar `/robots.txt`, que hoy se reescribe a
+- [x] `proxy.ts`: en el host de plataforma, dejar pasar `/robots.txt`, que hoy se reescribe a
   `/not-found` como todo lo que no es `/plataforma`. Solo esa ruta, sin cabeceras de tenant.
-- [ ] `app/sitemap.ts`: `{origen}/`, una URL por categoría con productos visibles
+- [x] `app/sitemap.ts`: `{origen}/`, una URL por categoría con productos visibles
   (`{origen}/?cat={slug}`) y las tres páginas legales. Sin `/{mesa}` y sin `/m/`. Usa
-  `leerCarta`. Host de plataforma o tenant sin canal QR: sitemap vacío.
-- [ ] Funciones puras `reglasDeRobots(...)` y `urlsDelSitemap(...)` con test unitario. Los
+  `leerCarta`. Host de plataforma o tenant sin canal QR: sitemap vacío. *(Nota: como la carta,
+    refleja las franjas de ese momento; las URL salen de `urlDeLaCarta`, la misma del canonical.)*
+- [x] Funciones puras `reglasDeRobots(...)` y `urlsDelSitemap(...)` con test unitario. Los
   ficheros de ruta solo las llaman.
-- [ ] Comprobar que las rutas estáticas `robots.txt` y `sitemap.xml` ganan al catch-all
+- [x] Comprobar que las rutas estáticas `robots.txt` y `sitemap.xml` ganan al catch-all
   `[mesa]`, cuyo comentario las menciona, y actualizar ese comentario.
-- [ ] e2e en `carta-publica.spec.ts`:
+- [x] e2e en `carta-publica.spec.ts`:
   - `/robots.txt` de `garum.localhost:3000` contiene `Disallow: /m/` y la línea `Sitemap:`;
   - `/robots.txt` de `admin.localhost:3000` contiene `Disallow: /`;
   - `/sitemap.xml` lista `/` y al menos una `?cat=`, y ninguna URL de mesa.

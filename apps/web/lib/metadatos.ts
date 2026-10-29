@@ -19,12 +19,13 @@ export type DatosDeLaCarta = {
 
 /**
  * La URL pública de un nivel de la carta: la raíz o una categoría, nunca una mesa (30 mesas no
- * son 30 cartas). `lang` solo cuando no es el del cliente, igual que los enlaces de la página.
+ * son 30 cartas). Es la del canonical y la del sitemap. `idioma` solo cuando no es el del
+ * cliente, igual que los enlaces de la página.
  */
-function urlDeLaCarta(origen: string, slug: string | null, lang: Lang, porDefecto: Lang): string {
+export function urlDeLaCarta(origen: string, slug: string | null, idioma: Lang | null): string {
   const params = new URLSearchParams();
   if (slug) params.set("cat", slug);
-  if (lang !== porDefecto) params.set("lang", lang);
+  if (idioma) params.set("lang", idioma);
   const query = params.toString();
   return `${origen}/${query ? `?${query}` : ""}`;
 }
@@ -43,7 +44,9 @@ export function metadatosDeLaCarta(d: DatosDeLaCarta): Metadata {
   const titulo = d.categoria
     ? `${d.categoria.nombre} · ${d.businessName}`
     : `${d.businessName} · ${strings(d.lang).cartaTitle}`;
-  const canonical = urlDeLaCarta(d.origen, d.categoria?.slug ?? null, d.lang, d.porDefecto);
+  const slug = d.categoria?.slug ?? null;
+  const idioma = (code: Lang) => (code === d.porDefecto ? null : code);
+  const canonical = urlDeLaCarta(d.origen, slug, idioma(d.lang));
   const descripcion = d.tagline ? { description: d.tagline } : {};
   const imagen = d.heroUrl ? absoluta(d.heroUrl, d.origen) : null;
 
@@ -56,10 +59,7 @@ export function metadatosDeLaCarta(d: DatosDeLaCarta): Metadata {
       ...(d.idiomas.length > 1
         ? {
             languages: Object.fromEntries(
-              d.idiomas.map((code) => [
-                code,
-                urlDeLaCarta(d.origen, d.categoria?.slug ?? null, code, d.porDefecto),
-              ]),
+              d.idiomas.map((code) => [code, urlDeLaCarta(d.origen, slug, idioma(code))]),
             ),
           }
         : {}),
