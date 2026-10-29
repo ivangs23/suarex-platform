@@ -1,18 +1,18 @@
 import type { TickPrinter } from "@suarex/agent";
 import type { AgentActivity } from "../main/agent-activity.js";
-import type {
-  ExportDiagnosticsResult,
-  PairIpcResult,
-  ProbeNetworkPrintersResult,
-} from "../main/ipc.js";
-import type { ShowWebPanelResult } from "../main/web-panel.js";
 import {
   type AgentStatus,
   type EstadoGeneral,
   estadoGeneral,
   nombreDeDestino,
   resumenDeImpresion,
-} from "./estado.js";
+} from "../main/estado.js";
+import type {
+  ExportDiagnosticsResult,
+  PairIpcResult,
+  ProbeNetworkPrintersResult,
+} from "../main/ipc.js";
+import type { ShowWebPanelResult } from "../main/web-panel.js";
 import { setupNavigation } from "./navigation.js";
 import { type Entrada, entradasDelRegistro, type Filtro, filtrar } from "./registro.js";
 
@@ -32,6 +32,7 @@ type AgentApi = {
   onActivity(cb: (activity: AgentActivity) => void): () => void;
   onVolverAlMenu(cb: () => void): () => void;
   onEstadoCambiado(cb: () => void): () => void;
+  onIrA(cb: (seccion: string) => void): () => void;
 };
 
 /**
@@ -518,6 +519,8 @@ const { irA } = setupNavigation(document, agent ? (s) => agent.showSection(s) : 
 void irA("estado");
 // Al cerrar la ventana se cierra la sesión de gestión: al reabrirla se vuelve a Estado.
 agent?.onVolverAlMenu(() => void irA("estado"));
+// La bandeja y los avisos de Windows abren la ventana directamente en Comandas o Impresoras.
+agent?.onIrA((seccion) => void irA(seccion));
 
 if (!agent) {
   $("pildora").dataset.nivel = "error";

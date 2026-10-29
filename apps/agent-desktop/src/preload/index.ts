@@ -51,6 +51,15 @@ contextBridge.exposeInMainWorld("agent", {
     ipcRenderer.on("volver-al-menu", handler);
     return () => ipcRenderer.removeListener("volver-al-menu", handler);
   },
+  /** La bandeja o un aviso de Windows piden abrir la ventana en una sección (Comandas,
+   *  Impresoras). Solo llega un NOMBRE de sección; la navegación la hace el renderer. */
+  onIrA: (cb: (seccion: string) => void): (() => void) => {
+    const handler = (_e: unknown, seccion: unknown): void => {
+      if (typeof seccion === "string") cb(seccion);
+    };
+    ipcRenderer.on("ir-a", handler);
+    return () => ipcRenderer.removeListener("ir-a", handler);
+  },
   /** Aviso del proceso principal cuando cambia el estado del agente fuera de un clic (empieza o
    *  termina de conectar al arrancar): la ventana vuelve a preguntarlo. */
   onEstadoCambiado: (cb: () => void): (() => void) => {
