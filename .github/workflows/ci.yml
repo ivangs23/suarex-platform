@@ -59,7 +59,9 @@ jobs:
       - uses: supabase/setup-cli@v1
         with:
           version: 2.109.1
-      - run: supabase start
+      # Sin lo que la integración no usa (panel, correo, funciones, imágenes, analítica): son
+      # siete imágenes menos por ejecución, y el límite de descargas del registro ya tumbó la CI.
+      - run: supabase start -x studio,meta,inbucket,edge-runtime,imgproxy,vector,analytics
       - run: pnpm db:env
       - run: pnpm seed:staff
       - run: pnpm test:integration
