@@ -1,11 +1,11 @@
 /**
- * Origen (`https://host`) que codifican los QR de las mesas.
+ * Origen público del cliente (`https://host`): el de sus QR, su canonical, su sitemap y su robots.
  *
  * Con dominio propio, SIEMPRE él: un QR impreso dura años y el subdominio de la plataforma
  * puede cambiar. Sin él, o en desarrollo (`*.localhost`), el Host de la petición, que sale de
  * `headers()` y nunca de un formulario.
  */
-export function origenDeLosQr(input: {
+export function origenPublico(input: {
   customDomain: string | null;
   host: string;
   forwardedProto: string | null;
