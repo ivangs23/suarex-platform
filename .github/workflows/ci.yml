@@ -52,6 +52,12 @@ jobs:
     # ghcr.io, su respaldo, admite las del token del job, con más margen.
     env:
       SUPABASE_INTERNAL_IMAGE_REGISTRY: ghcr.io
+      # Lo que la integración no usa: panel, funciones, transformación de imágenes, analítica y
+      # pooler. NO excluir `postgres-meta` (`supabase gen types`, db-types-sync.test.ts) ni
+      # `mailpit` (Auth manda la invitación del alta de cliente, platform-tenants.test.ts).
+      # Nombres de contenedor del CLI 2.109.1 (los da su aviso). Separados por `+` y no por comas:
+      # la lista va en la clave de la caché, que no admite comas.
+      EXCLUIR: studio+edge-runtime+imgproxy+vector+logflare+supavisor
     # La integración no importa Electron, así que no descarga su binario (desde Electron 42 solo
     # se baja al usarlo; `ELECTRON_SKIP_BINARY_DOWNLOAD` ya no existe).
     steps:
@@ -76,15 +82,14 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: /tmp/imagenes-supabase.tar
-          key: imagenes-supabase-ghcr-2.109.1-${{ hashFiles('supabase/config.toml') }}
+          key: imagenes-supabase-ghcr-2.109.1-${{ hashFiles('supabase/config.toml') }}-${{ env.EXCLUIR }}
       - if: steps.imagenes.outputs.cache-hit == 'true'
         run: docker load -i /tmp/imagenes-supabase.tar
       - if: steps.imagenes.outputs.cache-hit != 'true'
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
-      # Sin lo que la integración no usa (panel, correo, funciones, imágenes, analítica, pooler):
-      # ocho imágenes menos por ejecución. Nombres de contenedor del CLI 2.109.1 (los da su aviso).
-      - run: supabase start -x studio,postgres-meta,mailpit,edge-runtime,imgproxy,vector,logflare,supavisor
+      # La lista va en la clave de la caché: si cambia, la caché vieja no tendría las imágenes nuevas.
+      - run: supabase start -x "${EXCLUIR//+/,}"
 
       # Se guarda en cuanto el stack arranca, no al final: así la caché se rellena aunque luego
       # falle un test.
