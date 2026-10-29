@@ -175,7 +175,9 @@ viejo trae CRLF: `git config core.autocrlf false` y renormalizar.
 
 ## Prohibido
 
-- Tocar los repos/proyectos Supabase en **producción**.
+- Escribir en el Supabase de **producción** sin el «sí» explícito de Iván en ese paso, o sin
+  una copia de seguridad hecha justo antes. Leer para revisar sí se puede. El VPS y lo que
+  corre en él: `docs/HANDOFF.md` → «Producción».
 - Que el dispositivo/agente tenga la **service role key**.
 - Levantar el dev server con bash (usa `preview_start`).
 

@@ -5,7 +5,7 @@ Instalación desde cero de la plataforma en un VPS propio (probado contra Hostin
 
 | Stack | Qué es | De dónde sale |
 |---|---|---|
-| `supabase` | Postgres, Auth, PostgREST, Storage, Realtime, Kong | `supabase/docker` oficial, **sin modificar** |
+| `supabase` | Postgres, Auth, PostgREST, Storage, Realtime, gateway (Envoy, alias `kong`) | `supabase/docker` oficial, **sin modificar** |
 | `suarex` | La web (Next) y Caddy (TLS + enrutado) | `deploy/` de este repo |
 
 Se mantienen separadas para que actualizar Supabase sea un `git pull` y no un merge a mano.
@@ -129,10 +129,18 @@ con muchos clientes, usa un dominio propio y `cloudflare`.
 ```bash
 sudo mkdir -p /opt && sudo chown suarex:suarex /opt
 cd /opt
-git clone --depth 1 https://github.com/supabase/supabase
+# Solo la carpeta docker/ del monorepo oficial, no sus cientos de MB.
+git clone --depth 1 --filter=blob:none --sparse https://github.com/supabase/supabase
+git -C supabase sparse-checkout set docker
 mkdir suarex-supabase && cp -r supabase/docker/* supabase/docker/.env.example suarex-supabase/
-cd suarex-supabase && mv .env.example .env
 ```
+
+Deja `.env.example` donde está: `gen-secrets.sh` lo copia a `.env` (un `mv` previo lo rompe).
+
+Desde octubre de 2026 el gateway de la API del compose oficial es **Envoy**
+(`supabase-envoy`), no Kong. Lleva el alias de red `kong`, así que el Caddyfile
+(`reverse_proxy kong:8000`) funciona sin cambios. Lo que sí hace falta es atar su puerto a
+loopback: lo hace el override de abajo.
 
 ### Generar los secretos
 
@@ -152,8 +160,8 @@ Deja también puestos `DISABLE_SIGNUP=true` y el `COMPOSE_FILE` que carga el ove
 cp /opt/suarex/deploy/supabase-override.yml /opt/suarex-supabase/docker-compose.override.yml
 ```
 
-Hace dos cosas, y **las dos son de seguridad**: activa el hook del JWT y ata Postgres y el
-pooler a loopback. Lee sus comentarios antes de tocarlo.
+Hace dos cosas, y **las dos son de seguridad**: activa el hook del JWT y ata a loopback
+Postgres, el pooler y el gateway de la API. Lee sus comentarios antes de tocarlo.
 
 ### Editar `.env` (lo que el script no puede saber)
 
