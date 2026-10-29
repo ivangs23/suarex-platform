@@ -1,4 +1,5 @@
 import {
+  fichaPublicaDeLaSede,
   filtrarAgotados,
   filtrarPorFranja,
   getCategoriesSinFiltroHorario,
@@ -44,6 +45,11 @@ function cacheada<T>(lectura: string, tenantId: string, leer: () => Promise<T>):
 /** `tenant_settings` del tenant (marca, canales, idioma...), cacheados con la carta. */
 export function settingsDeLaCarta(tenantId: string) {
   return cacheada("settings", tenantId, () => getTenantSettings(tenantId));
+}
+
+/** Ficha pública de la sede por defecto (dirección, teléfono, horario), cacheada con la carta. */
+export function fichaDeLaCarta(tenantId: string) {
+  return cacheada("ficha", tenantId, () => fichaPublicaDeLaSede(tenantId));
 }
 
 /** Catálogo y alérgenos de la carta, con las franjas y el agotado aplicados a `ahora`. */

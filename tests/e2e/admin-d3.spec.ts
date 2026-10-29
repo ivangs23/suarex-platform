@@ -257,6 +257,17 @@ test("un owner guarda la ficha pública del local y la ve al volver", async ({ p
   // Un día sin tocar sigue sin publicarse.
   await expect(vuelta.getByTestId("horario-we").getByLabel("Cerrado")).not.toBeChecked();
   await expect(vuelta.getByLabel("Miércoles, tramo 1, abre")).toHaveValue("");
+
+  // Y la carta la pinta al momento, en la raíz y en una mesa (la provincia es la ciudad: no se
+  // repite).
+  for (const ruta of ["/", "/1"]) {
+    await page.goto(`http://garum.localhost:3000${ruta}`);
+    await expect(page.getByTestId("ficha-direccion")).toHaveText("Calle Larios 5, 29005 Málaga");
+    await expect(page.getByTestId("ficha-del-local").getByRole("link")).toHaveAttribute(
+      "href",
+      "tel:+34952000000",
+    );
+  }
 });
 
 test("un horario mal ordenado se dice en el formulario y no se pierde lo escrito", async ({

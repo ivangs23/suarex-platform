@@ -265,13 +265,16 @@ correcto: es el origen público del cliente aunque el DNS aún no apunte aquí.
 
 ### Tarea 1.3 — La ficha, visible en la carta
 
-- [ ] Componente `FichaDelLocal` montado por la PÁGINA (`Carta.tsx`) junto a `LegalFooter`, no
+- [x] Componente `FichaDelLocal` montado por la PÁGINA (`Carta.tsx`) junto a `LegalFooter`, no
   por el tema, igual que `LegalFooter` y por la misma razón. Muestra dirección, teléfono y
   horario de hoy, con un enlace «Ver horario» que despliega la semana (`<details>`, sin JS).
-- [ ] Sin datos guardados, no pinta nada.
-- [ ] Textos es/en/pt en `lib/i18n.ts` («Horario», «Cerrado», «Hoy»). Días y horas con
-  `Intl.DateTimeFormat` en la zona de la sede (`venues.timezone`).
-- [ ] Unit test del cálculo de «hoy» con la zona de la sede (Canarias ≠ Madrid). e2e: con ficha
+  *(La ficha se lee con `fichaDeLaCarta`, cacheada con la carta; guardarla en el panel la
+  invalida. Si su lectura falla, la carta se sirve sin ficha.)*
+- [x] Sin datos guardados, no pinta nada. Un día sin publicar no sale en la semana ni como «hoy».
+- [x] Textos es/en/pt en `lib/i18n.ts` («Horario», «Cerrado», «Hoy»). Días y horas con
+  `Intl.DateTimeFormat` en la zona de la sede (`venues.timezone`). *(El día de hoy, con `diaEnZona`
+  de `@suarex/domain`; las horas ya son locales y se formatean en el idioma de la carta.)*
+- [x] Unit test del cálculo de «hoy» con la zona de la sede (Canarias ≠ Madrid). e2e: con ficha
   guardada, la dirección se ve en `/` y en `/{mesa}`.
 
 ### Tarea 1.4 — JSON-LD `Restaurant` + `Menu`

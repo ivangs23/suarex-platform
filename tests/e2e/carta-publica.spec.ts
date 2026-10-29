@@ -138,6 +138,13 @@ test("el sitemap lista la carta sin mesa y sus categorías, nunca una mesa", asy
   for (const loc of locs) expect(new URL(loc ?? "").pathname).toMatch(/^\/($|legal\/)/);
 });
 
+test("sin ficha guardada, la carta no pinta ficha del local", async ({ page }) => {
+  // El seed no rellena la ficha de garum: nada de huecos ni de «sin horario».
+  await page.goto(`${ORIGIN}/`);
+  await expect(page.getByTestId("tenant-name")).toBeVisible();
+  await expect(page.getByTestId("ficha-del-local")).toHaveCount(0);
+});
+
 test("lo privado no se indexa", async ({ request }) => {
   const login = await request.get(`${ORIGIN}/staff/login`);
   expect(await login.text()).toContain('<meta name="robots" content="noindex"/>');

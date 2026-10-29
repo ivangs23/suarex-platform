@@ -113,6 +113,8 @@ export const guardarFichaAction = managerAction(
       throw error;
     }
     await guardarFichaPublica(session.tenantId, entrada.venueId, entrada.ficha);
+    // La carta la pinta (`fichaDeLaCarta`, cacheada con ella): que se vea ya.
+    invalidarCarta(session.tenantId);
     revalidatePath("/admin/ajustes");
     return { ok: true };
   },
