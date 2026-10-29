@@ -1,10 +1,14 @@
 // Genera los iconos de la app a partir de UN dibujo (la marca de SuarEx) en un canvas de
-// Chromium: los de la bandeja, uno por nivel de estado, en src/main/iconos-bandeja.ts.
+// Chromium:
+//   - src/main/iconos-bandeja.ts: la bandeja, uno por nivel de estado (con su punto);
+//   - build/icon.ico: el ejecutable, el instalador y el desinstalador;
+//   - src/main/icono-app.ts: la ventana, embebido (los avisos toman el del acceso directo).
 //
 //   node apps/agent-desktop/scripts/generar-iconos.mjs
 //
 // Usa el Chromium de Playwright (ya está en el monorepo) en vez de una dependencia de imagen.
-import { writeFileSync } from "node:fs";
+import { execSync } from "node:child_process";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,7 +17,10 @@ const aqui = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(join(aqui, "../../../package.json"));
 const { chromium } = require("@playwright/test");
 
-/** La marca, en un lienzo de 32 unidades. La «S» es un trazo, no un carácter de fuente. */
+/**
+ * La marca, en un lienzo de 32 unidades. La «S» es un trazo, no un carácter de fuente; la
+ * cabecera de la ventana (src/renderer/index.html) dibuja el mismo.
+ */
 const MARCA = {
   fondo: "oklch(0.52 0.19 274)",
   trazo: "oklch(0.985 0.005 274)",
@@ -29,11 +36,13 @@ const NIVELES = {
 };
 
 const TAMANOS = [16, 24, 32];
+/** Los tamaños que Windows pide al .ico: barra de tareas, Explorador y vistas grandes. */
+const TAMANOS_ICO = [16, 20, 24, 32, 40, 48, 64, 128, 256];
 
 const browser = await chromium.launch();
 const page = await browser.newPage();
 const iconos = await page.evaluate(
-  ({ MARCA, NIVELES, TAMANOS }) => {
+  ({ MARCA, NIVELES, TAMANOS, TAMANOS_ICO }) => {
     function dibuja(lado, punto) {
       const c = document.createElement("canvas");
       c.width = lado;
@@ -60,13 +69,14 @@ const iconos = await page.evaluate(
       }
       return c.toDataURL("image/png").replace("data:image/png;base64,", "");
     }
-    const salida = {};
+    const bandeja = {};
     for (const [nivel, color] of Object.entries(NIVELES)) {
-      salida[nivel] = Object.fromEntries(TAMANOS.map((t) => [t, dibuja(t, color)]));
+      bandeja[nivel] = Object.fromEntries(TAMANOS.map((t) => [t, dibuja(t, color)]));
     }
-    return salida;
+    const app = Object.fromEntries(TAMANOS_ICO.map((t) => [t, dibuja(t, null)]));
+    return { bandeja, app };
   },
-  { MARCA, NIVELES, TAMANOS },
+  { MARCA, NIVELES, TAMANOS, TAMANOS_ICO },
 );
 await browser.close();
 
@@ -78,7 +88,46 @@ const ts = `// GENERADO por scripts/generar-iconos.mjs: no se edita a mano.
 
 import type { Nivel } from "./estado.js";
 
-export const ICONOS_BANDEJA: Record<Nivel, Record<16 | 24 | 32, string>> = ${JSON.stringify(iconos, null, 2)};
+export const ICONOS_BANDEJA: Record<Nivel, Record<16 | 24 | 32, string>> = ${JSON.stringify(iconos.bandeja, null, 2)};
 `;
 writeFileSync(join(aqui, "../src/main/iconos-bandeja.ts"), ts);
-console.log("src/main/iconos-bandeja.ts");
+
+/** Un .ico con una imagen PNG por tamaño (válido desde Windows Vista). */
+function ico(pngs) {
+  const cabecera = Buffer.alloc(6 + 16 * pngs.length);
+  cabecera.writeUInt16LE(0, 0);
+  cabecera.writeUInt16LE(1, 2);
+  cabecera.writeUInt16LE(pngs.length, 4);
+  let desplazamiento = cabecera.length;
+  pngs.forEach(([lado, datos], i) => {
+    const e = 6 + 16 * i;
+    cabecera.writeUInt8(lado >= 256 ? 0 : lado, e);
+    cabecera.writeUInt8(lado >= 256 ? 0 : lado, e + 1);
+    cabecera.writeUInt16LE(1, e + 4);
+    cabecera.writeUInt16LE(32, e + 6);
+    cabecera.writeUInt32LE(datos.length, e + 8);
+    cabecera.writeUInt32LE(desplazamiento, e + 12);
+    desplazamiento += datos.length;
+  });
+  return Buffer.concat([cabecera, ...pngs.map(([, datos]) => datos)]);
+}
+
+const png = (lado) => Buffer.from(iconos.app[lado], "base64");
+mkdirSync(join(aqui, "../build"), { recursive: true });
+writeFileSync(join(aqui, "../build/icon.ico"), ico(TAMANOS_ICO.map((t) => [t, png(t)])));
+writeFileSync(
+  join(aqui, "../src/main/icono-app.ts"),
+  `// GENERADO por scripts/generar-iconos.mjs: no se edita a mano.
+//
+// El icono de la app (la marca, sin punto de estado) a 256 px, para la ventana. El ejecutable y
+// el instalador usan build/icon.ico, que sale del mismo dibujo.
+
+export const ICONO_APP_PNG = "${iconos.app[256]}";
+`,
+);
+// Con el formato del repo, para que regenerar sin cambiar el dibujo no deje diff.
+execSync("pnpm exec biome format --write src/main/iconos-bandeja.ts src/main/icono-app.ts", {
+  cwd: join(aqui, ".."),
+  stdio: "ignore",
+});
+console.log("src/main/iconos-bandeja.ts, src/main/icono-app.ts, build/icon.ico");

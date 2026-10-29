@@ -24,8 +24,17 @@ Estrategia **Restrained**, en OKLCH. Los neutros llevan una pizca del índigo de
 | Estado | `--ok`, `--warn`, `--danger` (+ `-bg`, `-border`) | Solo estado, siempre con su palabra |
 | Cabecera | `--bar-*` | Franja oscura, igual en ambos temas |
 
-Niveles de estado (`renderer/estado.ts`): `ok` verde, `aviso` ámbar (algo falla pero imprime,
-o conectando), `error` rojo (no imprime nada), `neutro` (sin vincular).
+Niveles de estado (`main/estado.ts`, el mismo para la ventana y la bandeja): `ok` verde, `aviso`
+ámbar (algo falla pero imprime, o conectando), `error` rojo (no imprime nada), `neutro` (sin
+vincular).
+
+## Brand
+
+La marca es una «S» trazada (no de fuente) en blanco sobre un cuadrado índigo redondeado
+(`--marca-fondo`, `--marca-trazo`: no cambian con el tema). Sale de un único dibujo,
+`scripts/generar-iconos.mjs`, que genera el `.ico` del ejecutable y el instalador, el icono de la
+ventana y los de la bandeja; la cabecera repite el mismo trazo en SVG. En la bandeja lleva un
+punto con el color del nivel de estado.
 
 ## Typography
 

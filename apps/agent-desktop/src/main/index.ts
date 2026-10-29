@@ -50,6 +50,7 @@ import { runChargeRecovery } from "./charge-recovery-runner.js";
 import { faltaEnConfigHorneada, mensajeDeConfigIncompleta } from "./config-check.js";
 import { loadCredentials, saveCredentials } from "./config-store.js";
 import { estadoGeneral, type Nivel } from "./estado.js";
+import { ICONO_APP_PNG } from "./icono-app.js";
 import { ICONOS_BANDEJA } from "./iconos-bandeja.js";
 import { exportarDiagnostico, leerEstadoDelAgente, registerIpc } from "./ipc.js";
 import { createLogger, type Logger } from "./logger.js";
@@ -213,6 +214,12 @@ function handleAgentActivity(activity: AgentActivity, alerts: ActivityAlerts): v
 
   avisar(avisoDeCaida(alerts.newlyDown));
   avisar(vuelta);
+}
+
+// Windows firma los avisos con el nombre y el icono del acceso directo que lleva este id: el
+// `appId` de electron-builder.cjs, que pone el instalador. En dev no hay acceso directo.
+if (process.platform === "win32") {
+  app.setAppUserModelId(app.isPackaged ? "app.suarex.agent" : process.execPath);
 }
 
 /** Single-instance: una segunda ejecución enfoca la existente en vez de abrir otra. */
@@ -468,6 +475,8 @@ function createWindow(): void {
     minWidth: 900,
     minHeight: 600,
     show: false,
+    // Empaquetada, Windows ya toma el del .exe; esto cubre dev y la barra de título.
+    icon: nativeImage.createFromDataURL(`data:image/png;base64,${ICONO_APP_PNG}`),
     webPreferences: {
       preload: join(import.meta.dirname, "../preload/index.js"),
       contextIsolation: true,
