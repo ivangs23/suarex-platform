@@ -39,12 +39,12 @@ describe("documentoLegal", () => {
   });
 
   it("sigue siendo publicable si el tenant no ha rellenado sus datos fiscales", () => {
-    // Un tenant recién dado de alta no tiene CIF. La página no puede romperse ni imprimir
+    // Un tenant recién dado de alta no tiene NIF. La página no puede romperse ni imprimir
     // "undefined" en un documento legal: cae al nombre comercial y omite lo que no hay.
     const texto = JSON.stringify(documentoLegal("privacidad", { businessName: "Bar Paco" }));
     expect(texto).toContain("Bar Paco");
     expect(texto).not.toContain("undefined");
-    expect(texto).not.toContain("CIF");
+    expect(texto).not.toContain("NIF");
   });
 
   it("el aviso legal identifica al titular con razón social, número fiscal y domicilio", () => {
@@ -54,7 +54,7 @@ describe("documentoLegal", () => {
       (s) => s.titulo === "Titular",
     );
     expect(titular?.parrafos[0]).toBe(
-      "Este sitio es la carta digital de Paco SL · CIF B12345678 · Calle Falsa 1, Madrid · tel. 600111222.",
+      "Este sitio es la carta digital de Paco SL · NIF B12345678 · Calle Falsa 1, Madrid · tel. 600111222.",
     );
   });
 

@@ -97,7 +97,7 @@ describe("bloque fiscal del recibo", () => {
     const texto = JSON.stringify(filas);
     expect(texto).toContain("Paco SL");
     expect(texto).not.toContain("undefined");
-    expect(texto).not.toContain("CIF");
+    expect(texto).not.toContain("NIF");
   });
 
   it("desglosa base imponible e IVA", () => {
@@ -114,7 +114,7 @@ describe("bloque fiscal del recibo", () => {
   });
 
   it("el aviso de que no es factura se pinta SIEMPRE, con o sin datos fiscales", () => {
-    // Doctrina: esto no es opcional por tenant. Un tenant sin CIF configurado no puede
+    // Doctrina: esto no es opcional por tenant. Un tenant sin NIF configurado no puede
     // acabar con un documento que parezca una factura. `opts` no trae `fiscal`.
     expect(JSON.stringify(filasRecibo(receipt, opts))).toContain("No válido como factura");
     expect(JSON.stringify(filasRecibo(receipt, conFiscal))).toContain("No válido como factura");

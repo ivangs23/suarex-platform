@@ -64,7 +64,7 @@ export function filasRecibo(
   // escribe "—": un recibo con campos vacíos parece un formulario a medio hacer.
   const emisor = [
     fiscal.legalName?.trim(),
-    fiscal.cif?.trim() ? `CIF ${fiscal.cif.trim()}` : null,
+    fiscal.cif?.trim() ? `NIF ${fiscal.cif.trim()}` : null,
     fiscal.address?.trim(),
     fiscal.phone?.trim(),
   ].filter((linea): linea is string => Boolean(linea));
