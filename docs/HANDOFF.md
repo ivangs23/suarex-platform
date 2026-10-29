@@ -18,7 +18,7 @@ Suite en verde:
 | lint | ok |
 | typecheck | 10/10 + tests |
 | unit | 9 paquetes; web: 3.990 |
-| integración | 527 (77 ficheros) |
+| integración | 533 (78 ficheros) |
 | e2e | 171, en Windows, incluidas 14 capturas visuales de la carta |
 
 **CI** (`.github/workflows/ci.yml`), en cada PR:
