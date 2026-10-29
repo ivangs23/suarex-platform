@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { INITIAL_ACTIVITY } from "../main/agent-activity.js";
+import { INITIAL_ACTIVITY } from "./agent-activity.js";
 import {
   type AgentStatus,
   estadoGeneral,

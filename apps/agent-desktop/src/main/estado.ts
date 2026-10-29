@@ -1,5 +1,5 @@
-import type { AgentActivity } from "../main/agent-activity.js";
-import { mensajeDeConfigIncompleta } from "../main/config-check.js";
+import type { AgentActivity } from "./agent-activity.js";
+import { mensajeDeConfigIncompleta } from "./config-check.js";
 
 /** Lo que devuelve `get-status`: el estado del agente tal como lo ve el proceso principal. */
 export type AgentStatus = {

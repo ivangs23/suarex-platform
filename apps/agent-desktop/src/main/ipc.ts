@@ -14,6 +14,7 @@ import { PLATFORM_WEB_ORIGIN, SUPABASE_ANON_KEY, SUPABASE_URL } from "./baked-co
 import { faltaEnConfigHorneada } from "./config-check.js";
 import { loadCredentials, saveCredentials } from "./config-store.js";
 import { formatDiagnostics } from "./diagnostics.js";
+import type { AgentStatus } from "./estado.js";
 import { type PairError, pairDevice } from "./pairing.js";
 import { listLocalPrinters, printTestTicket } from "./printers.js";
 import { realConfigBackend } from "./real-config-backend.js";
@@ -43,6 +44,77 @@ const ARRANCADA_EN = new Date().toISOString();
 /** El último diagnóstico guardado. "Mostrar en la carpeta" solo puede abrir ESTE, nunca una
  *  ruta que mande el renderer. */
 let ultimoDiagnostico: string | null = null;
+
+/** El estado del agente tal como lo pintan la ventana y la bandeja (`estadoGeneral`). */
+export function leerEstadoDelAgente(): AgentStatus {
+  const creds = loadCredentials(realConfigBackend());
+  return {
+    paired: creds !== null,
+    running: isAgentRunning(),
+    // Arrancando, o esperando a que vuelva la red: que la ventana no diga "agente parado".
+    conectando: estaConectando(),
+    deviceId: creds?.deviceId ?? null,
+    // La interfaz lo usa para AVISAR de que la impresión USB (winspool) solo existe en
+    // Windows, en vez de dejar que el usuario lo descubra al pulsar "Imprimir prueba" y
+    // recibir un error. `process` no está disponible en el renderer (contextIsolation),
+    // así que viaja por aquí.
+    platform: process.platform,
+    version: app.getVersion(),
+    startedAt: ARRANCADA_EN,
+    // Qué le falta a este ejecutable. La ventana lo dice en el sitio del estado, que es lo
+    // primero que se mira: sin esto, un build incompleto se manifiesta como tres fallos
+    // distintos, y ninguno de los tres señala la causa.
+    configFaltante: faltaEnConfigHorneada({
+      SUPABASE_URL,
+      SUPABASE_ANON_KEY,
+      PLATFORM_WEB_ORIGIN,
+    }),
+    // Estado de impresión acumulado, para que la ventana ya muestre lo que va pasando nada
+    // más abrirse (sin esperar al primer tick que llegue por `agent-activity`).
+    activity: getActivity(),
+  };
+}
+
+/** Guarda el diagnóstico donde elija el usuario. Lo usan la ventana y el menú de la bandeja. */
+export async function exportarDiagnostico(
+  win: BrowserWindow | null,
+  readLog: () => string,
+): Promise<ExportDiagnosticsResult> {
+  const creds = loadCredentials(realConfigBackend());
+  const contenido = formatDiagnostics(
+    {
+      generatedAt: new Date().toISOString(),
+      appVersion: app.getVersion(),
+      platform: process.platform,
+      paired: creds !== null,
+      deviceId: creds?.deviceId ?? null,
+      running: isAgentRunning(),
+    },
+    getActivity(),
+    readLog(),
+  );
+
+  // Nombre por defecto sin ':' (inválido en rutas de Windows).
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+
+  const opciones = {
+    title: "Exportar diagnóstico",
+    defaultPath: `suarex-diagnostico-${stamp}.txt`,
+    filters: [{ name: "Texto", extensions: ["txt"] }],
+  };
+  const { canceled, filePath } = win
+    ? await dialog.showSaveDialog(win, opciones)
+    : await dialog.showSaveDialog(opciones);
+  if (canceled || !filePath) return { ok: false, canceled: true };
+
+  try {
+    writeFileSync(filePath, contenido, "utf8");
+    ultimoDiagnostico = filePath;
+    return { ok: true, path: filePath };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
 
 /** Registra los canales IPC. El renderer nunca toca Node/Electron directo: todo pasa por
  * estos handlers vía el puente contextBridge del preload. `readLog` vuelca el registro en disco
@@ -127,34 +199,7 @@ export function registerIpc(
     return { ok: true, printers };
   });
 
-  ipcMain.handle("get-status", async () => {
-    const creds = loadCredentials(realConfigBackend());
-    return {
-      paired: creds !== null,
-      running: isAgentRunning(),
-      // Arrancando, o esperando a que vuelva la red: que la ventana no diga "agente parado".
-      conectando: estaConectando(),
-      deviceId: creds?.deviceId ?? null,
-      // La interfaz lo usa para AVISAR de que la impresión USB (winspool) solo existe en
-      // Windows, en vez de dejar que el usuario lo descubra al pulsar "Imprimir prueba" y
-      // recibir un error. `process` no está disponible en el renderer (contextIsolation),
-      // así que viaja por aquí.
-      platform: process.platform,
-      version: app.getVersion(),
-      startedAt: ARRANCADA_EN,
-      // Qué le falta a este ejecutable. La ventana lo dice en el sitio del estado, que es lo
-      // primero que se mira: sin esto, un build incompleto se manifiesta como tres fallos
-      // distintos, y ninguno de los tres señala la causa.
-      configFaltante: faltaEnConfigHorneada({
-        SUPABASE_URL,
-        SUPABASE_ANON_KEY,
-        PLATFORM_WEB_ORIGIN,
-      }),
-      // Estado de impresión acumulado, para que la ventana ya muestre lo que va pasando nada
-      // más abrirse (sin esperar al primer tick que llegue por `agent-activity`).
-      activity: getActivity(),
-    };
-  });
+  ipcMain.handle("get-status", async (): Promise<AgentStatus> => leerEstadoDelAgente());
 
   // Confirmación nativa antes de des-emparejar: un clic accidental dejaría la cocina sin
   // imprimir hasta re-emparejar con un código nuevo. Devuelve si el usuario confirmó; el
@@ -227,40 +272,8 @@ export function registerIpc(
     return true;
   });
 
-  ipcMain.handle("export-diagnostics", async (): Promise<ExportDiagnosticsResult> => {
-    const creds = loadCredentials(realConfigBackend());
-    const contenido = formatDiagnostics(
-      {
-        generatedAt: new Date().toISOString(),
-        appVersion: app.getVersion(),
-        platform: process.platform,
-        paired: creds !== null,
-        deviceId: creds?.deviceId ?? null,
-        running: isAgentRunning(),
-      },
-      getActivity(),
-      readLog(),
-    );
-
-    // Nombre por defecto sin ':' (inválido en rutas de Windows).
-    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const win = getWindow();
-    const opciones = {
-      title: "Exportar diagnóstico",
-      defaultPath: `suarex-diagnostico-${stamp}.txt`,
-      filters: [{ name: "Texto", extensions: ["txt"] }],
-    };
-    const { canceled, filePath } = win
-      ? await dialog.showSaveDialog(win, opciones)
-      : await dialog.showSaveDialog(opciones);
-    if (canceled || !filePath) return { ok: false, canceled: true };
-
-    try {
-      writeFileSync(filePath, contenido, "utf8");
-      ultimoDiagnostico = filePath;
-      return { ok: true, path: filePath };
-    } catch (e) {
-      return { ok: false, error: (e as Error).message };
-    }
-  });
+  ipcMain.handle(
+    "export-diagnostics",
+    async (): Promise<ExportDiagnosticsResult> => exportarDiagnostico(getWindow(), readLog),
+  );
 }

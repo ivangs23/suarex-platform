@@ -1,5 +1,14 @@
 import { join } from "node:path";
-import { app, BrowserWindow, Menu, Notification, nativeImage, Tray } from "electron";
+import {
+  app,
+  BrowserWindow,
+  Menu,
+  type NativeImage,
+  Notification,
+  nativeImage,
+  shell,
+  Tray,
+} from "electron";
 import { WebSocket as WsWebSocket } from "ws";
 import { type ActivityAlerts, type AgentActivity, INITIAL_ACTIVITY } from "./agent-activity.js";
 import { esArranqueDesatendido, opcionesDeInicioConWindows } from "./arranque-desatendido.js";
@@ -28,18 +37,27 @@ import {
 } from "./agent-runner.js";
 import { arrancarConReintentos, type ResultadoArranque } from "./arranque-con-reintentos.js";
 import { PLATFORM_WEB_ORIGIN, SUPABASE_ANON_KEY, SUPABASE_URL } from "./baked-config.js";
+import {
+  type AccionesDeBandeja,
+  type Aviso,
+  avisoDeCaida,
+  avisoDeVuelta,
+  menuDeBandeja,
+  textoDeBandeja,
+} from "./bandeja.js";
 import { type ChargeJournal, createChargeJournal } from "./charge-journal.js";
 import { runChargeRecovery } from "./charge-recovery-runner.js";
 import { faltaEnConfigHorneada, mensajeDeConfigIncompleta } from "./config-check.js";
 import { loadCredentials, saveCredentials } from "./config-store.js";
-import { registerIpc } from "./ipc.js";
+import { estadoGeneral, type Nivel } from "./estado.js";
+import { ICONOS_BANDEJA } from "./iconos-bandeja.js";
+import { exportarDiagnostico, leerEstadoDelAgente, registerIpc } from "./ipc.js";
 import { createLogger, type Logger } from "./logger.js";
 import { listLocalPrinters } from "./printers.js";
 import { realConfigBackend } from "./real-config-backend.js";
 import { realLogSink } from "./real-log-backend.js";
 import { realSessionStore } from "./real-session-store.js";
 import { openKioskWindow, registerTotemIpc } from "./totem-window.js";
-import { TRAY_ICON_DATA_URL } from "./tray-icon.js";
 import { startAutoUpdate } from "./updater.js";
 import { ensureWatchdogTask, removeWatchdogTask } from "./watchdog.js";
 import {
@@ -75,7 +93,72 @@ function reportMain(msg: string, err?: unknown): void {
   else console.error(msg, err);
 }
 
-const TRAY_BASE_TOOLTIP = "SuarEx — Agente de impresión";
+/** Cuándo empezó el corte de red en curso: la bandeja, como la ventana, no lo anuncia hasta
+ *  pasado el margen de `estadoGeneral`. */
+let sinConexionDesde: number | null = null;
+/** Lo último que se pintó en la bandeja, para no rehacer el menú en cada tick: rehacerlo con el
+ *  menú abierto lo cerraría bajo el ratón. */
+let firmaBandeja = "";
+/** El registro en disco, para el diagnóstico que se exporta desde la bandeja. */
+let leerRegistro: () => string = () => "";
+
+function iconoDeBandeja(nivel: Nivel): NativeImage {
+  const icono = nativeImage.createEmpty();
+  for (const [lado, escala] of [
+    [16, 1],
+    [24, 1.5],
+    [32, 2],
+  ] as const) {
+    icono.addRepresentation({
+      scaleFactor: escala,
+      dataURL: `data:image/png;base64,${ICONOS_BANDEJA[nivel][lado]}`,
+    });
+  }
+  return icono;
+}
+
+function mostrarVentana(seccion?: "pedidos" | "impresoras"): void {
+  if (!mainWindow) return;
+  mainWindow.show();
+  mainWindow.focus();
+  if (seccion) mainWindow.webContents.send("ir-a", seccion);
+}
+
+const accionesDeBandeja: AccionesDeBandeja = {
+  abrir: () => mostrarVentana(),
+  irA: (seccion) => mostrarVentana(seccion),
+  exportarDiagnostico: () => {
+    exportarDiagnostico(mainWindow, leerRegistro)
+      .then((r) => {
+        if (r.ok) shell.showItemInFolder(r.path);
+      })
+      .catch((err) => reportMain("[bandeja] no se pudo exportar el diagnóstico:", err));
+  },
+  salir: () => {
+    quitting = true;
+    app.quit();
+  },
+};
+
+/** El icono, el texto y el menú de la bandeja salen del MISMO estado que la ventana. */
+function actualizarBandeja(): void {
+  if (!tray) return;
+  const estado = estadoGeneral(leerEstadoDelAgente(), Date.now(), sinConexionDesde);
+  const firma = `${estado.nivel}|${estado.etiqueta}|${estado.titulo}`;
+  if (firma === firmaBandeja) return;
+  firmaBandeja = firma;
+  tray.setImage(iconoDeBandeja(estado.nivel));
+  tray.setToolTip(textoDeBandeja(estado));
+  tray.setContextMenu(Menu.buildFromTemplate(menuDeBandeja(estado, accionesDeBandeja)));
+}
+
+/** Un aviso de Windows que, al pulsarlo, abre la ventana en Impresoras. */
+function avisar(aviso: Aviso | null): void {
+  if (!aviso || !Notification.isSupported()) return;
+  const n = new Notification({ title: aviso.titulo, body: aviso.cuerpo });
+  n.on("click", () => mostrarVentana("impresoras"));
+  n.show();
+}
 
 // Watchdog dentro del proceso. Este agente corre desatendido: un error suelto no capturado no
 // debe llevarse por delante toda la app y dejar la cocina sin imprimir hasta reiniciar el PC.
@@ -119,36 +202,17 @@ function handleAgentActivity(activity: AgentActivity, alerts: ActivityAlerts): v
   } else if (!activity.lastError && prevActivity.lastError) {
     logger?.info("Conexión con la plataforma recuperada.");
   }
+  // Las que vuelven se nombran por el destino que tenían al caer: hay que mirarlo ANTES de
+  // olvidar la actividad anterior.
+  const vuelta = avisoDeVuelta(alerts.recovered, prevActivity);
   prevActivity = activity;
 
-  if (tray) {
-    const caidas = activity.downPrinters.length;
-    tray.setToolTip(
-      activity.lastError
-        ? `${TRAY_BASE_TOOLTIP} — sin conexión`
-        : caidas > 0
-          ? `${TRAY_BASE_TOOLTIP} — ${caidas} impresora(s) sin responder`
-          : TRAY_BASE_TOOLTIP,
-    );
-  }
+  if (!activity.lastError) sinConexionDesde = null;
+  else if (sinConexionDesde === null) sinConexionDesde = Date.now();
+  actualizarBandeja();
 
-  if (!Notification.isSupported()) return;
-  const [primerFallo, ...restoFallos] = alerts.newlyDown;
-  if (primerFallo) {
-    const nombreDestino = (d: string): string =>
-      d === "cocina" ? "cocina" : d === "barra" ? "barra" : "cocina y barra";
-    const body =
-      restoFallos.length === 0
-        ? `La de ${nombreDestino(primerFallo.destination)} no responde. Revisa que esté encendida y conectada.`
-        : `${alerts.newlyDown.length} impresoras no responden. Revisa que estén encendidas y conectadas.`;
-    new Notification({ title: "Impresora sin responder", body }).show();
-  }
-  if (alerts.recovered.length > 0) {
-    new Notification({
-      title: "Impresora recuperada",
-      body: "Vuelve a imprimir con normalidad.",
-    }).show();
-  }
+  avisar(avisoDeCaida(alerts.newlyDown));
+  avisar(vuelta);
 }
 
 /** Single-instance: una segunda ejecución enfoca la existente en vez de abrir otra. */
@@ -177,6 +241,7 @@ if (!gotLock) {
     // Logger a fichero rotativo en userData. Se crea aquí (ya hay `app`) y a partir de este punto
     // el watchdog y los eventos importantes quedan en disco, no solo en un stdout invisible.
     const logSink = realLogSink();
+    leerRegistro = () => logSink.read();
     logger = createLogger(logSink, () => new Date().toISOString());
     logger.info(`Arranque. Versión ${app.getVersion()}, plataforma ${process.platform}.`);
     // Los fallos del panel incrustado (página que no carga, JavaScript que revienta) van al
@@ -212,12 +277,14 @@ if (!gotLock) {
       // Recién emparejado: el watchdog del sistema pasa a vigilarlo y, si es un totem, entra en
       // modo kiosko sin reiniciar.
       async () => {
+        actualizarBandeja();
         syncSystemWatchdog(true);
         await maybeStartKiosk();
       },
       // Des-emparejado: el watchdog deja de vigilarlo y el panel olvida las sesiones de quien lo
       // usaba, también la de Comandas, que se guarda en disco.
       () => {
+        actualizarBandeja();
         syncSystemWatchdog(false);
         olvidarTodasLasSesiones().catch((err) =>
           reportMain("[panel] no se pudieron borrar las sesiones al des-emparejar:", err),
@@ -309,6 +376,7 @@ async function arrancarAgenteAlInicio(): Promise<ResultadoArranque> {
     alCambiarConectando: (conectando) => {
       setConectando(conectando);
       mainWindow?.webContents.send("estado-cambiado");
+      actualizarBandeja();
     },
     avisos: {
       sinConexion: (e) =>
@@ -444,21 +512,8 @@ function createWindow(): void {
 }
 
 function createTray(): void {
-  // Icono real (la app vive OCULTA en la bandeja al arrancar; sin icono no se puede reabrir).
-  tray = new Tray(nativeImage.createFromDataURL(TRAY_ICON_DATA_URL));
-  tray.setToolTip(TRAY_BASE_TOOLTIP);
-  tray.setContextMenu(
-    Menu.buildFromTemplate([
-      { label: "Abrir", click: () => mainWindow?.show() },
-      { type: "separator" },
-      {
-        label: "Salir",
-        click: () => {
-          quitting = true;
-          app.quit();
-        },
-      },
-    ]),
-  );
-  tray.on("click", () => mainWindow?.show());
+  // La app vive OCULTA en la bandeja al arrancar: sin icono no habría forma de reabrirla.
+  tray = new Tray(iconoDeBandeja("neutro"));
+  tray.on("click", () => mostrarVentana());
+  actualizarBandeja();
 }

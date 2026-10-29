@@ -127,6 +127,21 @@ si en el local resulta un problema.
 consulta del paso 1: la tarea ya no debe existir. Si se quedara, el PC seguiría reabriendo
 cada cinco minutos una app que ya no pertenece a ningún restaurante.
 
+## Validar la bandeja
+
+1. Con el equipo vinculado e imprimiendo, el icono de la bandeja lleva un **punto verde**. Al
+   pasar el ratón dice «SuarEx: imprimiendo».
+2. Clic derecho: la primera línea es el estado (no se pulsa), y debajo «Abrir SuarEx»,
+   «Comandas», «Impresoras», «Exportar diagnóstico…» y «Salir». «Comandas» e «Impresoras» abren
+   la ventana directamente en esa pestaña.
+3. **Desenchufa la impresora de cocina** y haz un pedido. Debe salir un aviso de Windows «La
+   impresora de cocina no responde», el punto pasa a **ámbar** y la cabecera de la ventana dice
+   «Atención». Pulsar el aviso abre la ventana en Impresoras.
+4. **Vuelve a enchufarla.** Debe salir «La impresora de cocina vuelve a responder», el ticket
+   pendiente se imprime y el punto vuelve a verde.
+5. Sin red durante más de 30 s, el punto pasa a **rojo** («Sin conexión con la plataforma»).
+   Un corte más corto no debe cambiar nada.
+
 ## Validar el diagnóstico exportable
 
 No se puede probar fuera de Windows empaquetado, así que va aquí con el resto.
