@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { reglasDeRobots, urlsDelSitemap } from "./rastreo.js";
+import { platosPorCategoria, reglasDeRobots, urlsDelSitemap } from "./rastreo.js";
 
 const ORIGEN = "https://garumvinoteca.com";
 
@@ -60,6 +60,15 @@ describe("urlsDelSitemap", () => {
     for (const url of urls([{ categoryId: "tintos" }])) {
       expect(new URL(url).pathname).toMatch(/^\/($|legal\/)/);
     }
+  });
+
+  it("los platos de una categoría cuentan su subárbol, como en la carta", () => {
+    const platos = platosPorCategoria(categorias, [
+      { categoryId: "tintos" },
+      { categoryId: "tintos" },
+      { categoryId: "blancos" },
+    ]);
+    expect(Object.fromEntries(platos)).toEqual({ vinos: 3, tintos: 2, blancos: 1, postres: 0 });
   });
 
   it("un ciclo de parent_id no cuelga el sitemap", () => {

@@ -17,9 +17,9 @@ Suite en verde:
 |---|---|
 | lint | ok |
 | typecheck | 10/10 + tests |
-| unit | 9 paquetes; web: 4.032 |
+| unit | 9 paquetes; web: 4.039 |
 | integración | 534 (78 ficheros) |
-| e2e | 175, en Windows, incluidas 14 capturas visuales de la carta |
+| e2e | 177, en Windows, incluidas 14 capturas visuales de la carta |
 
 **CI** (`.github/workflows/ci.yml`), en cada PR:
 - `verificar`: lint, typecheck y unit. **Obligatorio**: `main` está protegida y no se mergea sin él en verde. Como admin, Iván puede saltárselo en una emergencia (`enforce_admins` desactivado).
