@@ -18,7 +18,9 @@ paso falla, captura lo que se indica y pégalo para diagnosticar.
 
 1. **Instalar.** Ejecuta el instalador (`SuarEx Agente Setup *.exe`). Windows SmartScreen
    avisará (app sin firmar): pulsa **Más información → Ejecutar de todas formas**. Instala.
-   - ✅ Esperado: se instala sin pedir admin y crea acceso directo.
+   - ✅ Esperado: se instala sin pedir admin y crea acceso directo. El instalador, el acceso
+     directo, la barra de tareas y la ventana llevan el icono de SuarEx (la «S» blanca sobre
+     índigo), no el de Electron.
    - ❌ Si falla: captura el mensaje del instalador.
 
 2. **Arranque.** La app se abre y aparece en la bandeja del sistema.
@@ -136,7 +138,8 @@ cada cinco minutos una app que ya no pertenece a ningún restaurante.
    la ventana directamente en esa pestaña.
 3. **Desenchufa la impresora de cocina** y haz un pedido. Debe salir un aviso de Windows «La
    impresora de cocina no responde», el punto pasa a **ámbar** y la cabecera de la ventana dice
-   «Atención». Pulsar el aviso abre la ventana en Impresoras.
+   «Atención». El aviso viene firmado por «SuarEx Agente» con su icono, no por «electron.app».
+   Pulsar el aviso abre la ventana en Impresoras.
 4. **Vuelve a enchufarla.** Debe salir «La impresora de cocina vuelve a responder», el ticket
    pendiente se imprime y el punto vuelve a verde.
 5. Sin red durante más de 30 s, el punto pasa a **rojo** («Sin conexión con la plataforma»).

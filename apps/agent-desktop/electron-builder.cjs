@@ -13,7 +13,8 @@ module.exports = {
   files: ["out/**"],
   // koffi trae un binario nativo (.node): debe salir del asar para poder cargarse en runtime.
   asarUnpack: ["**/node_modules/koffi/**"],
-  win: { target: [{ target: "nsis", arch: ["x64"] }] },
+  // El icono sale de scripts/generar-iconos.mjs. El instalador y el desinstalador usan el mismo.
+  win: { target: [{ target: "nsis", arch: ["x64"] }], icon: "build/icon.ico" },
   nsis: {
     oneClick: false,
     perMachine: false,

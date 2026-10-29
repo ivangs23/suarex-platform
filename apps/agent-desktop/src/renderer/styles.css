@@ -58,6 +58,9 @@
   --bar-hair: oklch(1 0 0 / 9%);
   /* El índigo de marca, aclarado para que se lea sobre la franja oscura en los dos temas. */
   --bar-accent: oklch(0.78 0.12 274);
+  /* La marca no cambia con el tema: es la del icono de la app (scripts/generar-iconos.mjs). */
+  --marca-fondo: oklch(0.52 0.19 274);
+  --marca-trazo: oklch(0.985 0.005 274);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -169,14 +172,18 @@ body {
 .marca {
   width: 30px;
   height: 30px;
-  display: grid;
-  place-items: center;
-  border-radius: 8px;
-  background: var(--accent);
-  color: var(--accent-text);
-  font-weight: 700;
-  font-size: 0.95rem;
-  letter-spacing: -0.02em;
+  flex: none;
+}
+
+.marca rect {
+  fill: var(--marca-fondo);
+}
+
+.marca path {
+  fill: none;
+  stroke: var(--marca-trazo);
+  stroke-width: 3.2;
+  stroke-linecap: round;
 }
 
 .identidad-texto {
