@@ -1,7 +1,7 @@
-import { getTenantCustomDomain, listTables, listVenues } from "@suarex/db";
-import { headers } from "next/headers";
+import { listTables, listVenues } from "@suarex/db";
+import { dominioPropioRespondeAqui } from "@/lib/origen-publico";
+import { origenPublicoDeLaPeticion } from "@/lib/origen-publico-peticion";
 import { tableQrSvg } from "@/lib/qr";
-import { dominioPropioRespondeAqui, origenDeLosQr } from "@/lib/qr-origin";
 import { requireManager } from "@/lib/require-manager";
 import { ConfirmDeleteForm } from "../catalogo/ConfirmDeleteForm";
 import { deleteTableAction } from "./actions";
@@ -11,23 +11,16 @@ import { TableForm } from "./TableForm";
 /**
  * Gestión de mesas. `requireManager()` es la primera barrera; las actions vuelven a
  * comprobarlo vía `managerAction`. Cada mesa tiene su QR (`{origen}/m/{token}`, con el
- * origen de `origenDeLosQr`); borrarla lo invalida para siempre.
+ * origen de `origenPublicoDeLaPeticion`); borrarla lo invalida para siempre.
  */
 export default async function AdminMesasPage() {
   const session = await requireManager();
-  const headerList = await headers();
-
-  const [tables, venues, customDomain] = await Promise.all([
+  const [tables, venues, { origen: origin, dominioPropio: customDomain }] = await Promise.all([
     listTables(session.tenantId),
     listVenues(session.tenantId),
-    getTenantCustomDomain(session.tenantId),
+    origenPublicoDeLaPeticion(session.tenantId),
   ]);
 
-  const origin = origenDeLosQr({
-    customDomain,
-    host: headerList.get("host") ?? "",
-    forwardedProto: headerList.get("x-forwarded-proto"),
-  });
   const usaDominioPropio = customDomain !== null && origin === `https://${customDomain}`;
   const dominioListo = usaDominioPropio ? await dominioPropioRespondeAqui(customDomain) : true;
 

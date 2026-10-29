@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { dominioPropioRespondeAqui, origenDeLosQr } from "./qr-origin.js";
+import { dominioPropioRespondeAqui, origenPublico } from "./origen-publico.js";
 
-describe("origenDeLosQr", () => {
+describe("origenPublico", () => {
   it("con dominio propio, el QR va a él aunque el panel se abra desde el subdominio", () => {
     expect(
-      origenDeLosQr({
+      origenPublico({
         customDomain: "garumvinoteca.com",
         host: "garum.srv1121554.hstgr.cloud",
         forwardedProto: "https",
@@ -14,19 +14,19 @@ describe("origenDeLosQr", () => {
 
   it("sin dominio propio, usa el Host de la petición y su protocolo", () => {
     expect(
-      origenDeLosQr({ customDomain: null, host: "garum.suarex.app", forwardedProto: "https" }),
+      origenPublico({ customDomain: null, host: "garum.suarex.app", forwardedProto: "https" }),
     ).toBe("https://garum.suarex.app");
   });
 
   it("sin x-forwarded-proto y fuera de localhost, asume https", () => {
     expect(
-      origenDeLosQr({ customDomain: null, host: "garum.suarex.app", forwardedProto: null }),
+      origenPublico({ customDomain: null, host: "garum.suarex.app", forwardedProto: null }),
     ).toBe("https://garum.suarex.app");
   });
 
   it("en desarrollo ignora el dominio propio: no hay TLS para él en local", () => {
     expect(
-      origenDeLosQr({
+      origenPublico({
         customDomain: "garum-demo.test",
         host: "garum.localhost:3000",
         forwardedProto: null,

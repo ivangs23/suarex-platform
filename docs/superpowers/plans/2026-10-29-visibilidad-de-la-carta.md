@@ -84,13 +84,13 @@ Hoy `apps/web/lib/qr-origin.ts` (`origenDeLosQr`) decide a qué origen llevan lo
 canonical, el sitemap, el `robots.txt` y el JSON-LD necesitan exactamente la misma regla:
 dominio propio si existe y no es desarrollo; si no, el Host de la petición.
 
-- [ ] Renombrar el módulo a `apps/web/lib/origen-publico.ts`, con la función `origenPublico`.
+- [x] Renombrar el módulo a `apps/web/lib/origen-publico.ts`, con la función `origenPublico`.
   Misma firma y mismos tests (mover `qr-origin.test.ts` a `origen-publico.test.ts`).
-- [ ] Añadir `origenPublicoDeLaPeticion(tenantId)`: lee `headers()` y
+- [x] Añadir `origenPublicoDeLaPeticion(tenantId)` (en `lib/origen-publico-peticion.ts`, aparte para que el módulo puro no arrastre `next/headers` ni `@suarex/db` a sus tests): lee `headers()` y
   `getTenantCustomDomain(tenantId)` y llama a `origenPublico`. Es el único sitio que lee esas
   cabeceras para esto.
-- [ ] `app/admin/mesas/page.tsx` pasa a usarla. `dominioPropioRespondeAqui` se queda donde está.
-- [ ] Sin cambio de comportamiento: `admin-d2.spec.ts` en verde tal cual.
+- [x] `app/admin/mesas/page.tsx` pasa a usarla. `dominioPropioRespondeAqui` se queda donde está.
+- [x] Sin cambio de comportamiento: `admin-d2.spec.ts` en verde tal cual.
 
 ### Tarea 0.2 — La carta de consulta en `/`
 
