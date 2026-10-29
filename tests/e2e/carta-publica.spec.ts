@@ -102,6 +102,42 @@ test("las páginas legales llevan su título y el nombre del local", async ({ pa
   await expect(page).toHaveTitle("Aviso legal · Garum Vinoteca");
 });
 
+test("el robots.txt del cliente abre la carta, cierra lo privado y da su sitemap", async ({
+  request,
+}) => {
+  // Que responda 200 con texto prueba también que la ruta gana al catch-all `[mesa]`.
+  const res = await request.get(`${ORIGIN}/robots.txt`);
+  expect(res.status()).toBe(200);
+  const texto = await res.text();
+  expect(texto).toContain("Allow: /");
+  expect(texto).toContain("Disallow: /m/");
+  expect(texto).toContain("Disallow: /admin");
+  expect(texto).toContain(`Sitemap: ${ORIGIN}/sitemap.xml`);
+});
+
+test("el robots.txt del host de plataforma lo cierra todo", async ({ request }) => {
+  const res = await request.get("http://admin.localhost:3000/robots.txt");
+  expect(res.status()).toBe(200);
+  const texto = await res.text();
+  expect(texto).toMatch(/^Disallow: \/$/m);
+  expect(texto).not.toContain("Sitemap:");
+
+  // Solo robots.txt: el sitemap sigue sin existir en ese host.
+  const sitemap = await request.get("http://admin.localhost:3000/sitemap.xml");
+  expect(sitemap.status()).toBe(404);
+});
+
+test("el sitemap lista la carta sin mesa y sus categorías, nunca una mesa", async ({ request }) => {
+  const res = await request.get(`${ORIGIN}/sitemap.xml`);
+  expect(res.status()).toBe(200);
+  const locs = [...(await res.text()).matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
+
+  expect(locs).toContain(`${ORIGIN}/`);
+  expect(locs).toContain(`${ORIGIN}/?cat=tintos`);
+  expect(locs).toContain(`${ORIGIN}/legal/aviso-legal`);
+  for (const loc of locs) expect(new URL(loc ?? "").pathname).toMatch(/^\/($|legal\/)/);
+});
+
 test("lo privado no se indexa", async ({ request }) => {
   const login = await request.get(`${ORIGIN}/staff/login`);
   expect(await login.text()).toContain('<meta name="robots" content="noindex"/>');
