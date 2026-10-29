@@ -45,7 +45,7 @@ export function esDocumentoLegal(valor: string): valor is DocumentoLegal {
 function identificacion(d: DatosLegales): string {
   return [
     d.legalName?.trim() || d.businessName,
-    d.cif?.trim() ? `CIF ${d.cif.trim()}` : null,
+    d.cif?.trim() ? `NIF ${d.cif.trim()}` : null,
     d.address?.trim(),
     d.phone?.trim() ? `tel. ${d.phone.trim()}` : null,
   ]

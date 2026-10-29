@@ -301,7 +301,7 @@ export function AjustesForm(props: Props) {
           <input name="legal_name" defaultValue={props.fiscal.legalName} />
         </label>
         <label>
-          CIF
+          NIF
           <input name="cif" defaultValue={props.fiscal.cif} />
         </label>
         <label>
