@@ -186,6 +186,16 @@ describe.each(CASOS)("$nombre", ({ tema, branding }) => {
     expect(html).toContain("5");
   });
 
+  it("la bienvenida tiene un único h1 con el nombre, y sus imágenes declaran alt", () => {
+    // Es la portada que indexan los buscadores (`/`): su encabezado es el nombre del local. La
+    // foto y el logo son decorativos (el nombre ya va en texto): `alt=""`, nunca sin `alt`.
+    const html = render({ welcome: { active: true, href: "/5?ver=carta" } });
+    const h1 = html.match(/<h1[\s>][\s\S]*?<\/h1>/g) ?? [];
+    expect(h1).toHaveLength(1);
+    expect(h1[0]).toContain("Bar de Prueba");
+    for (const img of html.match(/<img[^>]*>/g) ?? []) expect(img).toMatch(/\salt="/);
+  });
+
   it("dentro de la carta expone el conteo crudo de productos del tenant", () => {
     // La suite e2e lo usa para detectar una fuga entre tenants aunque nada visible cambie.
     expect(render({})).toContain('data-testid="product-count"');

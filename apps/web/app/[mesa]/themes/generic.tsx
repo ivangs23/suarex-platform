@@ -118,7 +118,8 @@ export const GenericTheme: MenuTheme = ({
               priority
             />
           ) : null}
-          <span className={styles.welcomeContent}>
+          {/* `div` y no `span`: dentro va el `h1`, y un encabezado no cabe en un `span`. */}
+          <div className={styles.welcomeContent}>
             {branding.logoUrl ? (
               <Image
                 className={styles.welcomeLogo}
@@ -140,9 +141,9 @@ export const GenericTheme: MenuTheme = ({
                 {badge.emoji}
               </span>
             ) : null}
-            <span className={styles.name} data-testid="tenant-name">
+            <h1 className={styles.name} data-testid="tenant-name">
               {businessName}
-            </span>
+            </h1>
             {tagline ? <span className={styles.tagline}>{tagline}</span> : null}
             {/* Sin mesa (canal totem) no se pinta: en la mesa (QR) siempre hay número. */}
             {mesa ? (
@@ -151,7 +152,7 @@ export const GenericTheme: MenuTheme = ({
               </span>
             ) : null}
             <span className={styles.enter}>{t.enter}</span>
-          </span>
+          </div>
         </a>
         <Langs langs={langs} />
       </main>
