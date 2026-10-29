@@ -145,6 +145,46 @@ test("sin ficha guardada, la carta no pinta ficha del local", async ({ page }) =
   await expect(page.getByTestId("ficha-del-local")).toHaveCount(0);
 });
 
+test("los datos estructurados describen lo que se ve: el local y, en una categoría, sus platos", async ({
+  request,
+}) => {
+  const jsonLd = async (ruta: string) => {
+    const html = await (await request.get(`${ORIGIN}${ruta}`)).text();
+    const bloque = html.match(/<script type="application\/ld\+json">([^<]*)<\/script>/)?.[1];
+    expect(bloque, `JSON-LD en ${ruta}`).toBeTruthy();
+    return JSON.parse(bloque ?? "{}") as Record<string, unknown>;
+  };
+
+  // La bienvenida no enseña la carta: solo enlaza a ella.
+  const bienvenida = await jsonLd("/");
+  expect(bienvenida).toMatchObject({
+    "@type": "Restaurant",
+    name: "Garum Vinoteca",
+    url: `${ORIGIN}/`,
+    hasMenu: `${ORIGIN}/?ver=carta`,
+  });
+
+  // Desde una mesa, las URL siguen siendo las de la carta sin mesa.
+  const tintos = await jsonLd("/1?cat=tintos");
+  expect(tintos.hasMenu).toMatchObject({
+    "@type": "Menu",
+    hasMenuSection: [
+      {
+        name: "Tintos",
+        url: `${ORIGIN}/?cat=tintos`,
+        hasMenuItem: expect.arrayContaining([
+          {
+            "@type": "MenuItem",
+            name: "Ribera del Duero",
+            offers: { "@type": "Offer", price: "18.00", priceCurrency: "EUR" },
+          },
+        ]),
+      },
+    ],
+  });
+  expect(tintos).not.toHaveProperty("aggregateRating");
+});
+
 test("lo privado no se indexa", async ({ request }) => {
   const login = await request.get(`${ORIGIN}/staff/login`);
   expect(await login.text()).toContain('<meta name="robots" content="noindex"/>');
