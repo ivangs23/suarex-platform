@@ -2,7 +2,7 @@ import { hasChannel, parseBranding } from "@suarex/config";
 import { findTableByToken } from "@suarex/db";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { leerCarta, settingsDeLaCarta } from "@/lib/carta-cache";
+import { fichaDeLaCarta, leerCarta, settingsDeLaCarta } from "@/lib/carta-cache";
 import { availableLangs, LANG_LABELS, resolveLang, strings } from "@/lib/i18n";
 import { readMesaToken } from "@/lib/mesa-cookie";
 import { metadatosDeLaCarta } from "@/lib/metadatos";
@@ -11,6 +11,7 @@ import type { ResolvedTenant } from "@/lib/tenant-context";
 import { CartPanelHost } from "./cart/CartPanelHost";
 import { CartProvider } from "./cart/CartProvider";
 import { ScanToOrderHint } from "./cart/ScanToOrderHint";
+import { FichaDelLocal } from "./FichaDelLocal";
 import { LegalFooter } from "./LegalFooter";
 import { buildMenuView } from "./menu-view";
 import { resolveTheme } from "./themes";
@@ -23,10 +24,11 @@ type EntradaDeLaCarta = { tenant: ResolvedTenant; mesa: string | null; query: Qu
 async function prepararCarta({ tenant, mesa, query }: EntradaDeLaCarta) {
   // Cacheados por tenant (`lib/carta-cache.ts`); las franjas y el agotado se aplican aquí, a
   // la hora de esta petición. Si los alérgenos fallaran, la carta revienta en vez de decir
-  // "sin alérgenos" sobre un plato con gluten.
-  const [{ categories, products, allergens }, settings] = await Promise.all([
+  // "sin alérgenos" sobre un plato con gluten. Sin ficha, en cambio, la carta se sirve igual.
+  const [{ categories, products, allergens }, settings, ficha] = await Promise.all([
     leerCarta(tenant.id),
     settingsDeLaCarta(tenant.id).catch(() => null),
+    fichaDeLaCarta(tenant.id).catch(() => null),
   ]);
 
   // Mismo criterio que el totem: sin el canal encendido, este cliente no sirve carta por QR.
@@ -81,6 +83,7 @@ async function prepararCarta({ tenant, mesa, query }: EntradaDeLaCarta) {
     porDefecto,
     idiomas,
     view,
+    ficha,
   };
 }
 
@@ -130,6 +133,7 @@ export async function renderCarta(entrada: EntradaDeLaCarta) {
     porDefecto,
     idiomas,
     view,
+    ficha,
   } = await prepararCarta(entrada);
 
   // Paso de bienvenida: activo solo en la raíz de la carta y mientras no se haya entrado.
@@ -185,6 +189,7 @@ export async function renderCarta(entrada: EntradaDeLaCarta) {
       />
       <CartPanelHost />
       <ScanToOrderHint />
+      <FichaDelLocal ficha={ficha} lang={lang} strings={strings(lang)} />
       {/* Lo monta la PÁGINA, no el tema: igual que CartPanelHost. Un tema decide cómo se ve
           la carta; nunca si el comensal puede llegar a la política de privacidad de su
           restaurante. Por eso no está en contract.test.tsx -- ese helper solo renderiza el

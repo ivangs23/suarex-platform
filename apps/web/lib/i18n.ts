@@ -91,6 +91,11 @@ export type Strings = {
   menuTitle: string;
   /** Título de la pestaña y de la vista previa de la carta: «{nombre} · Carta». */
   cartaTitle: string;
+  /** Ficha del local al pie de la carta: horario de hoy y la semana desplegable. */
+  fichaHorario: string;
+  fichaVerHorario: string;
+  fichaHoy: string;
+  fichaCerrado: string;
   explore: string;
   backToCategories: string;
   /** El logo de la barra lleva de vuelta a la bienvenida: es su nombre accesible. */
@@ -198,6 +203,10 @@ const ES: Strings = {
   enter: "Toca para empezar",
   menuTitle: "Menú",
   cartaTitle: "Carta",
+  fichaHorario: "Horario",
+  fichaVerHorario: "Ver horario",
+  fichaHoy: "Hoy",
+  fichaCerrado: "Cerrado",
   explore: "¿Qué te apetece hoy?",
   backToCategories: "← Explorar otras categorías",
   backToStart: "Volver al inicio",
@@ -290,6 +299,10 @@ const EN: Strings = {
   enter: "Tap to start",
   menuTitle: "Menu",
   cartaTitle: "Menu",
+  fichaHorario: "Opening hours",
+  fichaVerHorario: "See opening hours",
+  fichaHoy: "Today",
+  fichaCerrado: "Closed",
   explore: "What do you fancy today?",
   backToCategories: "← Browse other categories",
   backToStart: "Back to start",
@@ -382,6 +395,10 @@ const PT: Strings = {
   enter: "Toque para começar",
   menuTitle: "Menu",
   cartaTitle: "Menu",
+  fichaHorario: "Horário",
+  fichaVerHorario: "Ver horário",
+  fichaHoy: "Hoje",
+  fichaCerrado: "Fechado",
   explore: "O que lhe apetece hoje?",
   backToCategories: "← Ver outras categorias",
   backToStart: "Voltar ao início",
