@@ -337,9 +337,11 @@ correcto: es el origen público del cliente aunque el DNS aún no apunte aquí.
 
 ### Tarea 2.2 — Aviso legal con los datos del titular
 
-- [ ] Revisar `lib/legal-content.ts`: con datos fiscales, el aviso legal ya pinta razón social,
-  NIF y domicilio. Confirmarlo con un test unitario de `documentoLegal` si no lo hay.
-- [ ] Sin datos fiscales: no cambiar el texto público. Lo que cambia es que el panel lo marca
+- [x] Revisar `lib/legal-content.ts`: con datos fiscales, el aviso legal ya pinta razón social,
+  NIF y domicilio. Confirmarlo con un test unitario de `documentoLegal` si no lo hay. *(Confirmado:
+  no había test del aviso legal, solo de la privacidad; ya lo hay. El texto público dice «CIF»; la
+  LSSI, art. 10, habla de «número de identificación fiscal» (NIF). Cambiarlo es decisión de Iván.)*
+- [x] Sin datos fiscales: no cambiar el texto público. Lo que cambia es que el panel lo marca
   como pendiente (2.1).
 
 ---
