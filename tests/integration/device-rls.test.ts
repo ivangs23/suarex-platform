@@ -201,6 +201,13 @@ describe("device_zonas_horarias: la zona de sus sedes, sin abrirle `venues`", ()
     expect(data ?? []).toEqual([]);
   });
 
+  it("tampoco la ficha pública de la sede (20261029000001 no le abre `venues`)", async () => {
+    const { data } = await deviceA.client
+      .from("venues")
+      .select("address_street, phone, opening_hours");
+    expect(data ?? []).toEqual([]);
+  });
+
   it("un anónimo no puede llamarla", async () => {
     const { error } = await anonClient().rpc("device_zonas_horarias");
     expect(error).not.toBeNull();

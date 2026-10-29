@@ -197,5 +197,18 @@ export type {
   Tenant,
   TenantSettingsRow,
 } from "./types.js";
-export type { VenueRow } from "./venues.js";
-export { listVenues, zonaHorariaDelTenant } from "./venues.js";
+export type {
+  DiaDeLaSemana,
+  FichaDeLaSede,
+  FichaPublica,
+  Horario,
+  Tramo,
+  VenueRow,
+} from "./venues.js";
+export {
+  DIAS_DE_LA_SEMANA,
+  fichaPublicaDeLaSede,
+  guardarFichaPublica,
+  listVenues,
+  zonaHorariaDelTenant,
+} from "./venues.js";

@@ -1,4 +1,6 @@
 import { tenantScoped } from "./client.js";
+import type { Json } from "./database.types.js";
+import { objetoJson } from "./json.js";
 
 export type VenueRow = {
   id: string;
@@ -61,4 +63,82 @@ export async function zonaHorariaDelTenant(tenantId: string): Promise<string> {
     .limit(1)
     .maybeSingle();
   return (data?.timezone as string | undefined) ?? "Europe/Madrid";
+}
+
+/** Los días de `venues.opening_hours`, de lunes a domingo. */
+export const DIAS_DE_LA_SEMANA = ["mo", "tu", "we", "th", "fr", "sa", "su"] as const;
+export type DiaDeLaSemana = (typeof DIAS_DE_LA_SEMANA)[number];
+/** Un tramo `["13:00", "16:00"]`, en hora local de la sede. */
+export type Tramo = [string, string];
+/** Día ausente = no publicado; `[]` = cerrado ese día. */
+export type Horario = Partial<Record<DiaDeLaSemana, Tramo[]>>;
+
+/** Lo que la sede publica. Cada campo es `null` si el cliente no lo ha rellenado. */
+export type FichaPublica = {
+  street: string | null;
+  postalCode: string | null;
+  city: string | null;
+  region: string | null;
+  phone: string | null;
+  openingHours: Horario | null;
+};
+
+export type FichaDeLaSede = FichaPublica & { venueId: string; timezone: string };
+
+/** El horario guardado, sin cast a ciegas: lo que no tenga la forma de un tramo se descarta. */
+function horarioJson(valor: Json | null): Horario | null {
+  if (valor === null) return null;
+  const dias = objetoJson(valor);
+  const horario: Horario = {};
+  for (const dia of DIAS_DE_LA_SEMANA) {
+    const tramos = dias[dia];
+    if (!Array.isArray(tramos)) continue;
+    horario[dia] = tramos.filter(
+      (t): t is Tramo =>
+        Array.isArray(t) && t.length === 2 && t.every((hora) => typeof hora === "string"),
+    );
+  }
+  return horario;
+}
+
+/** Ficha pública de la sede por defecto, la que pinta la carta. `null` si no hay sede. */
+export async function fichaPublicaDeLaSede(tenantId: string): Promise<FichaDeLaSede | null> {
+  const { data, error } = await tenantScoped("venues", tenantId)
+    .select(
+      "id, timezone, address_street, address_postal_code, address_city, address_region, phone, opening_hours",
+    )
+    .order("is_default", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  return {
+    venueId: data.id,
+    timezone: data.timezone,
+    street: data.address_street,
+    postalCode: data.address_postal_code,
+    city: data.address_city,
+    region: data.address_region,
+    phone: data.phone,
+    openingHours: horarioJson(data.opening_hours),
+  };
+}
+
+/** Guarda la ficha de una sede. Si `venueId` es de otro tenant, no toca nada (como `updateTable`). */
+export async function guardarFichaPublica(
+  tenantId: string,
+  venueId: string,
+  ficha: FichaPublica,
+): Promise<void> {
+  const { error } = await tenantScoped("venues", tenantId)
+    .update({
+      address_street: ficha.street,
+      address_postal_code: ficha.postalCode,
+      address_city: ficha.city,
+      address_region: ficha.region,
+      phone: ficha.phone,
+      opening_hours: ficha.openingHours,
+    })
+    .eq("id", venueId);
+  if (error) throw error;
 }

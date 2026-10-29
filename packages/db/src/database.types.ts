@@ -1009,28 +1009,46 @@ export type Database = {
       }
       venues: {
         Row: {
+          address_city: string | null
+          address_postal_code: string | null
+          address_region: string | null
+          address_street: string | null
           created_at: string
           id: string
           is_default: boolean
           name: string
+          opening_hours: Json | null
+          phone: string | null
           slug: string
           tenant_id: string
           timezone: string
         }
         Insert: {
+          address_city?: string | null
+          address_postal_code?: string | null
+          address_region?: string | null
+          address_street?: string | null
           created_at?: string
           id?: string
           is_default?: boolean
           name: string
+          opening_hours?: Json | null
+          phone?: string | null
           slug: string
           tenant_id: string
           timezone?: string
         }
         Update: {
+          address_city?: string | null
+          address_postal_code?: string | null
+          address_region?: string | null
+          address_street?: string | null
           created_at?: string
           id?: string
           is_default?: boolean
           name?: string
+          opening_hours?: Json | null
+          phone?: string | null
           slug?: string
           tenant_id?: string
           timezone?: string

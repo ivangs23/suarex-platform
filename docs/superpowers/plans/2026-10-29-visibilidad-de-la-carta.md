@@ -208,7 +208,8 @@ curl -s https://admin.srv1121554.hstgr.cloud/robots.txt    # Disallow: /
 Con dominio propio, el canonical y el sitemap ya dicen `https://garumvinoteca.com/...`. Es
 correcto: es el origen público del cliente aunque el DNS aún no apunte aquí.
 
-- [ ] Verificación pasada → Iván puede apuntar el DNS de Garum (Fase 3).
+- [x] Verificación pasada → Iván puede apuntar el DNS de Garum (Fase 3). *(2026-10-29, `9e42c40`:
+  200, título, canonical en el `<head>` también con UA de GPTBot, robots, 61 `<loc>`, `admin.` cerrado.)*
 
 ---
 
@@ -216,7 +217,7 @@ correcto: es el origen público del cliente aunque el DNS aún no apunte aquí.
 
 ### Tarea 1.1 — Columnas públicas en `venues`
 
-- [ ] Migración `supabase/migrations/2026MMDD000001_venues_ficha_publica.sql`, que añade:
+- [x] Migración `supabase/migrations/20261029000001_venues_ficha_publica.sql`, que añade:
   - `address_street text`, `address_postal_code text`, `address_city text`,
     `address_region text`;
   - `phone text`;
@@ -224,11 +225,13 @@ correcto: es el origen público del cliente aunque el DNS aún no apunte aquí.
     `{ "mo": [["13:00","16:00"],["20:00","23:30"]], ..., "su": [] }`. Ausente = no publicado;
     `[]` = cerrado ese día;
   - un `check` de forma básica en SQL. La validación fina (formato `HH:MM`, tramos ordenados)
-    va en zod en el borde (1.2).
-- [ ] Sin cambios de RLS: `venues` ya es por tenant. El rol `device` sigue sin leer `venues`
+    va en zod en el borde (1.2). *(Con `jsonb_path_exists` en modo `strict`: un `check` no
+    admite subconsultas. Comprueba claves de día, listas de tramos y pares de texto.)*
+- [x] Sin cambios de RLS: `venues` ya es por tenant. El rol `device` sigue sin leer `venues`
   (`20260722000005_device_rls_hardening.sql`): comprobar que la migración no lo abre.
-- [ ] `pnpm db:reset && pnpm db:types`.
-- [ ] `packages/db/src/venues.ts`: `fichaPublicaDeLaSede(tenantId)`, que devuelve la sede por
+- [x] `pnpm db:reset && pnpm db:types`. *(En local, `supabase migration up --local` en vez del reset,
+  para no borrar la base; la CI aplica todas las migraciones desde cero.)*
+- [x] `packages/db/src/venues.ts`: `fichaPublicaDeLaSede(tenantId)`, que devuelve la sede por
   defecto con esos campos, y `guardarFichaPublica(tenantId, venueId, ficha)`. Ambas con
   `tenantScoped("venues", tenantId)`. Test de integración: un tenant no lee ni escribe la sede
   de otro.
