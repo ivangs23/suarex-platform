@@ -17,7 +17,7 @@ Suite en verde:
 |---|---|
 | lint | ok |
 | typecheck | 10/10 + tests |
-| unit | 9 paquetes; web: 4.047 |
+| unit | 9 paquetes; web: 4.049 |
 | integración | 534 (78 ficheros) |
 | e2e | 177, en Windows, incluidas 14 capturas visuales de la carta |
 

@@ -47,6 +47,25 @@ describe("documentoLegal", () => {
     expect(texto).not.toContain("CIF");
   });
 
+  it("el aviso legal identifica al titular con razón social, número fiscal y domicilio", () => {
+    // LSSI, art. 10: el aviso legal de la web tiene que decir quién es el titular. Con los
+    // datos fiscales guardados, la sección «Titular» los pinta todos.
+    const titular = documentoLegal("aviso-legal", DATOS).secciones.find(
+      (s) => s.titulo === "Titular",
+    );
+    expect(titular?.parrafos[0]).toBe(
+      "Este sitio es la carta digital de Paco SL · CIF B12345678 · Calle Falsa 1, Madrid · tel. 600111222.",
+    );
+  });
+
+  it("sin datos fiscales, el aviso legal no cambia: cae al nombre comercial", () => {
+    // El hueco no se rellena en la página pública; lo avisa la puesta en marcha (checklist).
+    const titular = documentoLegal("aviso-legal", { businessName: "Bar Paco" }).secciones.find(
+      (s) => s.titulo === "Titular",
+    );
+    expect(titular?.parrafos[0]).toBe("Este sitio es la carta digital de Bar Paco.");
+  });
+
   it("los tres documentos traen título y al menos una sección con contenido", () => {
     for (const slug of DOCUMENTOS_LEGALES) {
       const doc = documentoLegal(slug, DATOS);
