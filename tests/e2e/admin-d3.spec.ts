@@ -1,9 +1,12 @@
 import { expect, type Page, test } from "@playwright/test";
 import {
   deleteStaffByEmailForTest,
+  type FichaSnapshot,
   restoreDemoSettings,
+  restoreFichaDeGarum,
   type SettingsSnapshot,
   snapshotDemoSettings,
+  snapshotFichaDeGarum,
 } from "./helpers/admin-d3-db.js";
 import {
   deleteOrder,
@@ -38,8 +41,18 @@ async function login(page: Page, email: string, password: string): Promise<void>
 // --- Ajustes: snapshot/restore de la marca compartida de garum ---
 let settingsSnap: SettingsSnapshot | undefined;
 let createdStaffEmail: string | undefined;
+let fichaSnap: FichaSnapshot | undefined;
 
 test.afterEach(async () => {
+  if (fichaSnap) {
+    const snap = fichaSnap;
+    fichaSnap = undefined;
+    try {
+      await restoreFichaDeGarum(snap);
+    } catch (error) {
+      console.error("No se pudo restaurar la ficha de garum:", error);
+    }
+  }
   if (settingsSnap) {
     const snap = settingsSnap;
     settingsSnap = undefined;
@@ -208,4 +221,60 @@ test("el cierre de caja resume lo cobrado hoy y cuadra", async ({ page }) => {
   } finally {
     await deleteOrder(orderId);
   }
+});
+
+// --- Ficha pública del local (dirección, teléfono, horario) ---
+
+test("un owner guarda la ficha pública del local y la ve al volver", async ({ page }) => {
+  fichaSnap = await snapshotFichaDeGarum(); // se restaura pase lo que pase (afterEach)
+  await login(page, "owner@garum.local", OWNER_PASSWORD as string);
+  await page.goto("http://garum.localhost:3000/admin/ajustes");
+
+  const ficha = page.getByTestId("ficha-form");
+  await ficha.getByLabel("Dirección").fill("Calle Larios 5");
+  await ficha.getByLabel("Código postal").fill("29005");
+  await ficha.getByLabel("Ciudad").fill("Málaga");
+  await ficha.getByLabel("Provincia").fill("Málaga");
+  await ficha.getByLabel("Teléfono").fill("+34 952 000 000");
+  await ficha.getByTestId("horario-mo").getByLabel("Cerrado").check();
+  await ficha.getByLabel("Martes, tramo 1, abre").fill("13:00");
+  await ficha.getByLabel("Martes, tramo 1, cierra").fill("16:00");
+  await ficha.getByLabel("Martes, tramo 2, abre").fill("20:00");
+  await ficha.getByLabel("Martes, tramo 2, cierra").fill("23:30");
+  // Un bar que cierra pasada la medianoche.
+  await ficha.getByLabel("Sábado, tramo 1, abre").fill("20:00");
+  await ficha.getByLabel("Sábado, tramo 1, cierra").fill("02:00");
+  await ficha.getByRole("button", { name: "Guardar ficha" }).click();
+  await expect(ficha.getByRole("status")).toHaveText("Ficha guardada.");
+
+  await page.reload();
+  const vuelta = page.getByTestId("ficha-form");
+  await expect(vuelta.getByLabel("Dirección")).toHaveValue("Calle Larios 5");
+  await expect(vuelta.getByLabel("Teléfono")).toHaveValue("+34 952 000 000");
+  await expect(vuelta.getByTestId("horario-mo").getByLabel("Cerrado")).toBeChecked();
+  await expect(vuelta.getByLabel("Martes, tramo 2, cierra")).toHaveValue("23:30");
+  await expect(vuelta.getByLabel("Sábado, tramo 1, cierra")).toHaveValue("02:00");
+  // Un día sin tocar sigue sin publicarse.
+  await expect(vuelta.getByTestId("horario-we").getByLabel("Cerrado")).not.toBeChecked();
+  await expect(vuelta.getByLabel("Miércoles, tramo 1, abre")).toHaveValue("");
+});
+
+test("un horario mal ordenado se dice en el formulario y no se pierde lo escrito", async ({
+  page,
+}) => {
+  fichaSnap = await snapshotFichaDeGarum();
+  await login(page, "owner@garum.local", OWNER_PASSWORD as string);
+  await page.goto("http://garum.localhost:3000/admin/ajustes");
+
+  const ficha = page.getByTestId("ficha-form");
+  await ficha.getByLabel("Dirección").fill("Calle Larios 5");
+  await ficha.getByLabel("Jueves, tramo 1, abre").fill("20:00");
+  await ficha.getByLabel("Jueves, tramo 1, cierra").fill("23:00");
+  await ficha.getByLabel("Jueves, tramo 2, abre").fill("13:00");
+  await ficha.getByLabel("Jueves, tramo 2, cierra").fill("16:00");
+  await ficha.getByRole("button", { name: "Guardar ficha" }).click();
+
+  await expect(ficha.getByRole("alert")).toContainText("Jueves: El segundo tramo va después");
+  await expect(ficha.getByLabel("Dirección")).toHaveValue("Calle Larios 5");
+  await expect(ficha.getByLabel("Jueves, tramo 2, abre")).toHaveValue("13:00");
 });

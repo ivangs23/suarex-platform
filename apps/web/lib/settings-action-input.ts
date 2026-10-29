@@ -20,6 +20,8 @@ import {
   normalizeCustomDomain,
   TOKEN_OPTIONS,
 } from "@suarex/config";
+import { DIAS_DE_LA_SEMANA, type DiaDeLaSemana, type FichaPublica, type Tramo } from "@suarex/db";
+import { z } from "zod";
 import { InvalidFormFieldError, optionalString, requiredString } from "./form-parse";
 import { SUPPORTED_LANGS } from "./i18n";
 
@@ -251,4 +253,110 @@ export function parseCustomDomain(formData: FormData, rootDomains: string[]): st
     );
   }
   return normalized;
+}
+
+/* ---- Ficha pública del local (`venues`) ---- */
+
+export const NOMBRE_DEL_DIA: Record<DiaDeLaSemana, string> = {
+  mo: "Lunes",
+  tu: "Martes",
+  we: "Miércoles",
+  th: "Jueves",
+  fr: "Viernes",
+  sa: "Sábado",
+  su: "Domingo",
+};
+
+const hora = z
+  .string({ error: "Cada tramo necesita hora de apertura y de cierre" })
+  .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Hora inválida: usa HH:MM");
+
+/** `[apertura, cierre]`. Un cierre anterior a la apertura cruza la medianoche (un bar). */
+const tramo = z
+  .tuple([hora, hora])
+  .refine(([desde, hasta]) => desde !== hasta, "Un tramo no puede abrir y cerrar a la misma hora");
+
+const cruzaMedianoche = ([desde, hasta]: Tramo) => hasta < desde;
+
+const tramosDelDia = z
+  .array(tramo)
+  .max(2, "Como máximo dos tramos por día")
+  .refine(
+    ([primero, segundo]) =>
+      !primero || !segundo || (!cruzaMedianoche(primero) && segundo[0] > primero[1]),
+    "El segundo tramo va después del primero, y solo el último puede pasar de medianoche",
+  );
+
+/** Español (612 345 678, +34…) o internacional E.164 (+44…). Se guarda tal como se escribe. */
+function esTelefono(valor: string): boolean {
+  const digitos = valor.replace(/[\s.()-]/g, "");
+  return /^(\+34|0034)?[6789]\d{8}$/.test(digitos) || /^\+[1-9]\d{7,14}$/.test(digitos);
+}
+
+const texto = (max: number) => z.string().max(max, `Máximo ${max} caracteres`).nullable();
+
+export const fichaPublicaSchema = z.object({
+  street: texto(160),
+  postalCode: texto(12),
+  city: texto(80),
+  region: texto(80),
+  phone: texto(30).refine(
+    (valor) => valor === null || esTelefono(valor),
+    "Teléfono inválido: uno español (612 345 678) o internacional con prefijo (+44 20 7946 0000)",
+  ),
+  openingHours: z.partialRecord(z.enum(DIAS_DE_LA_SEMANA), tramosDelDia).nullable(),
+}) satisfies z.ZodType<FichaPublica>;
+
+function campo(formData: FormData, nombre: string): string | null {
+  return optionalString(formData, nombre) ?? null;
+}
+
+/**
+ * El horario tal como lo manda el formulario: por día, «cerrado» o hasta dos tramos. Un día sin
+ * nada no se publica; sin ningún día, no hay horario. Un tramo a medias se queda, para que la
+ * validación lo rechace en vez de perderlo en silencio.
+ */
+function horarioDelFormulario(formData: FormData): Record<string, (string | null)[][]> | null {
+  const horario: Record<string, (string | null)[][]> = {};
+  for (const dia of DIAS_DE_LA_SEMANA) {
+    if (formData.get(`h_${dia}_cerrado`) === "on") {
+      horario[dia] = [];
+      continue;
+    }
+    const tramos = [1, 2]
+      .map((n) => [campo(formData, `h_${dia}_${n}_desde`), campo(formData, `h_${dia}_${n}_hasta`)])
+      .filter(([desde, hasta]) => desde !== null || hasta !== null);
+    if (tramos.length > 0) horario[dia] = tramos;
+  }
+  return Object.keys(horario).length > 0 ? horario : null;
+}
+
+/** Primer error, con el día delante si es del horario: «Martes: Hora inválida: usa HH:MM». */
+function mensajeDe(error: z.ZodError): string {
+  const [issue] = error.issues;
+  if (!issue) return "Ficha inválida";
+  const [raiz, dia] = issue.path;
+  const prefijo =
+    raiz === "openingHours" && typeof dia === "string" && dia in NOMBRE_DEL_DIA
+      ? `${NOMBRE_DEL_DIA[dia as DiaDeLaSemana]}: `
+      : "";
+  return prefijo + issue.message;
+}
+
+/**
+ * La ficha del formulario «Ficha pública del local», validada. Rechaza (no degrada): un horario
+ * mal escrito publicado en la carta y en los buscadores es peor que no publicarlo.
+ */
+export function parseFichaPublica(formData: FormData): { venueId: string; ficha: FichaPublica } {
+  const venueId = requiredString(formData, "venue_id");
+  const resultado = fichaPublicaSchema.safeParse({
+    street: campo(formData, "ficha_street"),
+    postalCode: campo(formData, "ficha_postal_code"),
+    city: campo(formData, "ficha_city"),
+    region: campo(formData, "ficha_region"),
+    phone: campo(formData, "ficha_phone"),
+    openingHours: horarioDelFormulario(formData),
+  });
+  if (!resultado.success) throw new InvalidFormFieldError(mensajeDe(resultado.error));
+  return { venueId, ficha: resultado.data };
 }

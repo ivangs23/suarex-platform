@@ -238,19 +238,30 @@ correcto: es el origen público del cliente aunque el DNS aún no apunte aquí.
 
 ### Tarea 1.2 — Editar la ficha en el panel
 
-- [ ] `app/admin/ajustes`: fieldset «Ficha pública del local». Con varias sedes, un selector de
+- [x] `app/admin/ajustes`: fieldset «Ficha pública del local». Con varias sedes, un selector de
   sede, como `TableForm`. Campos:
   - dirección, código postal, ciudad, provincia y teléfono;
   - horario por día, con uno o dos tramos y «cerrado».
-- [ ] Schema zod en `apps/web/lib/settings-action-input.ts`, con estas reglas:
+
+  *(Hecho como formulario propio, `FichaForm`, con su botón: la ficha es de UNA sede y el de
+  ajustes es del cliente entero. El selector es un GET a `?sede=`, que precarga esa sede; para
+  eso `fichaPublicaDeLaSede` acepta un `venueId` opcional. Envía con `startTransition`: con
+  `action={...}` React vacía el formulario y un error de validación se llevaba lo escrito.)*
+- [x] Schema zod en `apps/web/lib/settings-action-input.ts`, con estas reglas:
   - teléfono en formato español o E.164;
   - horas `HH:MM`;
   - el fin de un tramo va después de su inicio, salvo que cruce la medianoche (permitido, para
     bares);
   - como máximo dos tramos por día.
-- [ ] Server action con `managerAction`; el `tenantId` sale de la sesión, nunca del formulario.
-- [ ] Unit tests del schema. e2e en `admin-d3.spec.ts`: guardar la ficha y verla en la carta
-  (1.3).
+
+  *(Además: un tramo no abre y cierra a la misma hora; el segundo empieza después de que acabe el
+  primero, y solo el último puede pasar de medianoche. El teléfono se guarda tal como se
+  escribe.)*
+- [x] Server action con `managerAction`; el `tenantId` sale de la sesión, nunca del formulario.
+  *(Devuelve el error al formulario, como `PaymentConfigForm`.)*
+- [x] Unit tests del schema. e2e en `admin-d3.spec.ts`: guardar la ficha y verla en la carta
+  (1.3). *(Aquí, guardarla y volver a verla en el panel, y que un error no borre lo escrito;
+  verla en la carta se añade con la 1.3.)*
 
 ### Tarea 1.3 — La ficha, visible en la carta
 
