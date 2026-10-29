@@ -185,6 +185,30 @@ test("los datos estructurados describen lo que se ve: el local y, en una categor
   expect(tintos).not.toHaveProperty("aggregateRating");
 });
 
+test("el llms.txt del cliente cuenta su carta y cómo se pide, con las URL sin mesa", async ({
+  request,
+}) => {
+  const res = await request.get(`${ORIGIN}/llms.txt`);
+  expect(res.status()).toBe(200);
+  expect(res.headers()["content-type"]).toContain("text/plain");
+  const texto = await res.text();
+  expect(texto.startsWith("# Garum Vinoteca\n")).toBe(true);
+  expect(texto).toContain(`- [Vinos](${ORIGIN}/?cat=vinos): 3 platos`);
+  expect(texto).toContain(`  - [Tintos](${ORIGIN}/?cat=tintos): 2 platos`);
+  expect(texto).toContain("## Cómo se pide");
+  // El seed no trae ficha: nada de dirección.
+  expect(texto).not.toContain("Dirección");
+});
+
+test("sin carta por QR, o en el host de plataforma, no hay llms.txt", async ({ request }) => {
+  const plataforma = await request.get("http://admin.localhost:3000/llms.txt");
+  expect(plataforma.status()).toBe(404);
+
+  restaurar = await withChannels("garum", ["kiosko"]);
+  const sinQr = await request.get(`${ORIGIN}/llms.txt`);
+  expect(sinQr.status()).toBe(404);
+});
+
 test("lo privado no se indexa", async ({ request }) => {
   const login = await request.get(`${ORIGIN}/staff/login`);
   expect(await login.text()).toContain('<meta name="robots" content="noindex"/>');

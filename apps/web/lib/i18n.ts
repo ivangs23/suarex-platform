@@ -96,6 +96,11 @@ export type Strings = {
   fichaVerHorario: string;
   fichaHoy: string;
   fichaCerrado: string;
+  /** `llms.txt`: solo hechos sobre el local y cómo se pide, en el idioma del cliente. */
+  llmsComoSePide: string;
+  llmsPedido: string;
+  llmsDireccion: string;
+  llmsTelefono: string;
   explore: string;
   backToCategories: string;
   /** El logo de la barra lleva de vuelta a la bienvenida: es su nombre accesible. */
@@ -207,6 +212,11 @@ const ES: Strings = {
   fichaVerHorario: "Ver horario",
   fichaHoy: "Hoy",
   fichaCerrado: "Cerrado",
+  llmsComoSePide: "Cómo se pide",
+  llmsPedido:
+    "Se pide en la mesa, escaneando su código QR. La carta también se puede consultar fuera del local:",
+  llmsDireccion: "Dirección",
+  llmsTelefono: "Teléfono",
   explore: "¿Qué te apetece hoy?",
   backToCategories: "← Explorar otras categorías",
   backToStart: "Volver al inicio",
@@ -303,6 +313,11 @@ const EN: Strings = {
   fichaVerHorario: "See opening hours",
   fichaHoy: "Today",
   fichaCerrado: "Closed",
+  llmsComoSePide: "How to order",
+  llmsPedido:
+    "Orders are placed at the table by scanning its QR code. The menu can also be viewed from outside the venue:",
+  llmsDireccion: "Address",
+  llmsTelefono: "Phone",
   explore: "What do you fancy today?",
   backToCategories: "← Browse other categories",
   backToStart: "Back to start",
@@ -399,6 +414,11 @@ const PT: Strings = {
   fichaVerHorario: "Ver horário",
   fichaHoy: "Hoje",
   fichaCerrado: "Fechado",
+  llmsComoSePide: "Como pedir",
+  llmsPedido:
+    "Pede-se na mesa, digitalizando o seu código QR. O menu também pode ser consultado fora do local:",
+  llmsDireccion: "Morada",
+  llmsTelefono: "Telefone",
   explore: "O que lhe apetece hoje?",
   backToCategories: "← Ver outras categorias",
   backToStart: "Voltar ao início",

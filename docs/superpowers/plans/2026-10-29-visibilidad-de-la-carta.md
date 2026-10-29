@@ -304,14 +304,17 @@ correcto: es el origen público del cliente aunque el DNS aún no apunte aquí.
 
 ### Tarea 1.5 — `llms.txt` por cliente
 
-- [ ] `app/llms.txt/route.ts` (texto plano, dinámico por host). Contenido generado:
+- [x] `app/llms.txt/route.ts` (texto plano, dinámico por host). Contenido generado:
   - nombre y lema;
   - categorías con su número de platos y su URL;
   - cómo se pide: QR en mesa, la carta se consulta desde fuera;
   - la ficha (dirección, teléfono, horario) **solo si existe**.
-- [ ] Host de plataforma o tenant sin canal QR: 404.
-- [ ] Función pura `textoLlms(...)` con unit test. Sin ficha, el texto no contiene «Dirección».
-- [ ] Añadir `llms.txt` a la exención del proxy en el host de plataforma, para que sea 404
+
+  *(Formato de llmstxt.org, en el idioma del cliente; las categorías anidadas como en la carta y
+  sin las vacías. El recuento por subárbol, `platosPorCategoria`, lo comparte con el sitemap.)*
+- [x] Host de plataforma o tenant sin canal QR: 404.
+- [x] Función pura `textoLlms(...)` con unit test. Sin ficha, el texto no contiene «Dirección».
+- [x] Añadir `llms.txt` a la exención del proxy en el host de plataforma, para que sea 404
   limpio.
 
 ---

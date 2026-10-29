@@ -84,13 +84,14 @@ export async function proxy(request: NextRequest) {
   // tenant suspendido tumbe el cron) y por el de un tenant (como esta instalado hoy en el
   // VPS), para no romper el cron ya desplegado.
   const esRutaDeCron = pathname.startsWith("/api/internal/");
-  // Para decir a los buscadores que en este host no hay nada que indexar (`app/robots.ts`).
-  const esRobots = pathname === "/robots.txt";
+  // `robots.txt` dice a los buscadores que aquí no hay nada que indexar; `llms.txt` responde un
+  // 404 limpio, sin la página de error. Las dos rutas saben qué hacer sin tenant.
+  const esDeRastreo = pathname === "/robots.txt" || pathname === "/llms.txt";
 
   if (isPlatformHost(host, ROOT_DOMAINS)) {
     // Bajo el host de plataforma NO se resuelve ningun tenant, y cualquier otra ruta es 404:
     // la carta, el panel del cliente y el tablero de personal no existen aqui.
-    if (!esRutaDePlataforma && !esRutaDeCron && !esRobots) {
+    if (!esRutaDePlataforma && !esRutaDeCron && !esDeRastreo) {
       return NextResponse.rewrite(new URL("/not-found", request.url), {
         status: 404,
         request: { headers: stripForgedTenantHeaders(request) },
