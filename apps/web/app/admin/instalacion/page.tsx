@@ -1,4 +1,5 @@
 import {
+  fichaPublicaDeLaSede,
   getPaymentConfigForManager,
   getStripeConfigForManager,
   getTenantSettings,
@@ -30,8 +31,8 @@ import { buildSetupChecklist, isSetupComplete, type SetupFacts } from "./checkli
 export default async function AdminInstalacionPage() {
   const session = await requireManager();
 
-  const [settings, venues, catalog, tables, devices, printers, payment, stripe] = await Promise.all(
-    [
+  const [settings, venues, catalog, tables, devices, printers, payment, stripe, ficha] =
+    await Promise.all([
       getTenantSettings(session.tenantId),
       listVenues(session.tenantId),
       listAdminCatalog(session.tenantId),
@@ -40,8 +41,8 @@ export default async function AdminInstalacionPage() {
       listPrinters(session.tenantId),
       getPaymentConfigForManager(session.tenantId),
       getStripeConfigForManager(session.tenantId),
-    ],
-  );
+      fichaPublicaDeLaSede(session.tenantId),
+    ]);
 
   const ahora = Date.now();
   const provider = payment ? findProvider(payment.provider) : null;
@@ -51,6 +52,10 @@ export default async function AdminInstalacionPage() {
   const taxRateBruto = (settings?.fiscal as { taxRate?: unknown } | undefined)?.taxRate;
   const fiscalTaxRate =
     typeof taxRateBruto === "number" && Number.isFinite(taxRateBruto) ? taxRateBruto : null;
+  // Los del titular, igual: solo cuenta un texto con algo escrito.
+  const fiscal = (settings?.fiscal ?? {}) as Record<string, unknown>;
+  const relleno = (campo: string) =>
+    typeof fiscal[campo] === "string" && (fiscal[campo] as string).trim() !== "";
 
   const facts: SetupFacts = {
     channels: settings?.channels ?? [],
@@ -98,6 +103,15 @@ export default async function AdminInstalacionPage() {
       mock: payment?.mock ?? true,
     },
     fiscalTaxRate,
+    titular: {
+      razonSocial: relleno("legalName"),
+      nif: relleno("cif"),
+      domicilio: relleno("address"),
+    },
+    ficha: {
+      direccion: Boolean(ficha?.street),
+      horario: Object.keys(ficha?.openingHours ?? {}).length > 0,
+    },
     stripe: {
       publishableKey: Boolean(stripe?.publishableKey),
       // Por su NOMBRE, nunca por su valor: el secreto no sale de la base ni para esto.

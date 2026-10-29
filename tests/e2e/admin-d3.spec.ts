@@ -156,6 +156,17 @@ test("la puesta en marcha dice qué falta y enlaza a donde se arregla", async ({
   const cobro = items.filter({ hasText: "Datos de cobro" });
   await expect(cobro).toHaveAttribute("data-status", "falta");
   await expect(cobro.getByRole("link")).toHaveAttribute("href", "/admin/pagos");
+
+  // El seed no trae datos fiscales ni ficha: el aviso legal no identificaría al titular (falta) y
+  // los buscadores no sabrían dónde está el local (aviso, que no bloquea).
+  const titular = items.filter({ hasText: "Datos del titular" });
+  await expect(titular).toHaveAttribute("data-status", "falta");
+  await expect(titular).toContainText("LSSI, art. 10");
+  await expect(titular.getByRole("link")).toHaveAttribute("href", "/admin/ajustes");
+  await expect(items.filter({ hasText: "Ficha pública del local" })).toHaveAttribute(
+    "data-status",
+    "aviso",
+  );
 });
 
 test("un cliente sin totem no ve los pasos del datáfono", async ({ page }) => {

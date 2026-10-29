@@ -39,6 +39,8 @@ function base(over: Partial<SetupFacts> = {}): SetupFacts {
     ],
     payment: { configured: false, missing: [], mock: true },
     fiscalTaxRate: 0.1,
+    titular: { razonSocial: true, nif: true, domicilio: true },
+    ficha: { direccion: true, horario: true },
     stripe: { publishableKey: true, secretKey: true, entorno: false },
     ...over,
   };
@@ -421,5 +423,68 @@ describe("con qué cuenta de Stripe cobra la carta por QR", () => {
     // Cobra por datáfono. Pedirle claves de una pasarela que no usa es ruido.
     const items = ids(buildSetupChecklist(base({ channels: ["kiosko"] })));
     expect(items).not.toContain("stripe");
+  });
+});
+
+describe("los datos del titular, que el aviso legal necesita", () => {
+  const titular = (t: Partial<SetupFacts["titular"]>) =>
+    buildSetupChecklist(base({ titular: { razonSocial: true, nif: true, domicilio: true, ...t } }));
+  const paso = (items: ReturnType<typeof buildSetupChecklist>) =>
+    items.find((item) => item.id === "titular");
+
+  it("completos, constan hechos", () => {
+    expect(estado(titular({}), "titular")).toBe("ok");
+  });
+
+  it("sin ninguno, es falta: dice cuáles, por qué (LSSI) y dónde se arregla", () => {
+    const items = titular({ razonSocial: false, nif: false, domicilio: false });
+    expect(paso(items)).toMatchObject({
+      status: "falta",
+      href: "/admin/ajustes",
+      detail:
+        "Falta la razón social, el NIF y el domicilio fiscal. El aviso legal de tu web tiene que " +
+        "identificar al titular (LSSI, art. 10). Rellénalo en Ajustes.",
+    });
+    expect(isSetupComplete(items)).toBe(false);
+  });
+
+  it("con uno solo que falte, nombra solo ese", () => {
+    expect(paso(titular({ nif: false }))?.detail).toMatch(/^Falta el NIF. /);
+  });
+
+  it("también se pide a un cliente de solo totem: identifica al negocio en sus tickets", () => {
+    const items = buildSetupChecklist(
+      base({ channels: ["kiosko"], titular: { razonSocial: false, nif: true, domicilio: true } }),
+    );
+    expect(estado(items, "titular")).toBe("falta");
+  });
+});
+
+describe("la ficha pública del local, que leen los buscadores", () => {
+  const ficha = (f: SetupFacts["ficha"], channels = ["qr-mesa"]) =>
+    buildSetupChecklist(base({ ficha: f, channels }));
+
+  it("con dirección y horario, consta hecha", () => {
+    expect(estado(ficha({ direccion: true, horario: true }), "ficha")).toBe("ok");
+  });
+
+  it("sin horario es aviso, no falta: la carta funciona igual", () => {
+    const items = ficha({ direccion: true, horario: false });
+    expect(items.find((item) => item.id === "ficha")).toMatchObject({
+      status: "aviso",
+      href: "/admin/ajustes",
+      detail: expect.stringMatching(/^Sin horario, los buscadores no saben/),
+    });
+    expect(isSetupComplete(items)).toBe(true);
+  });
+
+  it("sin nada, lo dice entero", () => {
+    expect(
+      ficha({ direccion: false, horario: false }).find((item) => item.id === "ficha")?.detail,
+    ).toMatch(/^Sin dirección ni horario, /);
+  });
+
+  it("un cliente sin carta por QR no tiene dónde publicarla: no se le pide", () => {
+    expect(ids(ficha({ direccion: false, horario: false }, ["kiosko"]))).not.toContain("ficha");
   });
 });
