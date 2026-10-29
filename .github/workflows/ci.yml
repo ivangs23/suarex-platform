@@ -44,6 +44,14 @@ jobs:
     timeout-minutes: 25
     # No bloquea hasta que lleve 10 ejecuciones verdes seguidas (plan, tarea 0.2).
     continue-on-error: true
+    # `packages: read`: el token del job descarga las imágenes de ghcr.io (ver `env`).
+    permissions:
+      contents: read
+      packages: read
+    # El registro por defecto del CLI (public.ecr.aws) corta las descargas anónimas por volumen;
+    # ghcr.io, su respaldo, admite las del token del job, con más margen.
+    env:
+      SUPABASE_INTERNAL_IMAGE_REGISTRY: ghcr.io
     # La integración no importa Electron, así que no descarga su binario (desde Electron 42 solo
     # se baja al usarlo; `ELECTRON_SKIP_BINARY_DOWNLOAD` ya no existe).
     steps:
@@ -59,7 +67,35 @@ jobs:
       - uses: supabase/setup-cli@v1
         with:
           version: 2.109.1
-      - run: supabase start
+
+      # Las imágenes del stack, en caché: el registro público de Supabase corta las descargas
+      # anónimas por volumen («toomanyrequests: Data limit exceeded») y tumbaba el job antes del
+      # primer test. Se descargan una vez por versión del CLI y config; el CLI no vuelve a bajar
+      # una imagen que ya está en el Docker local.
+      - id: imagenes
+        uses: actions/cache/restore@v4
+        with:
+          path: /tmp/imagenes-supabase.tar
+          key: imagenes-supabase-ghcr-2.109.1-${{ hashFiles('supabase/config.toml') }}
+      - if: steps.imagenes.outputs.cache-hit == 'true'
+        run: docker load -i /tmp/imagenes-supabase.tar
+      - if: steps.imagenes.outputs.cache-hit != 'true'
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      # Sin lo que la integración no usa (panel, correo, funciones, imágenes, analítica, pooler):
+      # ocho imágenes menos por ejecución. Nombres de contenedor del CLI 2.109.1 (los da su aviso).
+      - run: supabase start -x studio,postgres-meta,mailpit,edge-runtime,imgproxy,vector,logflare,supavisor
+
+      # Se guarda en cuanto el stack arranca, no al final: así la caché se rellena aunque luego
+      # falle un test.
+      - if: steps.imagenes.outputs.cache-hit != 'true'
+        run: docker save $(docker ps --format '{{.Image}}' | sort -u) -o /tmp/imagenes-supabase.tar
+      - if: steps.imagenes.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: /tmp/imagenes-supabase.tar
+          key: ${{ steps.imagenes.outputs.cache-primary-key }}
+
       - run: pnpm db:env
       - run: pnpm seed:staff
       - run: pnpm test:integration
