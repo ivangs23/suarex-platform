@@ -94,34 +94,36 @@ dominio propio si existe y no es desarrollo; si no, el Host de la petición.
 
 ### Tarea 0.2 — La carta de consulta en `/`
 
-- [ ] Extraer el cuerpo de `app/[mesa]/page.tsx` a un componente de servidor
+- [x] Extraer el cuerpo de `app/[mesa]/page.tsx` a un componente de servidor
   `app/[mesa]/Carta.tsx` (`renderCarta({ tenant, mesa, query })`), con `mesa: string | null`:
   - `basePath`: `/` sin mesa, `/{mesa}` con ella;
   - `welcome.href` y los `href` del selector de idioma se construyen desde `basePath`;
   - sin mesa, `canOrder` es siempre `false` y no se lee la cookie: no hay mesa que comprobar;
   - al tema se le pasa `mesa=""`, que ya es el caso del totem («Sin mesa (totem) la columna
     queda vacía», `generic.tsx`). No hace falta tocar el tema.
-- [ ] `app/[mesa]/page.tsx` queda como envoltorio: valida `MESA_PATTERN`, resuelve el tenant y
+- [x] `app/[mesa]/page.tsx` queda como envoltorio: valida `MESA_PATTERN`, resuelve el tenant y
   llama a `renderCarta` con la mesa.
-- [ ] Nuevo `app/page.tsx`: mismo envoltorio sin mesa.
+- [x] Nuevo `app/page.tsx`: mismo envoltorio sin mesa.
   - Sin el canal `qr-mesa` encendido, `notFound()`, igual que hoy `/{mesa}`. Un cliente solo
     de totem sigue sin carta pública.
   - Sin tenant resuelto (host de plataforma o desconocido), el proxy ya reescribe a
     `/not-found`: comprobar que `/` en `admin.` sigue siendo 404.
-- [ ] `ScanToOrderHint` («Escanea el QR de tu mesa para pedir») ya sale cuando `canOrder` es
+- [x] `ScanToOrderHint` («Escanea el QR de tu mesa para pedir») ya sale cuando `canOrder` es
   `false`: verificar que sale en `/`.
-- [ ] ADR `docs/decisions/0009-carta-publica-en-la-raiz.md`: por qué `/` es la carta de
+- [x] ADR `docs/decisions/0009-carta-publica-en-la-raiz.md`: por qué `/` es la carta de
   consulta y no una landing aparte; por qué `/{mesa}` sigue existiendo, ya que el QR impreso
   redirige ahí y la cookie designa la mesa; y por qué un cliente sin canal QR no tiene portada.
-- [ ] e2e nuevo `tests/e2e/carta-publica.spec.ts`:
-  - `GET /` en `garum.localhost:3000` da 200, pinta el nombre y las categorías y NO pinta
-    «Mesa»;
+- [x] e2e nuevo `tests/e2e/carta-publica.spec.ts`:
+  - `GET /` en `garum.localhost:3000` da 200, pinta el nombre y NO pinta «Mesa». *(Ajustado:
+    `/` abre en la bienvenida, como `/{mesa}`; las categorías salen tras «Entrar», en
+    `/?ver=carta`, y es ahí donde se comprueban.)*;
   - `/?cat=<slug>` pinta los productos de esa categoría;
-  - en `/` no hay botón de pedir, y sí el aviso de escanear el QR;
-  - `/` en un cliente sin canal `qr-mesa` da 404 (crear el ajuste en el test y restaurarlo en
-    `afterEach`, como hace `admin-d2-db.ts`);
+  - en `/` no hay botón de pedir, y sí el aviso de escanear el QR. También con la cookie de una
+    mesa escaneada;
+  - `/` en un cliente sin canal `qr-mesa` da 404 (con `withChannels` de
+    `helpers/totem-db.ts`, que ya existía, restaurado en `afterEach`);
   - `/` en `admin.localhost:3000` da 404.
-- [ ] `qr-order.spec.ts` y `totem.spec.ts` en verde sin cambios: el flujo de pedido no se toca.
+- [x] `qr-order.spec.ts` y `totem.spec.ts` en verde sin cambios: el flujo de pedido no se toca.
 
 ### Tarea 0.3 — Títulos, descripción, canonical y vista previa
 

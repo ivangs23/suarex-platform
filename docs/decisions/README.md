@@ -41,3 +41,4 @@ y se escribe la nueva.
 | [0006](0006-reintentos-y-pool-de-la-integracion.md) | Integración: `retry: 2` para el entorno, contado, y pool de hilos |
 | [0007](0007-tenantscoped-y-sus-exenciones.md) | Todo acceso a datos pasa por `tenantScoped` o por una exención nombrada y numerada |
 | [0008](0008-panel-web-aislado-en-el-agente.md) | El panel web del agente es contenido remoto aislado (sin preload, sandbox, dos sesiones, solo su origen) |
+| [0009](0009-carta-publica-en-la-raiz.md) | `/` es la carta en consulta, mismo render que `/{mesa}`; sin canal QR no hay portada |
