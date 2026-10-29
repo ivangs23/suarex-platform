@@ -279,7 +279,7 @@ correcto: es el origen público del cliente aunque el DNS aún no apunte aquí.
 
 ### Tarea 1.4 — JSON-LD `Restaurant` + `Menu`
 
-- [ ] Función pura `jsonLdDeLaCarta({ businessName, tagline, origen, ficha, view, currency,
+- [x] Función pura `jsonLdDeLaCarta({ businessName, tagline, origen, ficha, view, currency,
   lang })` en `apps/web/lib/json-ld.ts`. Solo emite lo que está en la página:
   - siempre: `Restaurant` con `name`, `url` (origen) y `description` si hay lema;
   - con ficha: `address` (`PostalAddress`), `telephone` y `openingHoursSpecification`;
@@ -287,15 +287,20 @@ correcto: es el origen público del cliente aunque el DNS aún no apunte aquí.
     `MenuSection` con sus `MenuItem` (nombre y `Offer` con precio y moneda);
   - productos agotados o fuera de franja: los mismos que ve el comensal, ni más ni menos;
   - nada de `aggregateRating`, `review` ni `priceRange` sin datos reales.
-- [ ] Se inyecta con `<script type="application/ld+json">` en `Carta.tsx`, escapando `<` como
+
+  *(Ajustado: `/` abre en la bienvenida, donde la carta no se ve; ahí `hasMenu` es la URL de la
+  carta, el enlace «Entrar». El `Menu` con sus secciones va en `/?ver=carta`; en `?cat=x`, la
+  sección con sus subsecciones y platos. Las secciones sin platos no se declaran, como en el
+  sitemap. Las URL salen de `urlDeLaCarta`, sin mesa. Recibe la vista ya desglosada, no `view`.)*
+- [x] Se inyecta con `<script type="application/ld+json">` en `Carta.tsx`, escapando `<` como
   `<` al serializar.
-- [ ] Unit tests:
+- [x] Unit tests:
   - sin ficha no hay `address`;
   - un día con `[]` queda fuera de `openingHoursSpecification`;
   - un tramo que cruza la medianoche sale como dos;
   - el JSON no contiene `</script>` aunque un nombre de plato lo lleve.
 - [ ] Validar a mano una vez con https://validator.schema.org y el «Rich Results Test» de
-  Google sobre la carta de staging, y anotar el resultado en el PR.
+  Google sobre la carta de staging, y anotar el resultado en el PR. *(Pendiente del despliegue.)*
 
 ### Tarea 1.5 — `llms.txt` por cliente
 

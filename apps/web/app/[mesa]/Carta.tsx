@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { fichaDeLaCarta, leerCarta, settingsDeLaCarta } from "@/lib/carta-cache";
 import { availableLangs, LANG_LABELS, resolveLang, strings } from "@/lib/i18n";
+import { jsonLdDeLaCarta, jsonLdEnTexto } from "@/lib/json-ld";
 import { readMesaToken } from "@/lib/mesa-cookie";
 import { metadatosDeLaCarta } from "@/lib/metadatos";
 import { origenPublicoDeLaPeticion } from "@/lib/origen-publico-peticion";
@@ -13,7 +14,7 @@ import { CartProvider } from "./cart/CartProvider";
 import { ScanToOrderHint } from "./cart/ScanToOrderHint";
 import { FichaDelLocal } from "./FichaDelLocal";
 import { LegalFooter } from "./LegalFooter";
-import { buildMenuView } from "./menu-view";
+import { buildMenuView, type MenuView } from "./menu-view";
 import { resolveTheme } from "./themes";
 
 export type QueryDeLaCarta = Record<string, string | string[] | undefined>;
@@ -87,6 +88,11 @@ async function prepararCarta({ tenant, mesa, query }: EntradaDeLaCarta) {
   };
 }
 
+/** La categoría que se ve, ya resuelta: un slug desconocido cae a la raíz y no cuenta. */
+function categoriaActual(currentSlug: string | null, view: MenuView) {
+  return currentSlug && view.currentName ? { slug: currentSlug, nombre: view.currentName } : null;
+}
+
 /** Título, canonical y vista previa de la carta: solo con lo que la página pinta. */
 export async function metadatosDeLaPagina(entrada: EntradaDeLaCarta): Promise<Metadata> {
   const [carta, { origen }] = await Promise.all([
@@ -101,8 +107,7 @@ export async function metadatosDeLaPagina(entrada: EntradaDeLaCarta): Promise<Me
     lang,
     porDefecto: carta.porDefecto,
     idiomas: carta.idiomas,
-    categoria:
-      currentSlug && view.currentName ? { slug: currentSlug, nombre: view.currentName } : null,
+    categoria: categoriaActual(currentSlug, view),
     origen,
     heroUrl: branding.heroUrl,
   });
@@ -162,8 +167,25 @@ export async function renderCarta(entrada: EntradaDeLaCarta) {
     };
   });
 
-  // Sin mesa no hay nada que comprobar: la carta de `/` es de consulta.
-  const canOrder = mesa !== null && (await puedePedirEnLaMesa(tenant.id, mesa));
+  const [canOrder, { origen }] = await Promise.all([
+    // Sin mesa no hay nada que comprobar: la carta de `/` es de consulta.
+    mesa !== null && puedePedirEnLaMesa(tenant.id, mesa),
+    origenPublicoDeLaPeticion(tenant.id),
+  ]);
+
+  // Datos estructurados: exactamente lo que esta página enseña (`lib/json-ld.ts`).
+  const jsonLd = jsonLdDeLaCarta({
+    businessName,
+    tagline: branding.tagline[lang] ?? null,
+    origen,
+    ficha,
+    idioma: lang === porDefecto ? null : lang,
+    currency: settings?.currency ?? "EUR",
+    bienvenida: welcome.active,
+    categoria: categoriaActual(currentSlug, view),
+    secciones: view.children,
+    platos: view.products,
+  });
 
   const Theme = resolveTheme(settings?.theme);
 
@@ -195,6 +217,11 @@ export async function renderCarta(entrada: EntradaDeLaCarta) {
           restaurante. Por eso no está en contract.test.tsx -- ese helper solo renderiza el
           tema, así que no podría verlo. Lo cubre tests/e2e/legal.spec.ts. */}
       <LegalFooter strings={strings(lang)} />
+      <script
+        type="application/ld+json"
+        // biome-ignore lint/security/noDangerouslySetInnerHtml: `jsonLdEnTexto` escapa `<` como <, así que ningún texto del cliente puede cerrar el script.
+        dangerouslySetInnerHTML={{ __html: jsonLdEnTexto(jsonLd) }}
+      />
     </CartProvider>
   );
 }
