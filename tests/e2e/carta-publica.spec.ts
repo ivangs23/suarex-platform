@@ -87,6 +87,14 @@ test("la carta dice qué es: título y canonical sin mesa", async ({ page }) => 
   );
 });
 
+test("una categoría desconocida cae a la raíz, y su canonical apunta a /", async ({ page }) => {
+  // Un enlace viejo o manipulado no es un error (200), pero tampoco una página que indexar.
+  const response = await page.goto(`${ORIGIN}/?cat=no-existe`);
+  expect(response?.status()).toBe(200);
+  await expect(page.locator('link[rel="canonical"]')).toHaveAttribute("href", `${ORIGIN}/`);
+  await expect(page).toHaveTitle("Garum Vinoteca · Carta");
+});
+
 test("sin ejecutar JavaScript, el título y el canonical están en el <head>", async ({
   request,
 }) => {

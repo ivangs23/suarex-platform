@@ -372,12 +372,17 @@ correcto: es el origen público del cliente aunque el DNS aún no apunte aquí.
 
 ## Fase 4 — Menores (cuando haya hueco)
 
-- [ ] Pantalla de bienvenida (`/1`, `/` sin `?ver=carta`):
+- [x] Pantalla de bienvenida (`/1`, `/` sin `?ver=carta`):
   - no tiene `<h1>`: añadirlo en `generic.tsx` y una aserción en `contract.test.tsx` («la
     bienvenida tiene un único h1 con el nombre»);
   - su imagen no tiene `alt`: `alt` con el nombre del negocio, o `alt=""` si es decorativa.
-- [ ] `/?cat=<slug-desconocido>` degrada a la raíz con 200. Que su canonical apunte a `/` para
-  no indexar variantes basura.
+
+  *(La foto y el logo ya llevaban `alt=""`: son decorativos, el nombre va en texto al lado. El
+  contrato lo vigila ahora. El `h1` obligó a cambiar el `span` contenedor por un `div`: un
+  encabezado no cabe en un `span`.)*
+- [x] `/?cat=<slug-desconocido>` degrada a la raíz con 200. Que su canonical apunte a `/` para
+  no indexar variantes basura. *(Ya lo hacía desde la 0.3: el canonical sale de la categoría
+  resuelta. Lo fija un e2e.)*
 
 ## Fuera de alcance (decisiones conscientes)
 
