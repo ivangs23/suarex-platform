@@ -120,3 +120,26 @@ export async function createUsbPrinterForTest(
 
   return { printerId: printer.id as string };
 }
+
+/** Segunda sede de `garum`, para probar el selector de sede de las mesas. `tables.venue_id`
+ * es `on delete cascade`: borrar la sede en el `afterEach` se lleva sus mesas de prueba. */
+export async function createVenueForTest(name: string): Promise<string> {
+  const { data: tenant, error: te } = await admin
+    .from("tenants")
+    .select("id")
+    .eq("slug", "garum")
+    .single();
+  if (te) throw te;
+  const { data, error } = await admin
+    .from("venues")
+    .insert({ tenant_id: tenant.id, name, slug: `e2e-${Date.now()}`, is_default: false })
+    .select("id")
+    .single();
+  if (error) throw error;
+  return data.id as string;
+}
+
+export async function deleteVenueForTest(venueId: string): Promise<void> {
+  const { error } = await admin.from("venues").delete().eq("id", venueId);
+  if (error) throw error;
+}

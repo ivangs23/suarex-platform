@@ -54,15 +54,15 @@ Hasta el 2026-10-28 **no había plataforma en producción**: el VPS tenía una c
   Las contraseñas están en `/home/suarex/credenciales-iniciales.txt` y en el PC de Iván, nunca en git.
 
 **Pendiente (Iván), por orden:**
-1. **Webhook de Stripe:** crear en el panel de Stripe (modo test) el endpoint `https://garum.srv1121554.hstgr.cloud/api/webhook/stripe`, con los tres eventos de `.env.app.example`. Pegar su `whsec_` en `STRIPE_WEBHOOK_SECRET` de `/opt/suarex/deploy/.env.app` y aplicar con `docker compose -f deploy/docker-compose.app.yml --env-file deploy/.env.app up -d web`. Sin esto, un pago no pasa a «pagado».
+1. ~~**Webhooks de Stripe**~~ (hecho el 2026-10-29): dos endpoints en modo test, creados por la API: pagos en `https://garum.srv1121554.hstgr.cloud/api/webhook/stripe` (`payment_intent.succeeded`, `charge.refunded`, `charge.dispute.created`) y facturación en `…/api/webhook/stripe/billing` (los tres `customer.subscription.*`). Sus `whsec_` están en `STRIPE_WEBHOOK_SECRET` y `STRIPE_BILLING_WEBHOOK_SECRET`; con firma falsa ambos responden 400. Al pasar a claves live hay que crearlos de nuevo en la cuenta live.
 2. **`ACME_EMAIL`:** cambiar el provisional del `.env.app` por un correo real y reiniciar Caddy.
 3. **Garum en su dominio:**
    - en el panel, crear sus mesas y revisar alérgenos, barra/cocina e IVA;
    - apuntar los registros A de `garumvinoteca.com` y de `www` a 72.61.106.185 (hoy van a Vercel);
-   - reimprimir los QR desde `https://garumvinoteca.com/admin/mesas`;
+   - imprimir los QR desde `/admin/mesas` cuando el panel deje de avisar de que el dominio no apunta aquí. Con dominio propio, los QR siempre llevan a él, se abra el panel desde donde se abra;
    - emparejar el agente de la cocina.
 4. **Antes de cobrar de verdad:** claves live de Stripe. Hoy está en modo test.
-5. **SSH:** sigue con `PermitRootLogin yes` y `PasswordAuthentication yes`. Las claves de root y de `suarex` son las de Iván. Pasar a `prohibit-password` y `no` en cuanto se confirme que la terminal del navegador de Hostinger no usa la contraseña de root.
+5. ~~**SSH**~~ (hecho el 2026-10-29): root solo con clave y nadie con contraseña, en `/etc/ssh/sshd_config.d/00-suarex-hardening.conf`. El `sshd_config` de Hostinger **no traía** `Include /etc/ssh/sshd_config.d/*.conf`, así que esa carpeta no tenía efecto; se añadió en la línea 1 (copia en `sshd_config.bak-20261029-101500`). La consola web de Hostinger entra como root con clave RSA desde 169.254.0.1 y sigue funcionando.
 6. **Copias fuera del VPS:** `RCLONE_REMOTE` en `backup-db.sh`. Hoy solo viven en el mismo disco.
 7. **Correo saliente (SMTP):** para Auth (recuperar contraseña, invitaciones) y `AVISO_A`.
 8. **Dominio definitivo de la plataforma:** pasar a `PLATFORM_DOMAIN` propio en Cloudflare, con `PLATFORM_TLS=cloudflare` y el token. Hay que reconstruir la web y regenerar los instaladores del agente que apunten a la plataforma.
