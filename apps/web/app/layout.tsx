@@ -1,4 +1,5 @@
 import { brandingToCssVars, parseBranding } from "@suarex/config";
+import type { Metadata } from "next";
 import { Inter, Playfair_Display } from "next/font/google";
 import type { ReactNode } from "react";
 import { settingsDeLaCarta } from "@/lib/carta-cache";
@@ -27,6 +28,16 @@ const inter = Inter({
   variable: "--font-inter",
   display: "swap",
 });
+
+/** Título por defecto de las páginas del cliente: «Aviso legal · Garum Vinoteca». La carta pone
+ *  el suyo entero (`lib/metadatos.ts`). Sin tenant (plataforma, 404), nada. */
+export async function generateMetadata(): Promise<Metadata> {
+  const tenant = await requireTenant().catch(() => null);
+  if (!tenant) return {};
+  const settings = await settingsDeLaCarta(tenant.id).catch(() => null);
+  const nombre = parseBranding(settings?.branding).name ?? tenant.slug;
+  return { title: { template: `%s · ${nombre}`, default: nombre } };
+}
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
   // requireTenant() lanza cuando el middleware no resolvió tenant para esta ruta:

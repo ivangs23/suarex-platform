@@ -17,12 +17,16 @@ import { MESA_COOKIE, mesaCookieOptions } from "@/lib/mesa-cookie";
  * Una mesa desconocida o desactivada da 404, igual que antes: no se distingue entre "ese
  * token no existe" y "esa mesa está fuera de servicio", que para quien escanea es lo mismo.
  */
+// El token de la mesa nunca debe acabar en un buscador. Es una ruta, no una página, así que el
+// `noindex` va en cabecera y no en `metadata`.
+const NO_INDEXAR = { "x-robots-tag": "noindex" };
+
 export async function GET(_request: Request, context: { params: Promise<{ token: string }> }) {
   const { token } = await context.params;
 
   const table = await findTableByToken(token);
   if (!table?.isActive) {
-    return new NextResponse(null, { status: 404 });
+    return new NextResponse(null, { status: 404, headers: NO_INDEXAR });
   }
 
   // Se cuenta el escaneo ANTES de redirigir, que es el único momento en que sabemos que
@@ -38,7 +42,7 @@ export async function GET(_request: Request, context: { params: Promise<{ token:
   // subdominio o dominio propio, sin que esta ruta tenga que saber cuál es.
   const response = new NextResponse(null, {
     status: 303,
-    headers: { location: `/${table.label}` },
+    headers: { location: `/${table.label}`, ...NO_INDEXAR },
   });
   response.cookies.set(MESA_COOKIE, table.token, mesaCookieOptions());
   return response;

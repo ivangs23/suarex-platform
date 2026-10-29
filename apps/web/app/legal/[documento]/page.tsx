@@ -1,9 +1,18 @@
 import { parseBranding } from "@suarex/config";
 import { getTenantSettings } from "@suarex/db";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { documentoLegal, esDocumentoLegal } from "@/lib/legal-content";
+import { documentoLegal, esDocumentoLegal, TITULOS_LEGALES } from "@/lib/legal-content";
 import { requireTenant } from "@/lib/tenant-context";
 import styles from "../legal.module.css";
+
+type Props = { params: Promise<{ documento: string }> };
+
+/** «Aviso legal · Garum Vinoteca»: el nombre lo añade la plantilla del layout raíz. */
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { documento } = await params;
+  return esDocumentoLegal(documento) ? { title: TITULOS_LEGALES[documento] } : {};
+}
 
 /**
  * Las tres páginas legales del tenant, en una sola ruta.
@@ -15,7 +24,7 @@ import styles from "../legal.module.css";
  * así que el nombre del negocio sale de la marca, con el slug como respaldo, igual que la carta
  * (`app/[mesa]/page.tsx`).
  */
-export default async function LegalPage({ params }: { params: Promise<{ documento: string }> }) {
+export default async function LegalPage({ params }: Props) {
   const { documento } = await params;
   if (!esDocumentoLegal(documento)) notFound();
 

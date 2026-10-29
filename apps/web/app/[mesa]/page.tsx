@@ -1,6 +1,7 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { requireTenant } from "@/lib/tenant-context";
-import { type QueryDeLaCarta, renderCarta } from "./Carta";
+import { metadatosDeLaPagina, type QueryDeLaCarta, renderCarta } from "./Carta";
 
 // Los identificadores de mesa son siempre numéricos (ver el diseño: canal
 // "QR en mesa" -> `/{mesa}`). Este catch-all de un solo segmento también
@@ -15,14 +16,22 @@ import { type QueryDeLaCarta, renderCarta } from "./Carta";
 // numérico se resuelve aquí como 404 limpio, antes de tocar el tenant.
 const MESA_PATTERN = /^\d+$/;
 
-/** Carta de una mesa: la del QR impreso, la única que puede pedir. El render es `renderCarta`. */
-export default async function MenuPage({
-  params,
-  searchParams,
-}: {
+type Props = {
   params: Promise<{ mesa: string }>;
   searchParams: Promise<QueryDeLaCarta>;
-}) {
+};
+
+/** El canonical es el de la carta sin mesa: 30 mesas no son 30 cartas (`lib/metadatos.ts`). */
+export async function generateMetadata({ params, searchParams }: Props): Promise<Metadata> {
+  const [{ mesa }, query] = await Promise.all([params, searchParams]);
+  if (!MESA_PATTERN.test(mesa)) return {};
+  const tenant = await requireTenant().catch(() => null);
+  if (!tenant) return {};
+  return metadatosDeLaPagina({ tenant, mesa, query });
+}
+
+/** Carta de una mesa: la del QR impreso, la única que puede pedir. El render es `renderCarta`. */
+export default async function MenuPage({ params, searchParams }: Props) {
   const [{ mesa }, query] = await Promise.all([params, searchParams]);
 
   if (!MESA_PATTERN.test(mesa)) {

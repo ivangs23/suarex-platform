@@ -1,5 +1,9 @@
+import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import styles from "./plataforma.module.css";
+
+// La consola de plataforma no es contenido público: fuera de los buscadores.
+export const metadata: Metadata = { robots: { index: false } };
 
 /**
  * SOLO CÁSCARA VISUAL, SIN GUARD. En el App Router un `layout.tsx` envuelve TODAS las rutas
