@@ -22,6 +22,9 @@ contextBridge.exposeInMainWorld("agent", {
     conectando: boolean;
     deviceId: string | null;
     platform: string;
+    version: string;
+    startedAt: string;
+    configFaltante: string[];
     activity: AgentActivity;
   }> => ipcRenderer.invoke("get-status"),
   /** Últimas líneas del registro de este equipo, de más reciente a más antigua. */
@@ -30,6 +33,9 @@ contextBridge.exposeInMainWorld("agent", {
   unpair: (): Promise<{ ok: boolean }> => ipcRenderer.invoke("unpair"),
   exportDiagnostics: (): Promise<ExportDiagnosticsResult> =>
     ipcRenderer.invoke("export-diagnostics"),
+  /** Abre la carpeta del último diagnóstico exportado, con el fichero seleccionado. */
+  showLastDiagnostics: (): Promise<boolean> => ipcRenderer.invoke("show-last-diagnostics"),
+  copyText: (texto: string): Promise<boolean> => ipcRenderer.invoke("copy-text", texto),
   showSection: (section: string): Promise<ShowWebPanelResult> =>
     ipcRenderer.invoke("show-section", section),
   /** Empuje de cada tick del agente (impresos, fallos, impresoras caídas). Devuelve una función

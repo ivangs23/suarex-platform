@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { setupNavigation } from "./navigation.js";
 
 /**
- * Regresión de un fallo que llegó a la app: la barra lateral no respondía a NINGÚN clic.
+ * Regresión de un fallo que llegó a la app: la navegación no respondía a NINGÚN clic.
  *
  * Fueron dos causas encadenadas, y las dos silenciosas -- la interfaz se veía perfecta:
  *
@@ -19,13 +19,13 @@ import { setupNavigation } from "./navigation.js";
 
 const HTML = `
   <nav>
-    <button class="nav-item" data-section="config"></button>
-    <button class="nav-item" data-section="impresoras"></button>
-    <button class="nav-item" data-section="productos"></button>
-    <button class="nav-item" data-section="pedidos"></button>
+    <button class="tab" data-section="ajustes"></button>
+    <button class="tab" data-section="impresoras"></button>
+    <button class="tab" data-section="productos"></button>
+    <button class="tab" data-section="pedidos"></button>
   </nav>
   <main>
-    <section class="panel" data-panel="config"></section>
+    <section class="panel" data-panel="ajustes"></section>
     <section class="panel" data-panel="impresoras" hidden></section>
     <section class="panel" data-panel="productos" hidden>
       <div id="web-fallback-productos"></div>
@@ -38,7 +38,7 @@ const HTML = `
 
 function boton(section: string): HTMLButtonElement {
   return document.querySelector<HTMLButtonElement>(
-    `.nav-item[data-section="${section}"]`,
+    `.tab[data-section="${section}"]`,
   ) as HTMLButtonElement;
 }
 
@@ -52,7 +52,7 @@ beforeEach(() => {
   document.body.innerHTML = HTML;
 });
 
-describe("navegación de la barra lateral", () => {
+describe("navegación por pestañas", () => {
   it("un clic cambia de sección SIN puente IPC", async () => {
     // El fallo original: sin puente no se enganchaba ni un listener y la barra quedaba
     // muerta. Cambiar de sección es interfaz pura y no puede depender del IPC.
@@ -62,20 +62,20 @@ describe("navegación de la barra lateral", () => {
     await Promise.resolve();
 
     expect(visible()).toEqual(["impresoras"]);
-    expect(boton("impresoras").getAttribute("aria-selected")).toBe("true");
-    expect(boton("config").getAttribute("aria-selected")).toBe("false");
+    expect(boton("impresoras").getAttribute("aria-current")).toBe("page");
+    expect(boton("ajustes").hasAttribute("aria-current")).toBe(false);
   });
 
   it("avisa al proceso principal TAMBIÉN en las secciones locales", async () => {
     // La vista incrustada de la plataforma se superpone a esta zona: sin este aviso
-    // seguiría tapando Configuración al volver de Productos.
+    // seguiría tapando Ajustes al volver de Productos.
     const showSection = vi.fn(async (_section: string) => ({ ok: true }));
     const { irA } = setupNavigation(document, showSection);
 
     await irA("productos");
-    await irA("config");
+    await irA("ajustes");
 
-    expect(showSection.mock.calls.map(([s]) => s)).toEqual(["productos", "config"]);
+    expect(showSection.mock.calls.map(([s]) => s)).toEqual(["productos", "ajustes"]);
   });
 
   it("cambia de sección aunque el proceso principal falle", async () => {
@@ -104,7 +104,7 @@ describe("navegación de la barra lateral", () => {
   it("solo queda visible un panel a la vez", async () => {
     const { irA } = setupNavigation(document);
 
-    for (const seccion of ["config", "impresoras", "productos", "pedidos", "config"]) {
+    for (const seccion of ["ajustes", "impresoras", "productos", "pedidos", "ajustes"]) {
       await irA(seccion);
       expect(visible()).toEqual([seccion]);
     }
@@ -117,75 +117,32 @@ describe("navegación de la barra lateral", () => {
     await irA("no-existe");
 
     expect(visible()).toEqual([]);
-    expect(
-      [...document.querySelectorAll(".nav-item")].every(
-        (b) => b.getAttribute("aria-selected") === "false",
-      ),
-    ).toBe(true);
+    expect([...document.querySelectorAll(".tab")].some((b) => b.hasAttribute("aria-current"))).toBe(
+      false,
+    );
   });
 });
 
-describe("menú de inicio y vuelta atrás", () => {
-  /** El armazón mínimo con lo que la navegación toca: cabecera, botón de atrás y dos paneles. */
-  function conMenu() {
-    const root = document.createElement("div");
-    root.innerHTML = `
-      <header class="topbar" data-on-menu="true">
-        <button id="back" hidden>← Menú</button>
-        <h1 id="topbar-title">SuarEx</h1>
-      </header>
-      <section class="panel menu" data-panel="menu">
-        <button class="nav-item" data-section="config"></button>
-        <button class="nav-item" data-section="pedidos"></button>
-      </section>
-      <section class="panel" data-panel="config" hidden></section>
-      <section class="panel" data-panel="pedidos" hidden></section>`;
-    return root;
-  }
+describe("accesos a una sección desde fuera de las pestañas", () => {
+  it("un botón con data-ir-a lleva a su sección, aunque se cree después de arrancar", async () => {
+    // La acción de una alerta («Ver impresoras») se pinta cuando llega el estado.
+    setupNavigation(document);
+    const accion = document.createElement("button");
+    accion.dataset.irA = "impresoras";
+    document.body.appendChild(accion);
 
-  it("en el inicio no hay botón de atrás: uno que no lleva a ningún sitio estorba", async () => {
-    const root = conMenu();
-    const { irA } = setupNavigation(root);
-    await irA("menu");
-
-    expect(root.querySelector<HTMLButtonElement>("#back")?.hidden).toBe(true);
-    expect(root.querySelector<HTMLElement>('[data-panel="menu"]')?.hidden).toBe(false);
-  });
-
-  it("dentro de una sección aparece el atrás y el título dice dónde estás", async () => {
-    const root = conMenu();
-    const { irA } = setupNavigation(root);
-    await irA("pedidos");
-
-    expect(root.querySelector<HTMLButtonElement>("#back")?.hidden).toBe(false);
-    expect(root.querySelector<HTMLElement>("#topbar-title")?.textContent).toBe("Comandas");
-    expect(root.querySelector<HTMLElement>('[data-panel="menu"]')?.hidden).toBe(true);
-  });
-
-  it("el botón de atrás devuelve al menú", async () => {
-    const root = conMenu();
-    const { irA } = setupNavigation(root);
-    await irA("config");
-
-    root.querySelector<HTMLButtonElement>("#back")?.click();
+    accion.click();
     await Promise.resolve();
 
-    expect(root.querySelector<HTMLElement>('[data-panel="menu"]')?.hidden).toBe(false);
-    expect(root.querySelector<HTMLButtonElement>("#back")?.hidden).toBe(true);
+    expect(visible()).toEqual(["impresoras"]);
+    expect(boton("impresoras").getAttribute("aria-current")).toBe("page");
   });
 
-  it("al volver al menú se avisa al proceso principal, para que retire la vista incrustada", async () => {
-    /* Sin ese aviso, la vista de la plataforma seguiría superpuesta y taparía el menú entero:
-       el usuario vería las comandas con el botón de atrás encima y nada más. */
-    const avisos: string[] = [];
-    const root = conMenu();
-    const { irA } = setupNavigation(root, async (s) => {
-      avisos.push(s);
-      return { ok: true };
-    });
-
+  it("avisa de la sección a la que se entra, para cargar lo que necesite", async () => {
+    const entradas: string[] = [];
+    const { irA } = setupNavigation(document, undefined, (s) => entradas.push(s));
+    await irA("ajustes");
     await irA("pedidos");
-    await irA("menu");
-    expect(avisos).toEqual(["pedidos", "menu"]);
+    expect(entradas).toEqual(["ajustes", "pedidos"]);
   });
 });

@@ -1,4 +1,4 @@
-import type { AgentTickResult, PrintFailure } from "@suarex/agent";
+import type { AgentTickResult, PrintFailure, TickPrinter } from "@suarex/agent";
 
 /**
  * Estado acumulado de la impresión, para que la app deje de ser una caja negra: cuántos
@@ -14,6 +14,10 @@ export type AgentActivity = {
   /** Impresoras cuyo último intento de entrega falló. Se guarda `destination` (cocina/barra)
    *  porque es lo que el owner reconoce -- el `printerId` es un UUID que no le dice nada. */
   downPrinters: { printerId: string; destination: string; reason: string }[];
+  /** Las impresoras que saca este equipo (la ventana las lista con su estado). */
+  printers: TickPrinter[];
+  /** Nombre comercial del cliente, para que la ventana diga de quién es este equipo. */
+  businessName: string | null;
 };
 
 export const INITIAL_ACTIVITY: AgentActivity = {
@@ -22,6 +26,8 @@ export const INITIAL_ACTIVITY: AgentActivity = {
   failedTotal: 0,
   lastError: null,
   downPrinters: [],
+  printers: [],
+  businessName: null,
 };
 
 /**
@@ -73,6 +79,9 @@ export function reduceActivity(
     failedTotal: prev.failedTotal + result.failed,
     lastError: result.error ?? null,
     downPrinters: [...down.values()],
+    // Un tick que revienta antes de leerlas no las trae: se conservan las que ya había.
+    printers: result.printers ?? prev.printers,
+    businessName: result.businessName !== undefined ? result.businessName : prev.businessName,
   };
 
   return { activity, alerts: { newlyDown, recovered } };

@@ -1,6 +1,6 @@
 import { writeFileSync } from "node:fs";
 import { DEVICE_SESSION_STORAGE_KEY, type NetworkPrinterProbe } from "@suarex/agent";
-import { app, type BrowserWindow, dialog, ipcMain } from "electron";
+import { app, type BrowserWindow, clipboard, dialog, ipcMain, shell } from "electron";
 import {
   establishSessionFromPassword,
   estaConectando,
@@ -36,6 +36,13 @@ export type ProbeNetworkPrintersResult =
 function isPairError(e: unknown): e is PairError {
   return typeof e === "object" && e !== null && "kind" in e;
 }
+
+/** Cuándo arrancó la app: la ventana cuenta los tickets "desde las 19:00". */
+const ARRANCADA_EN = new Date().toISOString();
+
+/** El último diagnóstico guardado. "Mostrar en la carpeta" solo puede abrir ESTE, nunca una
+ *  ruta que mande el renderer. */
+let ultimoDiagnostico: string | null = null;
 
 /** Registra los canales IPC. El renderer nunca toca Node/Electron directo: todo pasa por
  * estos handlers vía el puente contextBridge del preload. `readLog` vuelca el registro en disco
@@ -133,6 +140,8 @@ export function registerIpc(
       // recibir un error. `process` no está disponible en el renderer (contextIsolation),
       // así que viaja por aquí.
       platform: process.platform,
+      version: app.getVersion(),
+      startedAt: ARRANCADA_EN,
       // Qué le falta a este ejecutable. La ventana lo dice en el sitio del estado, que es lo
       // primero que se mira: sin esto, un build incompleto se manifiesta como tres fallos
       // distintos, y ninguno de los tres señala la causa.
@@ -204,6 +213,20 @@ export function registerIpc(
     }
   });
 
+  ipcMain.handle("show-last-diagnostics", (): boolean => {
+    if (!ultimoDiagnostico) return false;
+    shell.showItemInFolder(ultimoDiagnostico);
+    return true;
+  });
+
+  // Copiar el nombre de una impresora de Windows para darla de alta en el panel. Acotado: un
+  // texto corto, nunca algo que el renderer pueda usar para otra cosa.
+  ipcMain.handle("copy-text", (_e, texto: unknown): boolean => {
+    if (typeof texto !== "string" || texto.length > 256) return false;
+    clipboard.writeText(texto);
+    return true;
+  });
+
   ipcMain.handle("export-diagnostics", async (): Promise<ExportDiagnosticsResult> => {
     const creds = loadCredentials(realConfigBackend());
     const contenido = formatDiagnostics(
@@ -234,6 +257,7 @@ export function registerIpc(
 
     try {
       writeFileSync(filePath, contenido, "utf8");
+      ultimoDiagnostico = filePath;
       return { ok: true, path: filePath };
     } catch (e) {
       return { ok: false, error: (e as Error).message };

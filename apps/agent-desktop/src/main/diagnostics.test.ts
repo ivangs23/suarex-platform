@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { AgentActivity } from "./agent-activity.js";
+import { type AgentActivity, INITIAL_ACTIVITY } from "./agent-activity.js";
 import { type DiagnosticsMeta, formatDiagnostics } from "./diagnostics.js";
 
 const META: DiagnosticsMeta = {
@@ -17,6 +17,8 @@ const ACTIVITY: AgentActivity = {
   failedTotal: 1,
   lastError: null,
   downPrinters: [{ printerId: "p1", destination: "cocina", reason: "sin conexión" }],
+  printers: [],
+  businessName: null,
 };
 
 describe("formatDiagnostics", () => {
@@ -36,7 +38,7 @@ describe("formatDiagnostics", () => {
   it("refleja el caso sin emparejar, sin actividad y con log vacío", () => {
     const out = formatDiagnostics(
       { ...META, paired: false, deviceId: null, running: false },
-      { lastTickAt: null, printedTotal: 0, failedTotal: 0, lastError: null, downPrinters: [] },
+      { ...INITIAL_ACTIVITY },
       "",
     );
     expect(out).toMatch(/Emparejado:\s+no/);
