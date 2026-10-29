@@ -1,6 +1,6 @@
 # Handoff — estado del proyecto
 
-_Última actualización: 2026-10-28. Punto de continuidad entre sesiones y máquinas: una
+_Última actualización: 2026-10-29. Punto de continuidad entre sesiones y máquinas: una
 conversación de Claude no se transfiere sola. Para retomar, lee esto, `git log` y `CLAUDE.md`._
 
 > **Si retomas desde otra máquina, empieza por [`RETOMAR-EN-WINDOWS.md`](RETOMAR-EN-WINDOWS.md).**
@@ -9,7 +9,10 @@ conversación de Claude no se transfiere sola. Para retomar, lee esto, `git log`
 
 `main` tiene integradas las fases 1-3 del plan de viabilidad y las fases 0-3 del
 [plan de endurecimiento](superpowers/plans/2026-10-22-auditoria-endurecimiento.md), más la 5.1 y
-dos arreglos de seguridad de dependencias.
+dos arreglos de seguridad de dependencias. Desde el 2026-10-29, también las fases 0, 1, 2 y 4 del
+[plan de visibilidad de la carta](superpowers/plans/2026-10-29-visibilidad-de-la-carta.md) (la 3
+es de Iván) y el rediseño de la app de escritorio. Detalle en
+[lo mergeado el 28 y 29 de octubre](#lo-mergeado-el-28-y-29-de-octubre-95-116).
 
 Suite en verde:
 
@@ -23,7 +26,7 @@ Suite en verde:
 
 **CI** (`.github/workflows/ci.yml`), en cada PR:
 - `verificar`: lint, typecheck y unit. **Obligatorio**: `main` está protegida y no se mergea sin él en verde. Como admin, Iván puede saltárselo en una emergencia (`enforce_admins` desactivado).
-- `integracion`: contra Supabase en el runner. Todavía no bloquea el merge.
+- `integracion`: contra Supabase en el runner. Todavía no bloquea el merge. Las imágenes de Supabase salen de `ghcr.io` con el token del job y se cachean (#109, #112): Docker Hub cortaba por límite de descargas.
 
 El e2e sigue siendo local.
 
@@ -36,8 +39,8 @@ Hasta el 2026-10-28 **no había plataforma en producción**: el VPS tenía una c
 **Qué hay:**
 - **Servidor:** VPS de Hostinger `srv1121554`, IP 72.61.106.185, Ubuntu 24.04. Usuario `suarex` (sudo con contraseña, grupo `docker`).
 - **Dominio provisional:** `srv1121554.hstgr.cloud`, con `PLATFORM_TLS=bajo_demanda` (#94). Consola de plataforma en `admin.`, API en `api.` y cada cliente en `<slug>.`.
-- **Supabase:** en `/opt/suarex-supabase`, con secretos nuevos y las 47 migraciones aplicadas. El hook de token está verificado. El gateway es Envoy (alias `kong`), atado a loopback.
-- **Web y Caddy:** en `/opt/suarex`, con git, desplegados desde `main`. Para actualizar: `./deploy/scripts/deploy.sh`.
+- **Supabase:** en `/opt/suarex-supabase`, con secretos nuevos y las 48 migraciones aplicadas. El hook de token está verificado. El gateway es Envoy (alias `kong`), atado a loopback.
+- **Web y Caddy:** en `/opt/suarex`, con git, desplegados desde `main`. Para actualizar: `./deploy/scripts/deploy.sh`. Último despliegue: `6f0deea` (2026-10-29). Lo mergeado después es de la app de escritorio y del CI, y no cambia la web.
 - **Tareas programadas** (crontab de `suarex`):
   - copias a las 3:30, en `/var/backups/suarex`;
   - resumen de errores a las 8:00;
@@ -56,7 +59,10 @@ Hasta el 2026-10-28 **no había plataforma en producción**: el VPS tenía una c
 **Pendiente (Iván), por orden:**
 1. ~~**Webhooks de Stripe**~~ (hecho el 2026-10-29): dos endpoints en modo test, creados por la API: pagos en `https://garum.srv1121554.hstgr.cloud/api/webhook/stripe` (`payment_intent.succeeded`, `charge.refunded`, `charge.dispute.created`) y facturación en `…/api/webhook/stripe/billing` (los tres `customer.subscription.*`). Sus `whsec_` están en `STRIPE_WEBHOOK_SECRET` y `STRIPE_BILLING_WEBHOOK_SECRET`; con firma falsa ambos responden 400. Al pasar a claves live hay que crearlos de nuevo en la cuenta live.
 2. **`ACME_EMAIL`:** cambiar el provisional del `.env.app` por un correo real y reiniciar Caddy.
-3. **Garum en su dominio:**
+3. **Garum en su dominio** (es la Fase 3 del [plan de visibilidad](superpowers/plans/2026-10-29-visibilidad-de-la-carta.md)):
+   - en Ajustes, los datos del titular (razón social, NIF, domicilio fiscal) y la ficha pública (dirección, teléfono, horario). Sin ellos el aviso legal sale incompleto, la lista de instalación lo marca y el JSON-LD no lleva dirección;
+   - con la ficha guardada, pasar a la carta el Rich Results Test de Google. El validador de schema.org ya da 0 errores;
+   - el perfil de Google Business y Search Console, como dice el plan;
    - en el panel, crear sus mesas y revisar alérgenos, barra/cocina e IVA;
    - apuntar los registros A de `garumvinoteca.com` y de `www` a 72.61.106.185 (hoy van a Vercel);
    - imprimir los QR desde `/admin/mesas` cuando el panel deje de avisar de que el dominio no apunta aquí. Con dominio propio, los QR siempre llevan a él, se abra el panel desde donde se abra;
@@ -125,6 +131,26 @@ Fuera del plan:
   - `tls-check` autoriza `api.`, `admin.` y `<slug>.` de un cliente activo.
   - Sirve con el dominio que da Hostinger (`*.srv1121554.hstgr.cloud`, que está en la Public Suffix List y tiene su propio cupo de Let's Encrypt) mientras no haya un dominio propio en Cloudflare.
   - `cloudflare` sigue siendo el valor por defecto.
+
+## Lo mergeado el 28 y 29 de octubre (#95-#116)
+
+- **#95:** lo aprendido en el primer despliegue real, llevado a `deploy/`.
+- **#96:** al crear mesas se elige la sede, y los QR llevan siempre al dominio del cliente.
+- **Visibilidad de la carta** ([plan](superpowers/plans/2026-10-29-visibilidad-de-la-carta.md)). Fases 0, 1, 2 y 4 hechas y desplegadas; la 3 es de Iván:
+  - #97, el plan. #98, un solo origen público por cliente.
+  - #99, la carta de consulta en `/` ([ADR 0009](decisions/0009-carta-publica-en-la-raiz.md)).
+  - #100, título, descripción, canonical y vista previa. `htmlLimitedBots` hace que los metadatos vayan en el `<head>` para cualquier navegador, no al final del `<body>`.
+  - #101, `robots.txt` y `sitemap.xml` por cliente.
+  - #102-#104, la ficha pública de la sede (dirección, teléfono y horario): columnas en `venues`, formulario en Ajustes y bloque al pie de la carta.
+  - #105, JSON-LD `Restaurant` + `Menu`. #106, `llms.txt`. Los dos solo con datos que guardó el cliente y se ven en la página.
+  - #107, la lista de instalación pide el titular y la ficha. #108, test del aviso legal con datos fiscales. #110, «NIF» en vez de «CIF». #111, la bienvenida tiene un `h1`.
+- **CI** (#109, #112): imágenes de Supabase desde `ghcr.io`, cacheadas por versión del CLI y lista de exclusiones. `postgres-meta` y `mailpit` no se pueden excluir: los piden `db-types-sync` y `inviteUserByEmail`.
+- **Rediseño de la app de escritorio** (#113-#116). El criterio está en `apps/agent-desktop/PRODUCT.md` y `DESIGN.md`:
+  - #113, las pantallas: pestañas; un estado en tres niveles que ya no dice «Imprimiendo» con una impresora caída; el estado de cada impresora; el registro con filtro; el soporte a un clic.
+  - #114, la bandeja y los avisos de Windows dicen el mismo estado que la ventana (`src/main/estado.ts`).
+  - #115, el icono de SuarEx en el exe, el instalador, la ventana y los avisos, todo de `scripts/generar-iconos.mjs`.
+  - #116, sin el menú por defecto de Electron, y el desinstalador borra el arranque con Windows.
+  - Probado instalándola en el PC de Iván, sin emparejar. **Falta probarla emparejada con `pnpm arrancar`**: los estados de la bandeja, los avisos al caer una impresora y el panel incrustado.
 
 ## Pendiente — decisiones abiertas (fuera del plan)
 
