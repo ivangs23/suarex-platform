@@ -80,6 +80,13 @@ describe("ficha pública de la sede", () => {
     expect(deB?.street).toBeNull();
   });
 
+  it("el panel lee una sede concreta por su id, pero nunca la de otro cliente", async () => {
+    expect((await fichaPublicaDeLaSede(tenantA.tenantId, seedA.venueId))?.street).toBe(
+      FICHA.street,
+    );
+    expect(await fichaPublicaDeLaSede(tenantB.tenantId, seedA.venueId)).toBeNull();
+  });
+
   it("un cliente no escribe la sede de otro aunque pase su id", async () => {
     await guardarFichaPublica(tenantB.tenantId, seedA.venueId, { ...VACIA, phone: "666" });
     expect(await fichaPublicaDeLaSede(tenantA.tenantId)).toMatchObject(FICHA);

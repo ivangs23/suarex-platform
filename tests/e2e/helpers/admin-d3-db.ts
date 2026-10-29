@@ -75,3 +75,30 @@ export async function deleteStaffByEmailForTest(email: string): Promise<void> {
   const { error } = await admin.auth.admin.deleteUser(match.id);
   if (error) throw error;
 }
+
+const COLUMNAS_FICHA =
+  "address_street, address_postal_code, address_city, address_region, phone, opening_hours";
+
+export type FichaSnapshot = { venueId: string; tenantId: string; fila: Record<string, unknown> };
+
+/** La ficha pública de la sede por defecto de garum antes del test, para restaurarla después:
+ *  la carta de garum la pinta, y el resto de la suite cuenta con ella como está en el seed. */
+export async function snapshotFichaDeGarum(): Promise<FichaSnapshot> {
+  const tenantId = await demoTenantId();
+  const { data, error } = await admin
+    .from("venues")
+    .select(`id, ${COLUMNAS_FICHA}`)
+    .eq("tenant_id", tenantId)
+    .order("is_default", { ascending: false })
+    .limit(1)
+    .single();
+  if (error) throw error;
+  const { id, ...fila } = data as Record<string, unknown>;
+  return { venueId: id as string, tenantId, fila };
+}
+
+export async function restoreFichaDeGarum(snap: FichaSnapshot): Promise<void> {
+  const { error } = await admin.from("venues").update(snap.fila).eq("id", snap.venueId);
+  if (error) throw error;
+  await revalidarCarta(snap.tenantId);
+}

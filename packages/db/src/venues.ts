@@ -101,12 +101,18 @@ function horarioJson(valor: Json | null): Horario | null {
   return horario;
 }
 
-/** Ficha pública de la sede por defecto, la que pinta la carta. `null` si no hay sede. */
-export async function fichaPublicaDeLaSede(tenantId: string): Promise<FichaDeLaSede | null> {
-  const { data, error } = await tenantScoped("venues", tenantId)
-    .select(
-      "id, timezone, address_street, address_postal_code, address_city, address_region, phone, opening_hours",
-    )
+/**
+ * Ficha pública de una sede: la por defecto, que es la que pinta la carta, o la `venueId` que
+ * edita el panel. `null` si no hay sede (o si `venueId` es de otro tenant).
+ */
+export async function fichaPublicaDeLaSede(
+  tenantId: string,
+  venueId?: string,
+): Promise<FichaDeLaSede | null> {
+  const consulta = tenantScoped("venues", tenantId).select(
+    "id, timezone, address_street, address_postal_code, address_city, address_region, phone, opening_hours",
+  );
+  const { data, error } = await (venueId ? consulta.eq("id", venueId) : consulta)
     .order("is_default", { ascending: false })
     .limit(1)
     .maybeSingle();

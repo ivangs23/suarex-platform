@@ -3,17 +3,20 @@
 import { parseBranding, resolveRootDomains } from "@suarex/config";
 import {
   getTenantSettings,
+  guardarFichaPublica,
   setTenantCustomDomain,
   updateTenantSettings,
   uploadBrandingImage,
 } from "@suarex/db";
 import { revalidatePath } from "next/cache";
 import { invalidarCarta } from "@/lib/carta-cache";
+import { InvalidFormFieldError } from "@/lib/form-parse";
 import { managerAction } from "@/lib/require-manager";
 import {
   parseBrandingFields,
   parseCurrency,
   parseCustomDomain,
+  parseFichaPublica,
   parseFiscalFields,
   parseLocale,
 } from "@/lib/settings-action-input";
@@ -92,3 +95,25 @@ export const updateSettingsAction = managerAction(async (session, formData: Form
 
   revalidatePath("/admin/ajustes");
 });
+
+export type FichaState = { ok?: boolean; error?: string };
+
+/**
+ * Ficha pública de una sede. Mismo patrón que arriba: el `tenantId` sale de la sesión, y una sede
+ * de otro cliente no se toca (`guardarFichaPublica` va por `tenantScoped`). Un error de quien
+ * rellena vuelve al formulario en vez de tirar la página: un tramo mal ordenado es una errata.
+ */
+export const guardarFichaAction = managerAction(
+  async (session, _prev: FichaState, formData: FormData): Promise<FichaState> => {
+    let entrada: ReturnType<typeof parseFichaPublica>;
+    try {
+      entrada = parseFichaPublica(formData);
+    } catch (error) {
+      if (error instanceof InvalidFormFieldError) return { error: error.message };
+      throw error;
+    }
+    await guardarFichaPublica(session.tenantId, entrada.venueId, entrada.ficha);
+    revalidatePath("/admin/ajustes");
+    return { ok: true };
+  },
+);

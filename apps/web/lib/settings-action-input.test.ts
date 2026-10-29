@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  fichaPublicaSchema,
   parseBrandingFields,
   parseCurrency,
   parseCustomDomain,
+  parseFichaPublica,
   parseFiscalFields,
   parseLocale,
 } from "./settings-action-input";
@@ -233,5 +235,142 @@ describe("parseCustomDomain", () => {
     expect(() => parseCustomDomain(fd({ custom_domain: "otro.suarex.app" }), ROOTS)).toThrow(
       /Dominio inválido/,
     );
+  });
+});
+
+describe("parseFichaPublica", () => {
+  const ficha = (campos: Record<string, string> = {}) =>
+    parseFichaPublica(fd({ venue_id: "sede-1", ...campos }));
+
+  it("sin rellenar nada, todo es null: no se publica nada por defecto", () => {
+    expect(ficha()).toEqual({
+      venueId: "sede-1",
+      ficha: {
+        street: null,
+        postalCode: null,
+        city: null,
+        region: null,
+        phone: null,
+        openingHours: null,
+      },
+    });
+  });
+
+  it("lee la dirección y el horario: cerrado, dos tramos y uno que pasa de medianoche", () => {
+    const { ficha: f } = ficha({
+      ficha_street: "  Calle Larios 5 ",
+      ficha_postal_code: "29005",
+      ficha_city: "Málaga",
+      ficha_region: "Málaga",
+      ficha_phone: "+34 952 000 000",
+      h_mo_cerrado: "on",
+      h_tu_1_desde: "13:00",
+      h_tu_1_hasta: "16:00",
+      h_tu_2_desde: "20:00",
+      h_tu_2_hasta: "23:30",
+      h_sa_1_desde: "20:00",
+      h_sa_1_hasta: "02:00",
+    });
+    expect(f.street).toBe("Calle Larios 5");
+    expect(f.phone).toBe("+34 952 000 000");
+    expect(f.openingHours).toEqual({
+      mo: [],
+      tu: [
+        ["13:00", "16:00"],
+        ["20:00", "23:30"],
+      ],
+      sa: [["20:00", "02:00"]],
+    });
+  });
+
+  it("«cerrado» manda aunque haya horas escritas", () => {
+    const { ficha: f } = ficha({
+      h_mo_cerrado: "on",
+      h_mo_1_desde: "13:00",
+      h_mo_1_hasta: "16:00",
+    });
+    expect(f.openingHours).toEqual({ mo: [] });
+  });
+
+  it.each([
+    "612 345 678",
+    "952.00.00.00",
+    "+34 612345678",
+    "0034 612 345 678",
+    "+44 20 7946 0000",
+  ])("acepta el teléfono %s", (telefono) => {
+    expect(ficha({ ficha_phone: telefono }).ficha.phone).toBe(telefono);
+  });
+
+  it.each([
+    "12345",
+    "512 345 678",
+    "llámanos",
+    "+0 123 456 789",
+  ])("rechaza el teléfono %s", (telefono) => {
+    expect(() => ficha({ ficha_phone: telefono })).toThrow(/Teléfono inválido/);
+  });
+
+  it("rechaza una hora que no es HH:MM, y dice de qué día", () => {
+    expect(() => ficha({ h_tu_1_desde: "25:00", h_tu_1_hasta: "16:00" })).toThrow(
+      "Martes: Hora inválida: usa HH:MM",
+    );
+  });
+
+  it("un tramo a medias no se pierde en silencio: se rechaza", () => {
+    expect(() => ficha({ h_mo_1_desde: "13:00" })).toThrow(
+      "Lunes: Cada tramo necesita hora de apertura y de cierre",
+    );
+  });
+
+  it("un tramo no abre y cierra a la misma hora", () => {
+    expect(() => ficha({ h_we_1_desde: "13:00", h_we_1_hasta: "13:00" })).toThrow(
+      /Miércoles: Un tramo no puede abrir y cerrar a la misma hora/,
+    );
+  });
+
+  it("el segundo tramo va después del primero", () => {
+    expect(() =>
+      ficha({
+        h_th_1_desde: "20:00",
+        h_th_1_hasta: "23:00",
+        h_th_2_desde: "13:00",
+        h_th_2_hasta: "16:00",
+      }),
+    ).toThrow(/Jueves: El segundo tramo va después del primero/);
+  });
+
+  it("solo el último tramo puede pasar de medianoche", () => {
+    expect(() =>
+      ficha({
+        h_fr_1_desde: "20:00",
+        h_fr_1_hasta: "02:00",
+        h_fr_2_desde: "03:00",
+        h_fr_2_hasta: "05:00",
+      }),
+    ).toThrow(/Viernes: .*solo el último puede pasar de medianoche/);
+  });
+
+  it("como máximo dos tramos por día (lo garantiza el esquema, no solo el formulario)", () => {
+    const tres = {
+      mo: [
+        ["09:00", "10:00"],
+        ["11:00", "12:00"],
+        ["13:00", "14:00"],
+      ],
+    };
+    const r = fichaPublicaSchema.safeParse({
+      street: null,
+      postalCode: null,
+      city: null,
+      region: null,
+      phone: null,
+      openingHours: tres,
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it("sin sede, no hay dónde guardarla", () => {
+    expect(() => parseFichaPublica(fd({}))).toThrow(/venue_id/);
   });
 });
