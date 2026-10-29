@@ -1,20 +1,35 @@
+import type { VenueRow } from "@suarex/db";
 import { createTableAction } from "./actions";
 
 /**
- * Alta de mesa. Formulario de servidor puro, mismo patrón que `CategoryForm`
- * (`app/admin/catalogo/CategoryForm.tsx`): sin estado de React, `action={createTableAction}`
- * (`actions.ts`, envuelto en `managerAction`) ya hace todo el trabajo.
- *
- * `venue_id` viaja como campo oculto, no como un `<select>`: esta fase (D2) no gestiona
- * altas/bajas de locales, así que la pantalla (`page.tsx`) resuelve el local por defecto
- * del tenant vía `listVenues` y lo pasa aquí ya elegido -- quien gestiona no tiene que
- * saber qué es un "local" para dar de alta una mesa.
+ * Alta de mesa. Formulario de servidor puro (`createTableAction`, envuelto en
+ * `managerAction`). Con una sola sede, `venue_id` viaja oculto y quien gestiona no tiene
+ * que saber qué es una sede; con varias, elige en cuál, con la de por defecto marcada.
  */
-export function TableForm({ venueId }: { venueId: string }) {
+export function TableForm({
+  venues,
+  defaultVenueId,
+}: {
+  venues: VenueRow[];
+  defaultVenueId: string;
+}) {
   return (
     <form action={createTableAction}>
       <h3>Nueva mesa</h3>
-      <input type="hidden" name="venue_id" value={venueId} />
+      {venues.length > 1 ? (
+        <>
+          <label htmlFor="table-venue">Sede</label>
+          <select id="table-venue" name="venue_id" defaultValue={defaultVenueId} required>
+            {venues.map((venue) => (
+              <option key={venue.id} value={venue.id}>
+                {venue.name}
+              </option>
+            ))}
+          </select>
+        </>
+      ) : (
+        <input type="hidden" name="venue_id" value={defaultVenueId} />
+      )}
 
       <label htmlFor="table-label">Etiqueta</label>
       <input id="table-label" name="label" type="text" required />

@@ -1,8 +1,10 @@
 import { expect, type Page, test } from "@playwright/test";
 import {
+  createVenueForTest,
   deleteDeviceForTest,
   deletePrinterForTest,
   deleteTableForTest,
+  deleteVenueForTest,
 } from "./helpers/admin-d2-db.js";
 
 // Igual que `admin-catalogo.spec.ts`: requiere que el personal demo Y el owner demo ya
@@ -49,8 +51,18 @@ async function login(page: Page, email: string, password: string): Promise<void>
 let createdTableId: string | undefined;
 let createdDeviceId: string | undefined;
 let createdPrinterId: string | undefined;
+let createdVenueId: string | undefined;
 
 test.afterEach(async () => {
+  if (createdVenueId) {
+    const id = createdVenueId;
+    createdVenueId = undefined;
+    try {
+      await deleteVenueForTest(id);
+    } catch (error) {
+      console.error(`No se pudo borrar la sede de prueba ${id}:`, error);
+    }
+  }
   if (createdTableId) {
     const id = createdTableId;
     createdTableId = undefined;
@@ -105,6 +117,40 @@ test("un owner crea una mesa y ve su QR", async ({ page }) => {
   // servidor a partir del Host de la petición + el token de la mesa), no una imagen ni
   // un placeholder de texto.
   await expect(tableRow.locator("svg")).toBeVisible();
+
+  // En local el QR usa el host de la petición, no el dominio propio sembrado
+  // (`garum-demo.test`), que aquí no tiene TLS.
+  await expect(page.getByTestId("qr-origin")).toContainText("http://garum.localhost:3000");
+  await expect(page.getByTestId("table-qr").first()).toBeVisible();
+});
+
+test("con varias sedes, la mesa se crea en la sede elegida y se lista bajo ella", async ({
+  page,
+}) => {
+  const venueName = `Sede E2E ${Date.now()}`;
+  createdVenueId = await createVenueForTest(venueName);
+
+  await login(page, "owner@garum.local", OWNER_PASSWORD as string);
+  await page.goto("http://garum.localhost:3000/admin/mesas");
+
+  const sede = page.getByTestId("admin-venue").filter({ hasText: venueName });
+  await expect(sede.getByRole("heading", { name: venueName })).toBeVisible();
+  await expect(sede).toContainText("Esta sede todavía no tiene mesas.");
+
+  const label = `E2E-${Date.now()}`;
+  await page.getByLabel("Sede").selectOption({ label: venueName });
+  await page.getByLabel("Etiqueta").fill(label);
+  await page.getByRole("button", { name: "Crear mesa" }).click();
+
+  // La mesa aparece DENTRO de la sección de su sede, con su QR.
+  const mesa = sede.getByTestId("admin-table").filter({ hasText: label });
+  await expect(mesa).toBeVisible({ timeout: 15_000 });
+  await expect(mesa.locator("svg")).toBeVisible();
+
+  // Borrarla quita la mesa y su QR del panel.
+  page.once("dialog", (dialog) => dialog.accept());
+  await mesa.getByRole("button", { name: "Borrar mesa" }).click();
+  await expect(mesa).toHaveCount(0, { timeout: 15_000 });
 });
 
 test("un owner da de alta un dispositivo y ve el código una vez", async ({ page }) => {
