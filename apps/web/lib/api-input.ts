@@ -43,6 +43,12 @@ export const kioskoOrderSchema = z.object({
 /** `POST /api/devices/pair`. */
 export const pairDeviceSchema = z.object({ pairingCode: z.string().min(1) });
 
+/** `POST /api/sesion`: los tokens de una sesión que la app de escritorio ya abrió en Auth. */
+export const sesionSchema = z.object({
+  accessToken: z.string().min(1),
+  refreshToken: z.string().min(1),
+});
+
 /** El mismo texto genérico que ya daban las rutas: nada del esquema llega al comensal. */
 export function peticionInvalida(): Response {
   return NextResponse.json({ error: "Petición inválida" }, { status: 400 });
