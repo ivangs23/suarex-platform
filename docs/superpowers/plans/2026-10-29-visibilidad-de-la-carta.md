@@ -300,7 +300,9 @@ correcto: es el origen público del cliente aunque el DNS aún no apunte aquí.
   - un tramo que cruza la medianoche sale como dos;
   - el JSON no contiene `</script>` aunque un nombre de plato lo lleve.
 - [ ] Validar a mano una vez con https://validator.schema.org y el «Rich Results Test» de
-  Google sobre la carta de staging, y anotar el resultado en el PR. *(Pendiente del despliegue.)*
+  Google sobre la carta de staging, y anotar el resultado en el PR. *(validator.schema.org,
+  2026-10-29 en producción: 0 errores y 0 avisos en `/` y en `/?ver=carta`. Falta el Rich Results
+  Test, cuando Garum tenga la ficha: Google exige la dirección para un `Restaurant`.)*
 
 ### Tarea 1.5 — `llms.txt` por cliente
 
